@@ -54,11 +54,11 @@ ml/
 - **Tool Registry** for Agent Function Calling: `ToolRegistry` scans Spring beans implementing `Tool`; LLM returns `function_call` → registry dispatches → result fed back to LLM; P0 needs only 2 tools
 - **SSE streaming** for Agent chat: `SseEmitter` in Spring, events: `thinking` → `text` → `chart` → `done`
 - **No Maven multi-module**: single `pom.xml`, single Jar — avoids build ordering issues and IDE import problems for a 15-day project
-- **Training/inference split**: Models trained offline in Python (PyTorch/Prophet), exported as `.pt`/ONNX, loaded by DJL at runtime in Java
+- **Training/inference split**: Models trained offline in Python (PyTorch/Prophet), exported as `.pt`/`.pkl`; loaded by Flask microservice (`ml/app.py`, port 5000), called by Java via OkHttp
 
 ### Database (MySQL 8.0 + Flyway migrations)
 
-Key tables: `load_data`, `prediction_result`, `alert_event`, `alert_rule`, `model_version`, `user`. Flyway scripts in `power-load-server/src/main/resources/db/migration/V1__init_schema.sql` and beyond. Index strategy optimizes for time-range queries on load data.
+Key tables: `load_data`, `prediction_result`, `alert_event`, `alert_rule`, `model_version`, `user`. Flyway scripts in `backend/src/main/resources/db/migration/V1__init_schema.sql` and beyond. Index strategy optimizes for time-range queries on load data.
 
 ## Tech Stack
 
