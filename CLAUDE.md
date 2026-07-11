@@ -4,15 +4,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-电力负荷预测与智能告警 Agent — a 15-day summer training project building an AI Agent system integrating **load forecasting, anomaly detection, and intelligent alerting**. Power dispatchers can monitor grid load via a visualization dashboard, view AI-predicted trends, receive smart alerts, and query data through natural language.
+电力负荷预测与智能告警 Agent — a 16-day summer training project building an AI Agent system integrating **load forecasting, anomaly detection, and intelligent alerting**. Power dispatchers can monitor grid load via a visualization dashboard, view AI-predicted trends, receive smart alerts, and query data through natural language.
 
-- **Team**: 4-5 people (Java-oriented)
-- **Timeline**: 15 days; currently Day 1-2 (design phase), no code written yet
+- **Team**: 4 people (Java-oriented)
+- **Timeline**: 16 days; currently Day 2 (design phase), no code written yet
 - **Key metric**: 24h load forecast MAPE < 5%, alert delay < 5s, anomaly detection accuracy > 90%
 
 ## Architecture
 
-**Single-module Spring Boot backend + React frontend**. Docker Compose only for Day 13 deployment — during development, Docker runs only MySQL + Redis, while Java and frontend run natively for fast iteration.
+**Single-module Spring Boot backend + React frontend**. Docker Compose only for Day 14 deployment — during development, Docker runs only MySQL + Redis, while Java and frontend run natively for fast iteration.
 
 ```
 Browser → Nginx (:80) → React SPA (static) + Spring Boot (:8080, /api/*, /ws/*)
@@ -33,7 +33,7 @@ common/      → R<T>, GlobalExceptionHandler, constants
 config/      → Redis, Swagger, Async, WebSocket, CORS configs
 agent/       → LLM Agent: AgentCore (~150 lines) + ToolRegistry + 2 tools (QueryLoadTool, GetStatsTool)
 ml/          → ModelInferenceService interface → FlaskInferenceService (HTTP call to Python)
-alert/       → ThresholdDetector (P0) + AlertTemplate (fixed string templates, not LLM)
+alert/       → ThresholdDetector + AlertTemplate (NFZ-3, fixed string templates, not LLM)
 websocket/   → STOMP over WebSocket for real-time dashboard push
 ```
 
@@ -53,12 +53,12 @@ ml/
 - **Alert template, not LLM** for alert text: `AlertTemplate.generate(level, current, threshold)` returns pre-written Chinese strings — zero latency, zero LLM cost
 - **Tool Registry** for Agent Function Calling: `ToolRegistry` scans Spring beans implementing `Tool`; LLM returns `function_call` → registry dispatches → result fed back to LLM; P0 needs only 2 tools
 - **SSE streaming** for Agent chat: `SseEmitter` in Spring, events: `thinking` → `text` → `chart` → `done`
-- **No Maven multi-module**: single `pom.xml`, single Jar — avoids build ordering issues and IDE import problems for a 15-day project
+- **No Maven multi-module**: single `pom.xml`, single Jar — avoids build ordering issues and IDE import problems for a 16-day project
 - **Training/inference split**: Models trained offline in Python (PyTorch/Prophet), exported as `.pt`/`.pkl`; loaded by Flask microservice (`ml/app.py`, port 5000), called by Java via OkHttp
 
 ### Database (MySQL 8.0 + Flyway migrations)
 
-Key tables: `load_data`, `prediction_result`, `alert_event`, `alert_rule`, `model_version`, `user`. Flyway scripts in `backend/src/main/resources/db/migration/V1__init_schema.sql` and beyond. Index strategy optimizes for time-range queries on load data.
+Key tables: `load_data`, `prediction_result`, `alert_event`, `alert_rule`, `model_version`, `conversation`, `user`. Flyway scripts in `backend/src/main/resources/db/migration/V1__init_schema.sql` and beyond. Index strategy optimizes for time-range queries on load data.
 
 ## Tech Stack
 
@@ -155,7 +155,7 @@ docker-compose logs -f backend                                # Tail backend log
 
 ## Current Status
 
-All design docs complete. Ready for Day 3-4 scaffolding: project initialization, database setup, CI/CD skeleton. See `docs/00-项目开发计划.md` for the full 15-day plan with daily task breakdowns.
+All design docs complete. Ready for Day 3-4 scaffolding: project initialization, database setup, CI/CD skeleton. See `docs/00-项目开发计划.md` for the full 16-day plan with daily task breakdowns.
 
 Behavioral guidelines to reduce common LLM coding mistakes. Merge with project-specific instructions as needed.
 

@@ -1,0 +1,27 @@
+#!/bin/sh
+# Maven Wrapper startup script for Unix / Git Bash
+# ----------------------------------------------------------------------------
+
+MAVEN_PROJECTBASEDIR="$(cd "$(dirname "$0")" && pwd)"
+export MAVEN_PROJECTBASEDIR
+
+if [ -z "$MAVEN_HOME" ]; then
+    MAVEN_HOME="$HOME/.m2/wrapper/dists/apache-maven-3.9.9"
+    export MAVEN_HOME
+fi
+
+WRAPPER_JAR="$MAVEN_PROJECTBASEDIR/.mvn/wrapper/maven-wrapper.jar"
+WRAPPER_PROPERTIES="$MAVEN_PROJECTBASEDIR/.mvn/wrapper/maven-wrapper.properties"
+
+if [ ! -f "$WRAPPER_JAR" ]; then
+    echo "Downloading Maven Wrapper..."
+    curl -fsSL -o "$WRAPPER_JAR" \
+        "https://repo.maven.apache.org/maven2/org/apache/maven/wrapper/maven-wrapper/3.3.2/maven-wrapper-3.3.2.jar" \
+        || wget -q -O "$WRAPPER_JAR" \
+        "https://repo.maven.apache.org/maven2/org/apache/maven/wrapper/maven-wrapper/3.3.2/maven-wrapper-3.3.2.jar"
+fi
+
+MAVEN_OPTS="-Xmx1024m"
+export MAVEN_OPTS
+
+exec java $MAVEN_OPTS -jar "$WRAPPER_JAR" "$@"

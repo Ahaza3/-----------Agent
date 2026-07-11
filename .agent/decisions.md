@@ -32,6 +32,46 @@
 
 ---
 
+## 2026-07-11 · Day 2
+
+### 决策 005：文档交叉审查 — 37 个问题确认
+
+- **决策**：完成 12 份设计文档全面审查，发现逻辑冲突 12、命名不统一 6、设计缺失 11、表述模糊 8，合计 37 个问题
+- **影响**：5 个阻塞级问题已在脚手架搭建前确认并修正；其余问题记录在案，Sprint 过程中逐步修正
+
+### 决策 006：新增 conversation 表
+
+- **决策**：V1 Flyway 迁移增加 `conversation` 表（conversation_id / role / content / tool_name / created_at）
+- **理由**：04-接口设计文档 Agent 对话使用 conversationId，但 05-数据模型设计缺此表 → Day 4 建表时一并创建
+- **影响**：V1__init_schema.sql 从 5 张表增加到 6 张（P0 全部表）
+
+### 决策 007：告警模块 P0 仅保留 NFZ-3 核心
+
+- **决策**：`alert/ThresholdDetector.java` + `alert/AlertTemplate.java`（NFZ-3 手写），PushService 砍掉，TrendDetector 延后 P1
+- **理由**：PushService 与 websocket/DashboardWebSocketHandler 职责重叠，AlertServiceImpl 直接用 SimpMessagingTemplate 推送即可
+
+### 决策 008：预测调度选 @Scheduled
+
+- **决策**：预测定时触发使用 Spring `@Scheduled`，每小时执行一次
+- **理由**：只需一个注解，比手动触发 API 更简单，未依赖额外基础设施
+
+### 决策 009：脚手架技术细节
+
+- **包名**：`com.powerload`（非 `com.example`）
+- **数据库密码**：`123456`
+- **JDBC 连接**：`characterEncoding=UTF-8`（不能用 `utf8mb4`，那是 MySQL 内部名）
+- **开发 Redis**：`application-dev.yml` 排除 `RedisAutoConfiguration`（本地未安装）
+- **Maven**：本地未安装命令行 Maven，使用 VS Code Java 扩展直接启动
+- **Node.js**：`C:\Program Files\nodejs\`，PowerShell 需 `& "C:\Program Files\nodejs\npm.cmd" run dev`
+- **Docker**：未安装 Docker Desktop，本地 MySQL `localhost:3306` 直连
+
+### 决策 010：文档已知问题修复
+
+- **CLAUDE.md**：15天→16天（4 处）；数据库表清单加入 conversation；部署时间统一 Day 14
+- **pom.xml**：补上遗漏的 `spring-boot-starter-actuator` 依赖
+
+---
+
 ## 待决策事项
 
 | 编号 | 事项 | 讨论时间 | 负责人 |

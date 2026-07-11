@@ -71,8 +71,9 @@ public class AgentCore { ... }
 ## 代码风格
 
 ### Java
+- 包名：`com.powerload`
 - 单模块 Maven 项目，包结构按 `controller → service → mapper → entity` 分层
-- 统一响应 `R<T>`，统一异常处理 `GlobalExceptionHandler`
+- 统一响应 `R<T>`，统一异常处理 `GlobalExceptionHandler`（`basePackages = "com.powerload.controller"`）
 - MyBatis-Plus Lambda QueryWrapper 优先（避免字段名魔法字符串）
 
 ### TypeScript / React
@@ -83,3 +84,42 @@ public class AgentCore { ... }
 ### 通用
 - 所有注释、文档使用中文
 - 代码命名使用英文（camelCase / PascalCase）
+
+---
+
+## 开发环境速查
+
+| 项目 | 值 |
+|:-----|:---|
+| 数据库 | MySQL 8.0 `localhost:3306` / 库 `power_load` / 密码 `123456` |
+| 后端端口 | `8080` |
+| 前端端口 | `5173`（Vite 代理 `/api` → `:8080`） |
+| ML 推理 | `5000`（Python Flask） |
+| Redis | **未安装**，dev profile 已排除自动配置 |
+| Docker | **未安装**，本地直连 MySQL |
+| Maven | **命令行无**，用 VS Code Java 扩展启动 |
+
+### 前端启动（PowerShell）
+
+```powershell
+cd frontend
+& "C:\Program Files\nodejs\npm.cmd" run dev
+```
+
+### 后端启动
+
+VS Code 中打开 `PowerLoadApplication.java` → 点击 `Run`。
+
+### Flyway 迁移
+
+应用启动时自动执行。V1 已创建 6 张表：
+`load_data` / `prediction_result` / `alert_event` / `alert_rule` / `model_version` / `conversation`
+
+### 常见坑
+
+| 问题 | 原因 | 解决 |
+|:-----|:-----|:-----|
+| `Unsupported character encoding 'utf8mb4'` | JDBC 不认 MySQL 内部字符集名 | 连接串用 `characterEncoding=UTF-8` |
+| `/actuator/health` 404 | pom.xml 缺 `spring-boot-starter-actuator` | 已补充依赖 |
+| `GlobalExceptionHandler` 拦截 Actuator | `@RestControllerAdvice` 无范围限制 | 加 `basePackages = "com.powerload.controller"` |
+| 前端 `npm` 不识别 | PowerShell 未加载 Node.js PATH | 用完整路径 `"C:\Program Files\nodejs\npm.cmd"` |

@@ -1,0 +1,13 @@
+# 电力负荷预测 — ML 推理依赖
+# 训练用（离线，手动执行一次）
+torch>=2.0
+prophet>=1.1
+pandas>=2.0
+numpy>=1.26
+scikit-learn>=1.5
+
+# 推理服务用
+flask>=3.0
+
+# ONNX 导出（可选）
+# onnx>=1.16

@@ -106,3 +106,68 @@
 | 有备选方案 | Flask 主力 / DJL 备选；LSTM 加分 / Prophet 兜底 |
 | 模块化 | 前后端分离 + 后端分层，松耦合独立开发 |
 | 可演示 | P0 功能 100% 可跑，P1/P2 有余力再加 |
+
+---
+
+## ADR-007：新增 conversation 表（V1 迁移）
+
+**决策日期**：2026-07-11  
+**状态**：✅ 已确认
+
+**背景**：04-接口设计文档中 Agent 对话接口使用 `conversationId` 管理会话，01-需求规格说明书数据流图包含 D4 对话记录库，但 05-数据模型设计未定义 conversation 表。
+
+**决策**：在 V1 Flyway 迁移中新增 `conversation` 表（id / conversation_id / role / content / tool_name / created_at），与其他 5 张 P0 表一同建表。
+
+**理由**：Agent 对话是 P0 功能，conversationId 是 POST /api/v1/agent/chat 的请求参数。没有 conversation 表会导致对话历史无法存储，且 V3 追加迁移增加复杂度。
+
+---
+
+## ADR-008：告警模块 P0 文件清单
+
+**决策日期**：2026-07-11  
+**状态**：✅ 已确认
+
+**背景**：各文档对 `alert/` 目录下文件列表描述不一致——02 文档有 PushService + TrendDetector，03 文档有 ThresholdDetector + AlertTemplate，NFZ-3 禁飞区要求手写。
+
+**决策**：
+- P0：`alert/ThresholdDetector.java` + `alert/AlertTemplate.java`（NFZ-3 手写）
+- 砍掉：`alert/PushService.java` — 告警推送直接通过 AlertServiceImpl 注入 `SimpMessagingTemplate` 完成，与 `websocket/DashboardWebSocketHandler` 无职责重叠
+- 延后 P1：`alert/TrendDetector.java`
+
+---
+
+## ADR-009：预测调度机制
+
+**决策日期**：2026-07-11  
+**状态**：✅ 已确认
+
+**决策**：预测使用 **Spring `@Scheduled` 定时触发**（每小时一次），在 `PredictServiceImpl` 中实现。
+
+**理由**：只需一个注解，零额外基础设施，不需要 API 端点或前端交互。比手动触发更易于实现。
+
+---
+
+## ADR-010：开发环境去 Docker 化
+
+**决策日期**：2026-07-11  
+**状态**：✅ 已确认
+
+**背景**：Docker Desktop 未安装，但本地已有 MySQL 8.0 运行。
+
+**决策**：开发阶段完全不用 Docker Compose——本地 MySQL `localhost:3306` 直连。`docker-compose.yml` 仅保留作为 Day 14 生产部署参考。
+
+**影响**：
+- `application-dev.yml` 排除 `RedisAutoConfiguration`（Redis 未安装）
+- 密码统一为 `123456`
+- `application-dev.yml` 连接参数 `characterEncoding=UTF-8`（不能用 `utf8mb4`，那是 MySQL 内部字符集名）
+
+---
+
+## ADR-011：模拟数据生成用 Python
+
+**决策日期**：2026-07-11  
+**状态**：✅ 已确认
+
+**决策**：模拟数据由 `ml/generate_mock_data.py` 生成（双峰模型 + 噪声 + 季节趋势），不再用 Java MockDataGenerator。
+
+**理由**：02-架构设计文档两处矛盾（3.1 节说 Java，3.2 节点说 Python）。Python 版本与后续特征工程、模型训练共用 pandas 生态，代码更简洁。

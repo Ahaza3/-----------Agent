@@ -1,0 +1,28 @@
+# ─── 开发环境配置 ───
+# 使用方式: MySQL 本地运行，后端 VS Code 直接启动
+
+spring:
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
+  datasource:
+    url: jdbc:mysql://localhost:3306/power_load?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai
+    username: root
+    password: "123456"
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+# ML 推理服务
+ml:
+  service:
+    url: http://localhost:5000
+
+# LLM API
+llm:
+  api:
+    key: ${LLM_API_KEY:}
+    url: ${LLM_API_URL:https://api.deepseek.com/v1}
+
+# 开发日志
+logging:
+  level:
+    com.powerload: debug
