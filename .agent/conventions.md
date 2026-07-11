@@ -97,7 +97,7 @@ public class AgentCore { ... }
 | ML 推理 | `5000`（Python Flask） |
 | Redis | **未安装**，dev profile 已排除自动配置 |
 | Docker | **未安装**，本地直连 MySQL |
-| Maven | **命令行无**，用 VS Code Java 扩展启动 |
+| Maven | `backend/apache-maven-3.9.16/` → `./apache-maven-3.9.16/bin/mvn` |
 
 ### 前端启动（PowerShell）
 

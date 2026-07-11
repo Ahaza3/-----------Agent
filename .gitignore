@@ -4,7 +4,7 @@ target/
 *.jar
 *.war
 *.log
-!.mvn/wrapper/maven-wrapper.jar
+apache-maven-*/
 
 # ===== Python (ML 训练脚本) =====
 __pycache__/
