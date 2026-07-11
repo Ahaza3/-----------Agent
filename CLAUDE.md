@@ -156,87 +156,67 @@ docker-compose logs -f backend                                # Tail backend log
 ## Current Status
 
 All design docs complete. Ready for Day 3-4 scaffolding: project initialization, database setup, CI/CD skeleton. See `docs/00-项目开发计划.md` for the full 15-day plan with daily task breakdowns.
- 
-  
-  
- S t a t u s C o d e                 :   2 0 0  
- S t a t u s D e s c r i p t i o n   :   O K  
- C o n t e n t                       :   #   C L A U D E . m d  
-                                          
-                                         B e h a v i o r a l   g u i d e l i n e s   t o   r e d u c e   c o m m o n   L L M   c o d i n g   m i s t a k e s .   M e r g e   w i t h   p r o j e c t - s p e c i f i c   i n s t r u c t i o n s   a s   n e e d e d .  
-                                          
-                                         * * T r a d e o f f : * *   T h e s e   g u i d e l i n e s   b i a s   t o w a r d   c a u t i o n   o v e r   s p e e d .   F o r   t r i v i a l . . .  
- R a w C o n t e n t                 :   H T T P / 1 . 1   2 0 0   O K  
-                                         C o n n e c t i o n :   k e e p - a l i v e  
-                                         C o n t e n t - S e c u r i t y - P o l i c y :   d e f a u l t - s r c   ' n o n e ' ;   s t y l e - s r c   ' u n s a f e - i n l i n e ' ;   s a n d b o x  
-                                         S t r i c t - T r a n s p o r t - S e c u r i t y :   m a x - a g e = 3 1 5 3 6 0 0 0  
-                                         X - C o n t e n t - T y p e - O p t i o n s :   n o s n i f f  
-                                         . . .  
- F o r m s                           :   { }  
- H e a d e r s                       :   { [ C o n n e c t i o n ,   k e e p - a l i v e ] ,   [ C o n t e n t - S e c u r i t y - P o l i c y ,   d e f a u l t - s r c   ' n o n e ' ;   s t y l e - s r c   ' u n s a f e - i n l i n e ' ;   s a n d b o x ] ,   [ S t r i c t - T r a n s p o r t - S e c u r i t y ,   m a x - a g e = 3 1 5 3 6 0 0 0 ]  
-                                         ,   [ X - C o n t e n t - T y p e - O p t i o n s ,   n o s n i f f ] . . . }  
- I m a g e s                         :   { }  
- I n p u t F i e l d s               :   { }  
- L i n k s                           :   { }  
- P a r s e d H t m l                 :   m s h t m l . H T M L D o c u m e n t C l a s s  
- R a w C o n t e n t L e n g t h     :   2 3 5 7  
-  
-  
-  
-  
-  
-  
- S t a t u s C o d e                 :   2 0 0  
- S t a t u s D e s c r i p t i o n   :   O K  
- C o n t e n t                       :   #   C L A U D E . m d  
-                                          
-                                         B e h a v i o r a l   g u i d e l i n e s   t o   r e d u c e   c o m m o n   L L M   c o d i n g   m i s t a k e s .   M e r g e   w i t h   p r o j e c t - s p e c i f i c   i n s t r u c t i o n s   a s   n e e d e d .  
-                                          
-                                         * * T r a d e o f f : * *   T h e s e   g u i d e l i n e s   b i a s   t o w a r d   c a u t i o n   o v e r   s p e e d .   F o r   t r i v i a l . . .  
- R a w C o n t e n t                 :   H T T P / 1 . 1   2 0 0   O K  
-                                         C o n n e c t i o n :   k e e p - a l i v e  
-                                         C o n t e n t - S e c u r i t y - P o l i c y :   d e f a u l t - s r c   ' n o n e ' ;   s t y l e - s r c   ' u n s a f e - i n l i n e ' ;   s a n d b o x  
-                                         S t r i c t - T r a n s p o r t - S e c u r i t y :   m a x - a g e = 3 1 5 3 6 0 0 0  
-                                         X - C o n t e n t - T y p e - O p t i o n s :   n o s n i f f  
-                                         . . .  
- F o r m s                           :   { }  
- H e a d e r s                       :   { [ C o n n e c t i o n ,   k e e p - a l i v e ] ,   [ C o n t e n t - S e c u r i t y - P o l i c y ,   d e f a u l t - s r c   ' n o n e ' ;   s t y l e - s r c   ' u n s a f e - i n l i n e ' ;   s a n d b o x ] ,   [ S t r i c t - T r a n s p o r t - S e c u r i t y ,   m a x - a g e = 3 1 5 3 6 0 0 0 ]  
-                                         ,   [ X - C o n t e n t - T y p e - O p t i o n s ,   n o s n i f f ] . . . }  
- I m a g e s                         :   { }  
- I n p u t F i e l d s               :   { }  
- L i n k s                           :   { }  
- P a r s e d H t m l                 :   m s h t m l . H T M L D o c u m e n t C l a s s  
- R a w C o n t e n t L e n g t h     :   2 3 5 7  
-  
-  
-  
-  
-  
-  
-  
-  
- S t a t u s C o d e                 :   2 0 0  
- S t a t u s D e s c r i p t i o n   :   O K  
- C o n t e n t                       :   #   C L A U D E . m d  
-                                          
-                                         B e h a v i o r a l   g u i d e l i n e s   t o   r e d u c e   c o m m o n   L L M   c o d i n g   m i s t a k e s .   M e r g e   w i t h   p r o j e c t - s p e c i f i c   i n s t r u c t i o n s   a s   n e e d e d .  
-                                          
-                                         * * T r a d e o f f : * *   T h e s e   g u i d e l i n e s   b i a s   t o w a r d   c a u t i o n   o v e r   s p e e d .   F o r   t r i v i a l . . .  
- R a w C o n t e n t                 :   H T T P / 1 . 1   2 0 0   O K  
-                                         C o n n e c t i o n :   k e e p - a l i v e  
-                                         C o n t e n t - S e c u r i t y - P o l i c y :   d e f a u l t - s r c   ' n o n e ' ;   s t y l e - s r c   ' u n s a f e - i n l i n e ' ;   s a n d b o x  
-                                         S t r i c t - T r a n s p o r t - S e c u r i t y :   m a x - a g e = 3 1 5 3 6 0 0 0  
-                                         X - C o n t e n t - T y p e - O p t i o n s :   n o s n i f f  
-                                         . . .  
- F o r m s                           :   { }  
- H e a d e r s                       :   { [ C o n n e c t i o n ,   k e e p - a l i v e ] ,   [ C o n t e n t - S e c u r i t y - P o l i c y ,   d e f a u l t - s r c   ' n o n e ' ;   s t y l e - s r c   ' u n s a f e - i n l i n e ' ;   s a n d b o x ] ,   [ S t r i c t - T r a n s p o r t - S e c u r i t y ,   m a x - a g e = 3 1 5 3 6 0 0 0 ]  
-                                         ,   [ X - C o n t e n t - T y p e - O p t i o n s ,   n o s n i f f ] . . . }  
- I m a g e s                         :   { }  
- I n p u t F i e l d s               :   { }  
- L i n k s                           :   { }  
- P a r s e d H t m l                 :   m s h t m l . H T M L D o c u m e n t C l a s s  
- R a w C o n t e n t L e n g t h     :   2 3 5 7  
-  
-  
-  
- 
+
+Behavioral guidelines to reduce common LLM coding mistakes. Merge with project-specific instructions as needed.
+
+**Tradeoff:** These guidelines bias toward caution over speed. For trivial tasks, use judgment.
+
+## 1. Think Before Coding
+
+**Don't assume. Don't hide confusion. Surface tradeoffs.**
+
+Before implementing:
+- State your assumptions explicitly. If uncertain, ask.
+- If multiple interpretations exist, present them - don't pick silently.
+- If a simpler approach exists, say so. Push back when warranted.
+- If something is unclear, stop. Name what's confusing. Ask.
+
+## 2. Simplicity First
+
+**Minimum code that solves the problem. Nothing speculative.**
+
+- No features beyond what was asked.
+- No abstractions for single-use code.
+- No "flexibility" or "configurability" that wasn't requested.
+- No error handling for impossible scenarios.
+- If you write 200 lines and it could be 50, rewrite it.
+
+Ask yourself: "Would a senior engineer say this is overcomplicated?" If yes, simplify.
+
+## 3. Surgical Changes
+
+**Touch only what you must. Clean up only your own mess.**
+
+When editing existing code:
+- Don't "improve" adjacent code, comments, or formatting.
+- Don't refactor things that aren't broken.
+- Match existing style, even if you'd do it differently.
+- If you notice unrelated dead code, mention it - don't delete it.
+
+When your changes create orphans:
+- Remove imports/variables/functions that YOUR changes made unused.
+- Don't remove pre-existing dead code unless asked.
+
+The test: Every changed line should trace directly to the user's request.
+
+## 4. Goal-Driven Execution
+
+**Define success criteria. Loop until verified.**
+
+Transform tasks into verifiable goals:
+- "Add validation" → "Write tests for invalid inputs, then make them pass"
+- "Fix the bug" → "Write a test that reproduces it, then make it pass"
+- "Refactor X" → "Ensure tests pass before and after"
+
+For multi-step tasks, state a brief plan:
+```
+1. [Step] → verify: [check]
+2. [Step] → verify: [check]
+3. [Step] → verify: [check]
+```
+
+Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
+
+---
+
+**These guidelines are working if:** fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, and clarifying questions come before implementation rather than after mistakes.
