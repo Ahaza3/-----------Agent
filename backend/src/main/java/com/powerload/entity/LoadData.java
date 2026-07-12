@@ -1,0 +1,46 @@
+package com.powerload.entity;
+
+import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableName;
+import lombok.Data;
+
+import java.time.LocalDateTime;
+
+/**
+ * 历史负荷数据表 — load_data
+ */
+@Data
+@TableName("load_data")
+public class LoadData {
+
+    @TableId(type = IdType.AUTO)
+    private Long id;
+
+    /** 数据时间点（精确到小时） */
+    private LocalDateTime time;
+
+    /** 负荷值(MW) */
+    private Float loadMw;
+
+    /** 温度(°C) */
+    private Float temperature;
+
+    /** 湿度(%) */
+    private Float humidity;
+
+    /** 是否节假日(0=否,1=是) */
+    private Integer isHoliday;
+
+    /** 小时(0-23) */
+    private Integer hour;
+
+    /** 星期几(0=周一,6=周日) */
+    private Integer dayOfWeek;
+
+    /** 月份(1-12) */
+    private Integer month;
+
+    /** 创建时间 */
+    private LocalDateTime createdAt;
+}
