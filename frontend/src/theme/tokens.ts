@@ -10,7 +10,7 @@ const themeToken: ThemeConfig = {
     colorPrimary: '#4f8cff',
     colorSuccess: '#34d399',
     colorWarning: '#fbbf24',
-    colorError: '#f87171',
+    colorError: '#d54747',
     colorInfo: '#60a5fa',
 
     // ---- 基底 ----
@@ -97,7 +97,7 @@ const themeToken: ThemeConfig = {
       colorBgContainer: '#0a0e27',
       colorBorder: '#1e2a5a',
       hoverBorderColor: '#4f8cff',
-      activeBorderColor: '#4f8cff',
+      activeBorderColor: '#145ada',
     },
     // ---- Select 下拉 ----
     Select: {
