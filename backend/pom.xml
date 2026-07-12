@@ -24,6 +24,7 @@
         <okhttp.version>4.12.0</okhttp.version>
         <springdoc.version>2.6.0</springdoc.version>
         <knife4j.version>4.5.0</knife4j.version>
+        <lombok.version>1.18.36</lombok.version>
     </properties>
 
     <dependencies>
@@ -82,6 +83,7 @@
         <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>
+            <version>${lombok.version}</version>
             <optional>true</optional>
         </dependency>
         <dependency>
