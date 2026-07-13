@@ -30,6 +30,10 @@ const DARK_THEME: EChartsOption = {
     borderColor: '#1e2a5a',
     textStyle: { color: '#e0e6f0', fontSize: 13 },
   },
+  toolbox: {
+    iconStyle: { borderColor: '#8892a4' },
+    emphasis: { iconStyle: { borderColor: '#4f8cff' } },
+  },
   legend: {
     textStyle: { color: '#8892a4' },
     top: 0,

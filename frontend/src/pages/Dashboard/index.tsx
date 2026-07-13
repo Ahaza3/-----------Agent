@@ -5,8 +5,8 @@
  * 功能：
  *   - 时间范围选择器 (Segmented 快捷 + RangePicker 自定义)
  *   - 四张统计卡片 (峰值 / 谷值 / 平均 / 负荷率)
- *   - 实时负荷曲线 (ECharts 时间序列)
- *   - 预测 vs 实际对比 (24h 预报叠加)
+ *   - 实时负荷曲线 (ECharts 时间序列) — 支持框选放大 / 滚轮缩放 / 滑块缩放
+ *   - 预测 vs 实际对比 (24h 预报叠加) — 支持框选放大 / 滚轮缩放 / 滑块缩放
  *   - 1920×1080 自适应布局
  */
 import { useState, useEffect, useCallback, useMemo } from 'react'
@@ -51,6 +51,69 @@ function quickToRange(q: QuickRange): [Dayjs, Dayjs] {
 function fmtMw(v: number | undefined | null): string {
   if (v == null) return '--'
   return v.toFixed(1)
+}
+
+/** 共用工具箱配置 — 框选放大 + 还原 + 导出图片 */
+const SHARED_TOOLBOX: EChartsOption['toolbox'] = {
+  right: 12,
+  top: 8,
+  feature: {
+    brush: {
+      type: ['rect', 'polygon'],
+      title: { rect: '框选放大', polygon: '圈选放大' },
+    },
+    restore: { title: '还原' },
+    saveAsImage: {
+      title: '保存图片',
+      pixelRatio: 2,
+      backgroundColor: '#0a0e27',
+    },
+  },
+  iconStyle: { borderColor: '#8892a4' },
+  emphasis: { iconStyle: { borderColor: '#4f8cff' } },
+}
+
+/** 共用框选配置 */
+const SHARED_BRUSH: EChartsOption['brush'] = {
+  toolbox: ['rect', 'polygon'],
+  brushLink: 'all',
+  outOfBrush: { color: 'rgba(136,146,164,0.15)' },
+  throttleType: 'debounce',
+  throttleDelay: 300,
+}
+
+/** 共用 dataZoom 滑块样式 */
+function buildDataZoom(): EChartsOption['dataZoom'] {
+  return [
+    {
+      type: 'inside',
+      start: 0,
+      end: 100,
+      minSpan: 5,
+      zoomOnMouseWheel: true,
+      moveOnMouseMove: true,
+      moveOnMouseWheel: false,
+    },
+    {
+      type: 'slider',
+      start: 0,
+      end: 100,
+      height: 32,
+      bottom: 8,
+      borderColor: '#1e2a5a',
+      backgroundColor: '#0a0e27',
+      fillerColor: 'rgba(79,140,255,0.15)',
+      handleStyle: { color: '#4f8cff' },
+      textStyle: { color: '#8892a4', fontSize: 11 },
+      showDetail: true,
+      showDataShadow: true,
+      dataBackground: {
+        lineStyle: { color: 'rgba(79,140,255,0.3)', width: 0.5 },
+        areaStyle: { color: 'rgba(79,140,255,0.05)' },
+      },
+      moveHandleSize: 0,
+    },
+  ]
 }
 
 const Dashboard = () => {
@@ -117,7 +180,9 @@ const Dashboard = () => {
             </div>`
         },
       },
-      grid: { top: 12, left: 56, right: 32, bottom: 36 },
+      grid: { top: 48, left: 56, right: 32, bottom: 48 },
+      toolbox: SHARED_TOOLBOX,
+      brush: SHARED_BRUSH,
       xAxis: {
         type: 'time',
         axisLabel: {
@@ -125,26 +190,7 @@ const Dashboard = () => {
             dayjs(v).format(quickRange === '24h' ? 'HH:mm' : 'MM-DD'),
         },
       },
-      dataZoom: [
-        {
-          type: 'inside',
-          start: 0,
-          end: 100,
-          minSpan: 5,
-        },
-        {
-          type: 'slider',
-          start: 0,
-          end: 100,
-          height: 28,
-          bottom: 6,
-          borderColor: '#1e2a5a',
-          backgroundColor: '#0a0e27',
-          fillerColor: 'rgba(79,140,255,0.15)',
-          handleStyle: { color: '#4f8cff' },
-          textStyle: { color: '#8892a4' },
-        },
-      ],
+      dataZoom: buildDataZoom(),
       yAxis: {
         type: 'value',
         name: 'MW',
@@ -188,6 +234,9 @@ const Dashboard = () => {
       v,
     ])
 
+    // 为实际数据添加标记，便于框选联动区分
+    const actualData = recent48.map((d) => [d.time, d.loadMw])
+
     return {
       tooltip: {
         formatter: (params: unknown) => {
@@ -209,11 +258,14 @@ const Dashboard = () => {
             </div>`
         },
       },
-      grid: { top: 12, left: 56, right: 32, bottom: 36 },
+      grid: { top: 48, left: 56, right: 32, bottom: 48 },
+      toolbox: SHARED_TOOLBOX,
+      brush: SHARED_BRUSH,
       xAxis: {
         type: 'time',
         axisLabel: { formatter: (v: number) => dayjs(v).format('MM-DD HH:mm') },
       },
+      dataZoom: buildDataZoom(),
       yAxis: {
         type: 'value',
         name: 'MW',
@@ -223,7 +275,7 @@ const Dashboard = () => {
         {
           name: '实际负荷',
           type: 'line',
-          data: recent48.map((d) => [d.time, d.loadMw]),
+          data: actualData,
           smooth: true,
           symbol: 'none',
           lineStyle: { color: '#4f8cff', width: 2 },
@@ -334,7 +386,7 @@ const Dashboard = () => {
           <LoadChart
             title="实时负荷曲线"
             option={loadChartOption}
-            height={380}
+            height={420}
             loading={fetching}
             emptyText="所选时间范围内无负荷数据"
           />
@@ -343,7 +395,7 @@ const Dashboard = () => {
           <LoadChart
             title="预测 vs 实际对比"
             option={predChartOption}
-            height={380}
+            height={420}
             loading={fetching}
             emptyText="暂无预测数据"
           />
