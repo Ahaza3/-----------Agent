@@ -55,6 +55,7 @@ def build_sliding_windows(
     df: pd.DataFrame,
     target_col: str = "load_mw",
     seq_length: int = 168,
+    forecast_horizon: int = 24,
     feature_cols: list | None = None,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
@@ -64,12 +65,13 @@ def build_sliding_windows(
         df: 特征 DataFrame（已按时间排序）
         target_col: 预测目标列名
         seq_length: 序列长度（默认 168 = 7 天 × 24h）
+        forecast_horizon: 预测步数（默认 24，一次输出未来 24h）
         feature_cols: 特征列名列表，None 则自动选择数值列
 
     Returns:
-        features: (N, seq_length, n_features) 标准化特征数组
-        targets:  (N,) 标准化目标数组
-        raw_targets: (N,) 原始目标值（反标准化用）
+        features:     (N, seq_length, n_features) 标准化特征数组
+        targets:      (N, forecast_horizon) 标准化目标数组
+        raw_targets:  (N, forecast_horizon) 原始目标值
     """
     if feature_cols is None:
         # 自动选择：数值列，排除目标列和时间列
@@ -82,26 +84,29 @@ def build_sliding_windows(
     data = df[feature_cols].values.astype(np.float32)
     raw_y = df[target_col].values.astype(np.float32)
 
-    n_samples = len(data) - seq_length
+    n_samples = len(data) - seq_length - forecast_horizon + 1
     if n_samples <= 0:
-        raise ValueError(f"数据量 ({len(data)}) 不足以构建 seq_length={seq_length} 的窗口")
+        raise ValueError(
+            f"数据量 ({len(data)}) 不足以构建 seq_length={seq_length} + horizon={forecast_horizon} 的窗口"
+        )
 
-    # 特征标准化（全部特征全局拟合，保持时序顺序）
+    # 特征标准化
     scaler_x = StandardScaler()
     data_scaled = scaler_x.fit_transform(data)
 
     scaler_y = StandardScaler()
-    targets_scaled = scaler_y.fit_transform(raw_y.reshape(-1, 1)).flatten()
+    raw_y_2d = raw_y.reshape(-1, 1)
+    targets_scaled = scaler_y.fit_transform(raw_y_2d).flatten()
 
-    # 构建滑动窗口
+    # 构建滑动窗口：X = 过去 seq_length 步特征，Y = 未来 forecast_horizon 步目标
     features = np.zeros((n_samples, seq_length, len(feature_cols)), dtype=np.float32)
-    targets = np.zeros(n_samples, dtype=np.float32)
-    raw_targets_out = np.zeros(n_samples, dtype=np.float32)
+    targets = np.zeros((n_samples, forecast_horizon), dtype=np.float32)
+    raw_targets_out = np.zeros((n_samples, forecast_horizon), dtype=np.float32)
 
     for i in range(n_samples):
         features[i] = data_scaled[i:i + seq_length]
-        targets[i] = targets_scaled[i + seq_length]
-        raw_targets_out[i] = raw_y[i + seq_length]
+        targets[i] = targets_scaled[i + seq_length:i + seq_length + forecast_horizon]
+        raw_targets_out[i] = raw_y[i + seq_length:i + seq_length + forecast_horizon]
 
     return features, targets, raw_targets_out
 
@@ -110,6 +115,7 @@ def create_dataloaders(
     df: pd.DataFrame,
     target_col: str = "load_mw",
     seq_length: int = 168,
+    forecast_horizon: int = 24,
     batch_size: int = 64,
     train_ratio: float = 0.85,
     feature_cols: list | None = None,
@@ -122,8 +128,9 @@ def create_dataloaders(
         df: 特征 DataFrame
         target_col: 预测目标列
         seq_length: 输入序列长度
+        forecast_horizon: 预测步数
         batch_size: 批次大小
-        train_ratio: 训练集比例（时序分割，不打乱顺序）
+        train_ratio: 训练集比例（时序分割）
         feature_cols: 特征列名
         shuffle_train: 训练集是否 shuffle
 
@@ -133,7 +140,8 @@ def create_dataloaders(
     """
     # 构建窗口
     features, targets, _ = build_sliding_windows(
-        df, target_col=target_col, seq_length=seq_length, feature_cols=feature_cols
+        df, target_col=target_col, seq_length=seq_length,
+        forecast_horizon=forecast_horizon, feature_cols=feature_cols,
     )
 
     # 时序分割（保持时间顺序）
