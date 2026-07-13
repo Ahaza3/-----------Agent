@@ -5,8 +5,8 @@
  * 功能：
  *   - 时间范围选择器 (Segmented 快捷 + RangePicker 自定义)
  *   - 四张统计卡片 (峰值 / 谷值 / 平均 / 负荷率)
- *   - 实时负荷曲线 (ECharts 时间序列) — 支持框选放大 / 滚轮缩放 / 滑块缩放
- *   - 预测 vs 实际对比 (24h 预报叠加) — 支持框选放大 / 滚轮缩放 / 滑块缩放
+ *   - 实时负荷曲线 (ECharts 时间序列) — 滚轮缩放 + 滑块缩放 + 还原 + 导出
+ *   - 预测 vs 实际对比 (24h 预报叠加) — 滚轮缩放 + 滑块缩放 + 还原 + 导出
  *   - 1920×1080 自适应布局
  */
 import { useState, useEffect, useCallback, useMemo } from 'react'
@@ -53,33 +53,20 @@ function fmtMw(v: number | undefined | null): string {
   return v.toFixed(1)
 }
 
-/** 共用工具箱配置 — 框选放大 + 还原 + 导出图片 */
+/** 共用工具箱 — 还原 + 导出图片 */
 const SHARED_TOOLBOX: EChartsOption['toolbox'] = {
   right: 12,
-  top: 8,
+  top: 4,
   feature: {
-    brush: {
-      type: ['rect', 'polygon'],
-      title: { rect: '框选放大', polygon: '圈选放大' },
-    },
     restore: { title: '还原' },
     saveAsImage: {
-      title: '保存图片',
+      title: '保存为图片',
       pixelRatio: 2,
       backgroundColor: '#0a0e27',
     },
   },
   iconStyle: { borderColor: '#8892a4' },
   emphasis: { iconStyle: { borderColor: '#4f8cff' } },
-}
-
-/** 共用框选配置 */
-const SHARED_BRUSH: EChartsOption['brush'] = {
-  toolbox: ['rect', 'polygon'],
-  brushLink: 'all',
-  outOfBrush: { color: 'rgba(136,146,164,0.15)' },
-  throttleType: 'debounce',
-  throttleDelay: 300,
 }
 
 /** 共用 dataZoom 滑块样式 */
@@ -180,9 +167,8 @@ const Dashboard = () => {
             </div>`
         },
       },
-      grid: { top: 48, left: 56, right: 32, bottom: 48 },
+      grid: { top: 40, left: 56, right: 32, bottom: 48 },
       toolbox: SHARED_TOOLBOX,
-      brush: SHARED_BRUSH,
       xAxis: {
         type: 'time',
         axisLabel: {
@@ -263,9 +249,8 @@ const Dashboard = () => {
             </div>`
         },
       },
-      grid: { top: 48, left: 56, right: 32, bottom: 48 },
+      grid: { top: 40, left: 56, right: 32, bottom: 48 },
       toolbox: SHARED_TOOLBOX,
-      brush: SHARED_BRUSH,
       xAxis: {
         type: 'time',
         axisLabel: { formatter: (v: number) => dayjs(v).format('MM-DD HH:mm') },
