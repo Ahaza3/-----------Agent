@@ -15,6 +15,7 @@ import {
   Row,
   Col,
   Segmented,
+  Skeleton,
   message,
 } from 'antd'
 import {
@@ -35,6 +36,12 @@ import useDashboardStore from '../../stores/useDashboardStore'
 const { RangePicker } = DatePicker
 
 type QuickRange = '24h' | '7d' | '30d'
+
+/** 各时间范围对应图表最大点数 */
+const MAX_POINTS: Record<QuickRange, number> = { '24h': 0, '7d': 500, '30d': 1200 }
+
+/** 各时间范围在预测图中显示的最近实际数据量 */
+const PRED_CONTEXT: Record<QuickRange, number> = { '24h': 48, '7d': 168, '30d': 336 }
 
 function quickToRange(q: QuickRange): [Dayjs, Dayjs] {
   const now = dayjs()
@@ -108,6 +115,7 @@ const Dashboard = () => {
   const [quickRange, setQuickRange] = useState<QuickRange>('24h')
   const [customRange, setCustomRange] = useState<[Dayjs, Dayjs] | null>(null)
   const [fetching, setFetching] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   const {
     loadData,
@@ -125,6 +133,7 @@ const Dashboard = () => {
     const end = range[1].toISOString()
 
     setFetching(true)
+    setError(null)
     try {
       const [data, statResult, fcResult] = await Promise.all([
         fetchLoadRange(start, end),
@@ -135,6 +144,7 @@ const Dashboard = () => {
       setStats(statResult)
       setForecast(fcResult)
     } catch {
+      setError('数据加载失败，请确认后端服务已启动')
       message.error('数据加载失败，请确认后端服务已启动')
     } finally {
       setFetching(false)
@@ -147,8 +157,10 @@ const Dashboard = () => {
 
   // ---- 负荷曲线 option ----
   const loadChartOption = useMemo<EChartsOption>(() => {
-    const points =
-      loadData.length > 500 ? loadData.slice(-500) : loadData
+    const maxPts = MAX_POINTS[quickRange]
+    const points = maxPts > 0 && loadData.length > maxPts
+      ? loadData.slice(-maxPts)
+      : loadData
 
     return {
       tooltip: {
@@ -207,26 +219,29 @@ const Dashboard = () => {
 
   // ---- 预测对比 option ----
   const predChartOption = useMemo<EChartsOption>(() => {
-    // 最近 48h 实际数据
-    const recent48 = loadData.length > 48 ? loadData.slice(-48) : loadData
+    const ctx = PRED_CONTEXT[quickRange]
+    const recent = loadData.length > ctx ? loadData.slice(-ctx) : loadData
 
-    // 构建预测时间轴：从最后一个数据点开始，未来 24h
-    const lastTime = recent48.length > 0
-      ? dayjs(recent48[recent48.length - 1].time)
+    const lastTime = recent.length > 0
+      ? dayjs(recent[recent.length - 1].time)
       : dayjs()
 
-    // 预测从实际最后一个点开始接续，使两条线视觉连贯
+    // 预测从实际最后一个点开始接续
     const predPoints: [string, number][] = []
-    if (recent48.length > 0) {
-      const last = recent48[recent48.length - 1]
-      predPoints.push([last.time, last.loadMw])  // 起锚点 = 最后实际值
+    if (recent.length > 0) {
+      const last = recent[recent.length - 1]
+      predPoints.push([last.time, last.loadMw])
     }
     ;(forecast?.predictions ?? []).forEach((v, i) => {
       predPoints.push([lastTime.add(i + 1, 'hour').toISOString(), v])
     })
 
-    // 为实际数据添加标记，便于框选联动区分
-    const actualData = recent48.map((d) => [d.time, d.loadMw])
+    const actualData = recent.map((d) => [d.time, d.loadMw])
+
+    // "当前时刻" 分界线：标记实际数据终点 / 预测起点
+    const nowMark = recent.length > 0
+      ? recent[recent.length - 1].time
+      : null
 
     return {
       tooltip: {
@@ -279,10 +294,24 @@ const Dashboard = () => {
           symbolSize: 4,
           lineStyle: { color: '#fbbf24', width: 2, type: 'dashed' },
           itemStyle: { color: '#fbbf24' },
+          markLine: nowMark
+            ? {
+                silent: true,
+                symbol: 'none',
+                lineStyle: { color: 'rgba(255,255,255,0.3)', type: 'dashed', width: 1 },
+                label: {
+                  formatter: '现在',
+                  position: 'end',
+                  color: '#8892a4',
+                  fontSize: 11,
+                },
+                data: [{ xAxis: nowMark }],
+              }
+            : undefined,
         },
       ],
     }
-  }, [loadData, forecast])
+  }, [loadData, forecast, quickRange])
 
   // ---- 统计卡片数据 ----
   const statCards = useMemo(() => {
@@ -360,15 +389,31 @@ const Dashboard = () => {
       </div>
 
       {/* ====== 统计卡片行 ====== */}
-      {statCards && (
+      {statCards ? (
         <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
           {statCards.map((card) => (
             <Col xs={24} sm={12} lg={6} key={card.title}>
-              <StatCard {...card} />
+              {fetching ? (
+                <Skeleton
+                  active
+                  paragraph={{ rows: 2 }}
+                  title={{ width: '60%' }}
+                />
+              ) : (
+                <StatCard {...card} />
+              )}
             </Col>
           ))}
         </Row>
-      )}
+      ) : fetching ? (
+        <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
+          {[0, 1, 2, 3].map((i) => (
+            <Col xs={24} sm={12} lg={6} key={i}>
+              <Skeleton active paragraph={{ rows: 2 }} title={{ width: '60%' }} />
+            </Col>
+          ))}
+        </Row>
+      ) : null}
 
       {/* ====== 图表区 ====== */}
       <Row gutter={[16, 16]}>
@@ -378,7 +423,7 @@ const Dashboard = () => {
             option={loadChartOption}
             height={420}
             loading={fetching}
-            emptyText="所选时间范围内无负荷数据"
+            emptyText={error ?? '所选时间范围内无负荷数据'}
           />
         </Col>
         <Col xs={24} lg={12}>
@@ -387,7 +432,7 @@ const Dashboard = () => {
             option={predChartOption}
             height={420}
             loading={fetching}
-            emptyText="暂无预测数据"
+            emptyText={error ?? '暂无预测数据'}
           />
         </Col>
       </Row>
@@ -395,7 +440,7 @@ const Dashboard = () => {
       {/* ====== 内联自适应样式 ====== */}
       <style>{`
         .dashboard-root {
-          min-height: calc(100vh - 136px); /* 减去 header + content padding */
+          min-height: calc(100vh - 136px);
           display: flex;
           flex-direction: column;
         }
@@ -414,7 +459,6 @@ const Dashboard = () => {
           font-weight: 600;
           white-space: nowrap;
         }
-        /* 1920×1080 大屏优化 */
         @media (min-width: 1920px) {
           .dashboard-root {
             max-width: 1920px;
