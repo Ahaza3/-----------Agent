@@ -99,7 +99,7 @@ def main():
 
     # 4. 填充 lag 导致的 NaN（前 168 行）
     numeric_cols = df.select_dtypes(include=[np.number]).columns
-    df[numeric_cols] = df[numeric_cols].fillna(method="bfill").fillna(method="ffill")
+    df[numeric_cols] = df[numeric_cols].bfill().ffill()
 
     # 5. 输出
     df.to_csv(args.output, index=False, encoding="utf-8")
