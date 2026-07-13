@@ -1,4 +1,15 @@
 /**
+ * 预测接口响应
+ * 对应后端 ForecastResponse DTO — GET /api/v1/predict/forecast
+ */
+export interface ForecastResponse {
+  /** 24 小时预测值 (MW)，从当前时刻起每小时一个 */
+  predictions: number[]
+  /** 模型名称: LSTM / Prophet */
+  model: string
+}
+
+/**
  * 预测结果类型
  * 对应后端 prediction_result 表
  */
