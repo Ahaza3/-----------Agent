@@ -1,6 +1,6 @@
 /**
- * LoadChart — 可复用 ECharts 图表容器
- * 封装 loading / empty / resize，统一暗色大屏主题
+ * LoadChart — Brutalist CRT 风格 ECharts 容器
+ * 零渐变 / 零阴影 / 终端配色
  */
 import { useRef, useMemo } from 'react'
 import ReactECharts from 'echarts-for-react'
@@ -8,47 +8,59 @@ import { Card, Spin, Empty } from 'antd'
 import type { EChartsOption } from 'echarts'
 
 interface LoadChartProps {
-  /** 图表标题 */
   title?: string
-  /** ECharts 配置项 */
   option: EChartsOption
-  /** 图表高度 (px)，默认 360 */
   height?: number
-  /** 是否加载中 */
   loading?: boolean
-  /** 数据为空时的提示文案 */
   emptyText?: string
 }
 
-/** 暗色大屏 ECharts 基础主题 */
-const DARK_THEME: EChartsOption = {
+/** Tactical Telemetry 图表主题 */
+const CRT_THEME: EChartsOption = {
   backgroundColor: 'transparent',
-  grid: { left: 56, right: 32, top: 16, bottom: 36 },
+  grid: { left: 52, right: 28, top: 12, bottom: 36 },
   tooltip: {
     trigger: 'axis',
-    backgroundColor: '#141a4a',
-    borderColor: '#1e2a5a',
-    textStyle: { color: '#e0e6f0', fontSize: 13 },
-  },
-  toolbox: {
-    iconStyle: { borderColor: '#8892a4' },
-    emphasis: { iconStyle: { borderColor: '#4f8cff' } },
+    backgroundColor: '#0E0E0E',
+    borderColor: '#FF2A2A',
+    borderWidth: 1,
+    textStyle: {
+      color: '#EAEAEA',
+      fontSize: 12,
+      fontFamily:
+        "'JetBrains Mono', 'IBM Plex Mono', 'Consolas', monospace",
+    },
   },
   legend: {
-    textStyle: { color: '#8892a4' },
+    textStyle: {
+      color: '#888888',
+      fontFamily:
+        "'JetBrains Mono', 'IBM Plex Mono', 'Consolas', monospace",
+      fontSize: 11,
+    },
     top: 0,
   },
   xAxis: {
-    axisLine: { lineStyle: { color: '#1e2a5a' } },
-    axisTick: { lineStyle: { color: '#1e2a5a' } },
-    axisLabel: { color: '#8892a4' },
+    axisLine: { lineStyle: { color: '#2A2A2A', width: 1 } },
+    axisTick: { lineStyle: { color: '#2A2A2A' } },
+    axisLabel: {
+      color: '#888888',
+      fontFamily:
+        "'JetBrains Mono', 'IBM Plex Mono', 'Consolas', monospace",
+      fontSize: 10,
+    },
     splitLine: { show: false },
   },
   yAxis: {
     axisLine: { show: false },
     axisTick: { show: false },
-    axisLabel: { color: '#8892a4' },
-    splitLine: { lineStyle: { color: '#162050', type: 'dashed' } },
+    axisLabel: {
+      color: '#888888',
+      fontFamily:
+        "'JetBrains Mono', 'IBM Plex Mono', 'Consolas', monospace",
+      fontSize: 10,
+    },
+    splitLine: { lineStyle: { color: '#1A1A1A', type: 'solid', width: 1 } },
   },
 }
 
@@ -62,10 +74,9 @@ const LoadChart = ({
   const chartRef = useRef<ReactECharts>(null)
 
   const mergedOption = useMemo(() => {
-    const merged = { ...DARK_THEME, ...option }
-    // 深度合并子对象，避免被外部 option 覆盖
-    merged.grid = { ...DARK_THEME.grid, ...option.grid }
-    merged.tooltip = { ...DARK_THEME.tooltip, ...option.tooltip }
+    const merged = { ...CRT_THEME, ...option }
+    merged.grid = { ...CRT_THEME.grid, ...option.grid }
+    merged.tooltip = { ...CRT_THEME.tooltip, ...option.tooltip }
     return merged
   }, [option])
 
@@ -79,7 +90,25 @@ const LoadChart = ({
   const isEmpty = !loading && !hasData
 
   return (
-    <Card title={title} bodyStyle={{ padding: isEmpty ? 40 : 12 }}>
+    <Card
+      title={
+        title ? (
+          <span
+            className="font-mono"
+            style={{
+              fontSize: 11,
+              letterSpacing: '0.08em',
+              textTransform: 'uppercase',
+              color: '#AAAAAA',
+            }}
+          >
+            &gt;&gt; {title} &lt;&lt;
+          </span>
+        ) : undefined
+      }
+      bodyStyle={{ padding: isEmpty ? 40 : 8 }}
+      style={{ border: '1px solid #2A2A2A' }}
+    >
       {loading ? (
         <div
           style={{
@@ -93,7 +122,11 @@ const LoadChart = ({
         </div>
       ) : isEmpty ? (
         <Empty
-          description={<span style={{ color: '#5c6680' }}>{emptyText}</span>}
+          description={
+            <span className="font-mono" style={{ color: '#666666', fontSize: 12 }}>
+              // {emptyText} //
+            </span>
+          }
           style={{ margin: 'auto' }}
         />
       ) : (

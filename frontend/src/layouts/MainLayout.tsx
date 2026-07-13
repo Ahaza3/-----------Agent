@@ -1,8 +1,8 @@
 /**
- * 主布局 — 顶部导航 + 侧边菜单 + 内容区
- * 暗色大屏风格，适配可视化监控场景
+ * 主布局 — Brutalist CRT Terminal 风格
+ * 可见边框分隔 + 等宽时钟 + ASCII 标识
  */
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { Layout, Menu, Button, Typography, Space } from 'antd'
 import {
@@ -14,15 +14,12 @@ import {
   MenuFoldOutlined,
   MenuUnfoldOutlined,
   ThunderboltOutlined,
-  ClockCircleOutlined,
 } from '@ant-design/icons'
-import { useEffect } from 'react'
 import dayjs from 'dayjs'
 
 const { Header, Sider, Content } = Layout
 const { Text } = Typography
 
-// ---- 菜单项配置 ----
 const menuItems = [
   { key: '/dashboard', icon: <DashboardOutlined />, label: '可视化大屏' },
   { key: '/alerts', icon: <AlertOutlined />, label: '告警中心' },
@@ -32,7 +29,7 @@ const menuItems = [
 ]
 
 const SIDER_WIDTH = 220
-const SIDER_COLLAPSED_WIDTH = 64
+const SIDER_COLLAPSED_WIDTH = 56
 
 const MainLayout = () => {
   const [collapsed, setCollapsed] = useState(false)
@@ -40,7 +37,6 @@ const MainLayout = () => {
   const navigate = useNavigate()
   const location = useLocation()
 
-  // 实时时钟
   useEffect(() => {
     const timer = setInterval(() => {
       setClock(dayjs().format('YYYY-MM-DD HH:mm:ss'))
@@ -48,16 +44,11 @@ const MainLayout = () => {
     return () => clearInterval(timer)
   }, [])
 
-  // 菜单选中
   const selectedKey = '/' + location.pathname.split('/')[1]
-
-  const handleMenuClick = (info: { key: string }) => {
-    navigate(info.key)
-  }
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
-      {/* ---- 侧边栏 ---- */}
+      {/* ====== 侧栏 ====== */}
       <Sider
         width={SIDER_WIDTH}
         collapsedWidth={SIDER_COLLAPSED_WIDTH}
@@ -65,39 +56,37 @@ const MainLayout = () => {
         collapsed={collapsed}
         trigger={null}
         style={{
-          borderRight: '1px solid #162050',
-          overflow: 'auto',
+          borderRight: '2px solid #2A2A2A',
         }}
       >
-        {/* Logo 区域 */}
+        {/* Logo */}
         <div
           style={{
-            height: 56,
+            height: 52,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            borderBottom: '1px solid #162050',
-            gap: collapsed ? 0 : 8,
+            borderBottom: '2px solid #2A2A2A',
+            gap: collapsed ? 0 : 6,
             padding: collapsed ? 0 : '0 16px',
           }}
         >
           <ThunderboltOutlined
-            style={{
-              fontSize: collapsed ? 22 : 20,
-              color: '#4f8cff',
-            }}
+            style={{ fontSize: collapsed ? 20 : 16, color: '#FF2A2A' }}
           />
           {!collapsed && (
-            <Text
-              strong
+            <span
+              className="font-mono"
               style={{
-                color: '#e0e6f0',
-                fontSize: 16,
+                color: '#EAEAEA',
+                fontSize: 12,
+                letterSpacing: '0.1em',
+                textTransform: 'uppercase',
                 whiteSpace: 'nowrap',
               }}
             >
               电力负荷监控
-            </Text>
+            </span>
           )}
         </div>
 
@@ -107,45 +96,58 @@ const MainLayout = () => {
           mode="inline"
           selectedKeys={[selectedKey]}
           items={menuItems}
-          onClick={handleMenuClick}
-          style={{ borderInlineEnd: 'none', marginTop: 8 }}
+          onClick={(info) => navigate(info.key)}
+          style={{ borderInlineEnd: 'none', marginTop: 4 }}
         />
       </Sider>
 
-      {/* ---- 右侧区域 ---- */}
+      {/* ====== 右侧 ====== */}
       <Layout>
-        {/* 顶部导航 */}
+        {/* 顶部栏 */}
         <Header
           style={{
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            padding: '0 24px',
-            borderBottom: '1px solid #162050',
+            padding: '0 20px',
+            borderBottom: '2px solid #2A2A2A',
           }}
         >
           <Button
             type="text"
-            icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+            icon={
+              collapsed ? (
+                <MenuUnfoldOutlined />
+              ) : (
+                <MenuFoldOutlined />
+              )
+            }
             onClick={() => setCollapsed(!collapsed)}
-            style={{ color: '#8892a4', fontSize: 16 }}
+            style={{ color: '#888888', fontSize: 16 }}
           />
 
-          <Space size="large">
-            <ClockCircleOutlined style={{ color: '#4f8cff' }} />
-            <Text style={{ color: '#8892a4', fontFamily: 'monospace', fontSize: 14 }}>
+          <Space size="middle">
+            <span
+              className="font-mono"
+              style={{ color: '#4AF626', fontSize: 11, letterSpacing: '0.05em' }}
+            >
+              系统运行中
+            </span>
+            <Text
+              className="font-mono"
+              style={{
+                color: '#AAAAAA',
+                fontSize: 12,
+                letterSpacing: '0.06em',
+              }}
+            >
               {clock}
             </Text>
           </Space>
         </Header>
 
         {/* 内容区 */}
-        <Content
-          style={{
-            padding: 24,
-            overflow: 'auto',
-          }}
-        >
+        <Content style={{ padding: 20, overflow: 'auto' }}>
           <Outlet />
         </Content>
       </Layout>
