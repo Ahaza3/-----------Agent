@@ -97,10 +97,9 @@ const DataQuery = () => {
   const [minLoad, setMinLoad] = useState<number | null>(null)
   const [maxLoad, setMaxLoad] = useState<number | null>(null)
 
-  const range = customRange ?? quickToRange(quickRange)
-
   // ---- 获取数据 ----
   const doFetch = useCallback(async () => {
+    const range = customRange ?? quickToRange(quickRange)
     setLoading(true)
     try {
       const result = await fetchLoadRange(range[0].toISOString(), range[1].toISOString())
@@ -110,7 +109,7 @@ const DataQuery = () => {
     } finally {
       setLoading(false)
     }
-  }, [range])
+  }, [quickRange, customRange])
 
   useEffect(() => {
     doFetch()
