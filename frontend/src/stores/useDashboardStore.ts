@@ -6,7 +6,8 @@ import { create } from 'zustand'
 import type { LoadData } from '../types/load'
 import type { PredictionResult } from '../types/prediction'
 import type { AlertEvent } from '../types/alert'
-import type { DashboardStats } from '../types/common'
+import type { LoadStats } from '../types/load'
+import type { ForecastResponse } from '../types/prediction'
 
 interface DashboardState {
   // ---- 数据 ----
@@ -14,10 +15,12 @@ interface DashboardState {
   loadData: LoadData[]
   /** 预测结果 */
   predictions: PredictionResult[]
+  /** 预测原始数据（来自 /predict/forecast） */
+  forecast: ForecastResponse | null
   /** 告警事件 */
   alerts: AlertEvent[]
   /** 仪表盘统计概览 */
-  stats: DashboardStats | null
+  stats: LoadStats | null
   /** 数据加载中 */
   loading: boolean
 
@@ -26,6 +29,8 @@ interface DashboardState {
   setLoadData: (data: LoadData[]) => void
   /** 追加负荷数据（WebSocket 实时推送） */
   appendLoadData: (data: LoadData) => void
+  /** 设置预测原始数据 */
+  setForecast: (data: ForecastResponse) => void
   /** 设置预测结果 */
   setPredictions: (data: PredictionResult[]) => void
   /** 设置告警事件 */
@@ -35,7 +40,7 @@ interface DashboardState {
   /** 确认告警 */
   acknowledgeAlert: (alertId: number) => void
   /** 设置统计概览 */
-  setStats: (stats: DashboardStats) => void
+  setStats: (stats: LoadStats) => void
   /** 设置加载状态 */
   setLoading: (loading: boolean) => void
   /** 重置全部数据 */
@@ -45,8 +50,9 @@ interface DashboardState {
 const initialState = {
   loadData: [] as LoadData[],
   predictions: [] as PredictionResult[],
+  forecast: null as ForecastResponse | null,
   alerts: [] as AlertEvent[],
-  stats: null as DashboardStats | null,
+  stats: null as LoadStats | null,
   loading: false,
 }
 
@@ -59,6 +65,8 @@ const useDashboardStore = create<DashboardState>((set) => ({
     set((state) => ({
       loadData: [...state.loadData.slice(-199), data], // 保留最近 200 条
     })),
+
+  setForecast: (data) => set({ forecast: data }),
 
   setPredictions: (data) => set({ predictions: data }),
 
