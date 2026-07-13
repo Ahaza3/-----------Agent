@@ -61,3 +61,5 @@ logs/
 
 # ===== Flyway (local dev cache) =====
 flyway*.jar
+mock_load_data.csv
+featured_load_data.csv
