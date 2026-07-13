@@ -125,6 +125,26 @@ const Dashboard = () => {
             dayjs(v).format(quickRange === '24h' ? 'HH:mm' : 'MM-DD'),
         },
       },
+      dataZoom: [
+        {
+          type: 'inside',
+          start: 0,
+          end: 100,
+          minSpan: 5,
+        },
+        {
+          type: 'slider',
+          start: 0,
+          end: 100,
+          height: 28,
+          bottom: 6,
+          borderColor: '#1e2a5a',
+          backgroundColor: '#0a0e27',
+          fillerColor: 'rgba(79,140,255,0.15)',
+          handleStyle: { color: '#4f8cff' },
+          textStyle: { color: '#8892a4' },
+        },
+      ],
       yAxis: {
         type: 'value',
         name: 'MW',
