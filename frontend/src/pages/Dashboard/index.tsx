@@ -229,10 +229,15 @@ const Dashboard = () => {
       ? dayjs(recent48[recent48.length - 1].time)
       : dayjs()
 
-    const predPoints = (forecast?.predictions ?? []).map((v, i) => [
-      lastTime.add(i + 1, 'hour').toISOString(),
-      v,
-    ])
+    // 预测从实际最后一个点开始接续，使两条线视觉连贯
+    const predPoints: [string, number][] = []
+    if (recent48.length > 0) {
+      const last = recent48[recent48.length - 1]
+      predPoints.push([last.time, last.loadMw])  // 起锚点 = 最后实际值
+    }
+    ;(forecast?.predictions ?? []).forEach((v, i) => {
+      predPoints.push([lastTime.add(i + 1, 'hour').toISOString(), v])
+    })
 
     // 为实际数据添加标记，便于框选联动区分
     const actualData = recent48.map((d) => [d.time, d.loadMw])
