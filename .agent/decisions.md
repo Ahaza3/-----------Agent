@@ -72,14 +72,70 @@
 
 ---
 
+## 2026-07-12 · Day 3
+
+### 决策 011：TBD-01 已解决 — LSTM 主力，Prophet 兜底
+
+- **决策**：LSTM 作为主力推理模型（Flask 优先加载 TorchScript），Prophet 作为模型加载失败时的 fallback
+- **实测**：LSTM MAPE 3.53% vs Prophet 4.71%（低 25%）；MAE 27.24 vs 36.61 MW
+- **影响**：ADR-012 记录完整决策；Flask app.py 实现 LSTM→Prophet 自动降级
+
+### 决策 012：TBD-03 已解决 — Zustand 状态管理
+
+- **决策**：前端全局状态使用 Zustand（非 Redux / Context），按领域拆分 Store（`useDashboardStore`）
+- **理由**：Zustand API 简洁（`create` 一个函数搞定），无 Provider 嵌套，与 React 18 兼容最佳
+- **影响**：`stores/useDashboardStore.ts` 管理 loadData/predictions/alerts/stats 四个领域
+
+---
+
+## 2026-07-13 · Day 4
+
+### 决策 013：AI Code Review SOP 落地
+
+- **决策**：制定 [07-AI代码审查SOP.md](../docs/07-AI代码审查SOP.md)，所有 PR 必须走 AI 审查 → 人工确认 → Merge 流程
+- **理由**：对应 30% 考核权重；禁飞区特殊规则（AI 只审查不给修复代码）
+- **影响**：PR 模板增加禁飞区声明、Review 指令字段；GitHub 配置分支保护
+
+### 决策 014：Sprint 1 超前交付
+
+- **决策**：Day 4 完成 Day 4-7 约 85% 工作量（脚手架→数据管道→预测模型→可视化大屏全链路贯通）
+- **影响**：Day 5-7 可用于 Sprint 1 收尾（Bug 注入练习 + 评审）和 Sprint 2 提前准备
+
+### 决策 015：AI 协作审计机制建立
+
+- **决策**：每个 Sprint 结束前执行 AI 协作审计（三层次范式合规检查），产出 [08-AI协作审计报告.md](../docs/08-AI协作审计报告.md)
+- **Sprint 1 审计结果**：整体合规率 94%，禁飞区零违规，发现 2 个 AI 生成 Bug（SLF4J 格式符 + Flask 假数据）
+- **影响**：审计成为 Sprint 评审标准流程；ADR-015 记录完整审计维度
+
+### 决策 016：Sprint 1 技术笔记产出
+
+- **决策**：整理 [09-Sprint1技术笔记.md](../docs/09-Sprint1技术笔记.md)（27 个踩坑记录 + 5 条核心经验 + 10 个 Bug 全记录）
+- **理由**：经验沉淀是实训核心目标之一，避免 Sprint 2/3 重复踩坑
+- **影响**：7 条 Sprint 2 预防措施；测试文档重编号（09→10-13，为技术笔记腾位）
+
+### 决策 017：Brutalist CRT Terminal 设计风格
+
+- **决策**：前端大屏采用 CRT 终端风格（零圆角/零阴影/终端配色/等宽字体），Ant Design 5 Theme Token 覆盖 15 个组件
+- **理由**：契合电力调度监控场景；统一设计语言降低后续页面决策成本
+- **影响**：ADR-013 记录；`theme/tokens.ts` 172 行完整 Token 覆盖
+
+---
+
+## 2026-07-14 · Day 5
+
+### 决策 018：文档重编号方案
+
+- **决策**：测试报告 09-12 → 10-13，腾出 09 号位存放 Sprint 1 技术笔记
+- **影响**：docs/ 编号规范写入 conventions.md；后续文档按新编号追加
+
+---
+
 ## 待决策事项
 
 | 编号 | 事项 | 讨论时间 | 负责人 |
 |:-----|:-----|:---------|:-------|
-| TBD-01 | Prophet vs LSTM 模型上线选择 | Day 6 | 技术经理 |
-| TBD-02 | DeepSeek vs 通义千问 LLM API 锁定 | Day 3 | 技术经理 |
-| TBD-03 | 前端状态管理方案（Zustand vs Context） | Day 3 | 产品经理（PO） |
-| TBD-04 | 是否接入真实天气数据 API | Day 5 | 全员 |
+| TBD-02 | DeepSeek vs 通义千问 LLM API 锁定 | Sprint 2 (Day 9) | 技术经理 |
+| TBD-04 | 是否接入真实天气数据 API | Sprint 2 | 全员 |
 
 ---
 

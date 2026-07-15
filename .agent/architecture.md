@@ -171,3 +171,79 @@
 **决策**：模拟数据由 `ml/generate_mock_data.py` 生成（双峰模型 + 噪声 + 季节趋势），不再用 Java MockDataGenerator。
 
 **理由**：02-架构设计文档两处矛盾（3.1 节说 Java，3.2 节点说 Python）。Python 版本与后续特征工程、模型训练共用 pandas 生态，代码更简洁。
+
+---
+
+## ADR-012：LSTM 为主力预测模型，Prophet 为兜底
+
+**决策日期**：2026-07-13  
+**状态**：✅ 已确认（解决 TBD-01）
+
+**背景**：Day 6 完成 Prophet 和 LSTM 两种模型训练，需确定上线策略。
+
+**决策**：**LSTM 作为主力推理模型**（Flask 优先加载 TorchScript），Prophet 作为 fallback。
+
+**实测数据**：
+
+| 指标 | Prophet | LSTM |
+|:-----|--------:|------:|
+| MAPE | 4.71% | **3.53%** |
+| MAE (MW) | 36.61 | **27.24** |
+| RMSE (MW) | 45.22 | **37.46** |
+
+**理由**：LSTM 三项指标全面优于 Prophet（MAPE 低 25%）。Prophet 保留作为模型文件损坏或 TorchScript 加载失败时的兜底。
+
+---
+
+## ADR-013：Brutalist CRT Terminal 前端设计风格
+
+**决策日期**：2026-07-13  
+**状态**：✅ 已确认
+
+**背景**：Day 4-7 Sprint 1 前端开发中，需确定可视化大屏设计方向。
+
+**决策**：采用 **Brutalist CRT Terminal** 风格——零圆角、零渐变、零阴影、终端配色（红 #FF2A2A / 黄 #E6C300 / 绿 #4AF626 / 白 #EAEAEA）、JetBrains Mono 等宽字体。
+
+**理由**：
+- 与电力调度中心终端监控的工业场景契合
+- 深色主题在 1920×1080 大屏上可读性好
+- 统一设计语言降低后续页面（告警中心、Agent 对话）的设计决策成本
+- Ant Design 5 主题 Token 完整覆盖（Layout/Menu/Card/Table/Button/Input/Select/Tag/Tooltip/Statistic/Modal/Segmented/DatePicker/Pagination 共 15 个组件）
+
+---
+
+## ADR-014：TorchScript 模型导出 + 元数据分离
+
+**决策日期**：2026-07-13  
+**状态**：✅ 已确认
+
+**背景**：PyTorch 模型需导出为 Flask 推理服务可加载的格式。
+
+**决策**：使用 **TorchScript `torch.jit.script` + `torch.jit.freeze`**，元数据（seq_length / scaler / feature_cols）独立保存为 `.pkl` 文件。
+
+**导出文件清单**：
+- `models/lstm_scripted.pt` — TorchScript 计算图
+- `models/lstm_meta.pt` — seq_length 等超参数
+- `models/lstm_scaler_x.pkl` / `lstm_scaler.pkl` — 特征/目标 StandardScaler
+- `models/lstm_feature_cols.pkl` — 19 个特征列名列表
+
+**理由**：TorchScript 是 PyTorch 生产部署标准格式；元数据分离避免模型文件中嵌入 Python 对象导致的跨环境兼容问题。
+
+---
+
+## ADR-015：Sprint 1 AI 协作审计机制
+
+**决策日期**：2026-07-13  
+**状态**：✅ 已确认
+
+**背景**：项目规范要求"所有 AI 生成代码必须经过 Code Review"，需要建立审计机制。
+
+**决策**：每个 Sprint 结束前执行一次 **AI 协作审计**（三层次范式合规检查），产出审计报告。
+
+**审计维度**：
+- 逐文件分类：💡 启发式 / ✍️ 精确式 / 🔒 约束式 / 🚫 Vibe Coding
+- 禁飞区安全检查（零违规确认）
+- 跨文件 AI 特征识别（代码重复、格式错误、风格一致性）
+- Bug 全记录 + 修复追踪
+
+**Sprint 1 审计结果**：[08-AI协作审计报告.md](../docs/08-AI协作审计报告.md) — 整体合规率 94%，发现 2 个 AI 生成 Bug。
