@@ -102,6 +102,17 @@ const Dashboard = () => {
   // ---- 实时负荷曲线 ----
   const loadChartOption = useMemo<EChartsOption>(() => {
     const points = loadData.length > 500 ? loadData.slice(-500) : loadData
+    const chartData = points.map((d) => [d.time, d.loadMw]) as [string, number][]
+
+    // 把 liveLoad 作为图表最后一个动态点（每次都覆盖，不累积）
+    if (liveLoad && liveLoad.time && liveLoad.loadMw != null) {
+      const lastHist = chartData[chartData.length - 1]
+      // 只有当 liveLoad 比最后一个历史点更新时才追加
+      if (lastHist && new Date(liveLoad.time) > new Date(lastHist[0])) {
+        chartData.push([liveLoad.time, liveLoad.loadMw])
+      }
+    }
+
     return {
       grid: { top: 28, left: 56, right: 32, bottom: 52 },
       xAxis: {
@@ -125,14 +136,14 @@ const Dashboard = () => {
         {
           name: '负荷',
           type: 'line',
-          data: points.map((d) => [d.time, d.loadMw]),
+          data: chartData,
           smooth: true, symbol: 'none',
           lineStyle: { color: WHITE, width: 1.5 },
           areaStyle: { color: 'rgba(255,42,42,0.06)' },
         },
       ],
     }
-  }, [loadData, quickRange])
+  }, [loadData, liveLoad, quickRange])
 
   // ---- 预测曲线（独立图表） ----
   const predChartOption = useMemo<EChartsOption>(() => {
