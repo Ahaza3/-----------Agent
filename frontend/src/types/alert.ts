@@ -41,10 +41,17 @@ export interface AlertRule {
   updatedAt: string
 }
 
-/** WebSocket 实时负荷推送 */
+/** WebSocket 实时负荷推送（RealtimeLoadPoint） */
 export interface WsLoadPayload {
   type: 'load_update'
-  data: { time: string; loadMw: number; temperature: number; humidity: number }
+  data: {
+    timestamp: number
+    sequence: number
+    loadMw: number
+    temperature: number | null
+    humidity: number | null
+    source: string
+  }
 }
 
 /** WebSocket 告警推送 */
@@ -64,12 +71,16 @@ export interface WsAlertPayload {
 /** WebSocket 预测推送 */
 export interface WsPredictionPayload {
   type: 'prediction_update'
-  data: { predictions: number[]; model: string }
+  data: {
+    predictions: number[]
+    model: string
+    forecastStartTime: string | null
+  }
 }
 
 /** 前端展示配置 */
 export const ALERT_LEVEL_CONFIG: Record<AlertLevel, { label: string; color: string; bg: string }> = {
   RED:    { label: '紧急', color: '#FF2A2A', bg: 'rgba(255,42,42,0.12)' },
-  ORANGE: { label: '重要', color: '#E6C300', bg: 'rgba(230,195,0,0.12)' },
-  YELLOW: { label: '提示', color: '#4AF626', bg: 'rgba(74,246,38,0.10)' },
+  ORANGE: { label: '重要', color: '#FA8C16', bg: 'rgba(250,140,22,0.12)' },
+  YELLOW: { label: '提示', color: '#FADB14', bg: 'rgba(250,219,20,0.10)' },
 }

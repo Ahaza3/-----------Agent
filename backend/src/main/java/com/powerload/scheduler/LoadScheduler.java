@@ -1,20 +1,20 @@
 package com.powerload.scheduler;
 
+import com.powerload.dto.response.RealtimeLoadPoint;
 import com.powerload.entity.LoadData;
 import com.powerload.service.LoadDataService;
+import com.powerload.service.RealtimeLoadService;
 import com.powerload.websocket.PushService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
-import java.time.LocalDateTime;
-import java.util.Random;
-
 /**
- * 实时负荷推送 — 每 5 秒读取最新 DB 值 + 微调 → WebSocket 推送
+ * 实时负荷推送 — 每秒从 RealtimeLoadService 生成新点 → WebSocket 推送
  *
- * <p>不插入 DB，只推送当前读数，图表数据保持小时粒度不变。</p>
+ * <p>启动时从 DB 最新小时数据初始化模拟器状态，之后每秒生成有状态均值回归随机游走。
+ * 不插入 DB，仅推送实时点到 /topic/load。</p>
  */
 @Slf4j
 @Component
@@ -22,31 +22,55 @@ import java.util.Random;
 public class LoadScheduler {
 
     private final LoadDataService loadDataService;
+    private final RealtimeLoadService realtimeLoadService;
     private final PushService pushService;
-    private final Random random = new Random();
 
-    @Scheduled(fixedRate = 5_000)
+    private volatile boolean initialized = false;
+
+    /**
+     * 每秒执行：生成实时点 → 推送 → 更新模拟器目标负荷（跟随小时级最新值）
+     */
+    @Scheduled(fixedRate = 1_000)
     public void pushLatestLoad() {
         try {
-            LoadData latest = loadDataService.getLatest();
-            if (latest == null || latest.getLoadMw() == null) return;
+            // 首次执行时从 DB 初始化
+            if (!initialized) {
+                initFromDb();
+            }
 
-            // 基于最新 DB 值做一个小的随机扰动（模拟"实时"波动感）
-            float baseLoad = latest.getLoadMw();
-            float jitter = (float) random.nextGaussian() * 3f;
-            float liveLoad = Math.max(0, baseLoad + jitter);
+            // 定期同步目标负荷（每分钟），遵循小时级趋势
+            syncTargetLoad();
 
-            // 构造一个虚拟 LoadData 用于推送（不写库）
-            LoadData live = new LoadData();
-            live.setTime(LocalDateTime.now());
-            live.setLoadMw(liveLoad);
-            live.setTemperature(latest.getTemperature());
-            live.setHumidity(latest.getHumidity());
-            live.setHour(LocalDateTime.now().getHour());
-
-            pushService.pushLoad(live);
+            RealtimeLoadPoint point = realtimeLoadService.generateAndAppend();
+            pushService.pushRealtimeLoad(point);
         } catch (Exception e) {
             log.error("Load push error", e);
+        }
+    }
+
+    private void initFromDb() {
+        LoadData latest = loadDataService.getLatest();
+        if (latest == null || latest.getLoadMw() == null) {
+            log.warn("DB 无小时级数据，使用默认值初始化实时模拟器");
+            realtimeLoadService.initialize(800, 25, 60);
+        } else {
+            float temp = latest.getTemperature() != null ? latest.getTemperature() : 25f;
+            float hum = latest.getHumidity() != null ? latest.getHumidity() : 60f;
+            realtimeLoadService.initialize(latest.getLoadMw(), temp, hum);
+        }
+        initialized = true;
+    }
+
+    private long lastTargetSync = 0;
+
+    private void syncTargetLoad() {
+        long now = System.currentTimeMillis();
+        if (now - lastTargetSync < 60_000) return; // 每分钟刷新一次
+        lastTargetSync = now;
+
+        LoadData latest = loadDataService.getLatest();
+        if (latest != null && latest.getLoadMw() != null) {
+            realtimeLoadService.setTargetLoad(latest.getLoadMw());
         }
     }
 }

@@ -3,7 +3,6 @@ package com.powerload.scheduler;
 import com.powerload.entity.LoadData;
 import com.powerload.mapper.LoadDataMapper;
 import com.powerload.service.LoadDataService;
-import com.powerload.websocket.PushService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -14,7 +13,10 @@ import java.time.temporal.ChronoUnit;
 import java.util.Random;
 
 /**
- * 模拟实时数据源 — 每 15 秒检查并补齐缺口，使 DB 始终有到当前整点的数据
+ * 模拟小时级数据源 — 每 15 秒检查并补齐缺口，使 DB 始终有到当前整点的数据
+ *
+ * <p>注意：此组件仅负责补齐小时级 DB 数据，不推送实时 WebSocket 消息。
+ * 实时推送由 {@link LoadScheduler} 通过 {@link com.powerload.service.RealtimeLoadService} 完成。</p>
  */
 @Slf4j
 @Component
@@ -23,7 +25,6 @@ public class MockDataFeeder {
 
     private final LoadDataMapper loadDataMapper;
     private final LoadDataService loadDataService;
-    private final PushService pushService;
     private final Random random = new Random();
 
     private static final double[] HOURLY_PATTERN = {
@@ -65,9 +66,8 @@ public class MockDataFeeder {
                 row.setCreatedAt(LocalDateTime.now());
 
                 loadDataMapper.insert(row);
-                pushService.pushLoad(row);
+                // 不推送 WebSocket — 实时链路由 LoadScheduler + RealtimeLoadService 负责
                 cursor = nextHour;
-                latest = row;
                 latest = row;
             }
         } catch (Exception e) {

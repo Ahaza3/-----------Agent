@@ -7,7 +7,7 @@ import org.springframework.web.socket.config.annotation.StompEndpointRegistry;
 import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerConfigurer;
 
 /**
- * WebSocket 配置 — STOMP over SockJS
+ * WebSocket 配置 — STOMP over 原生 WebSocket
  *
  * <p>端点: /ws/dashboard（原生 WebSocket，无 SockJS 包装）
  * 订阅主题: /topic/load（实时负荷）/ /topic/alerts（告警）/ /topic/predictions（预测）</p>
@@ -18,9 +18,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     @Override
     public void configureMessageBroker(MessageBrokerRegistry registry) {
-        // 客户端订阅前缀（服务端 → 客户端广播）
         registry.enableSimpleBroker("/topic");
-        // 客户端发送前缀（暂不使用）
         registry.setApplicationDestinationPrefixes("/app");
     }
 

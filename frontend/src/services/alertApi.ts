@@ -2,7 +2,7 @@
  * 告警 API — GET /api/v1/alert/*
  */
 import api from './api'
-import type { AlertEvent, AlertPageResult } from '../types/alert'
+import type { AlertEvent, AlertPageResult, AlertRule } from '../types/alert'
 
 interface QueryParams {
   level?: string
@@ -23,4 +23,8 @@ export function markAlertRead(id: number): Promise<void> {
 
 export function fetchLatestAlerts(): Promise<AlertEvent[]> {
   return fetchAlertEvents({ page: 1, size: 5, unreadOnly: true }).then((r) => r.records)
+}
+
+export function fetchAlertRules(): Promise<AlertRule[]> {
+  return api.get('/alert/rules')
 }

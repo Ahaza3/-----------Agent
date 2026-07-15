@@ -26,6 +26,7 @@ const AlertCenter = () => {
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
   const wsAlerts = useDashboardStore((s) => s.alerts)
+  const acknowledgeStoreAlert = useDashboardStore((s) => s.acknowledgeAlert)
   const seenIds = useRef(new Set<number>())
 
   // 实时注入 WebSocket 新告警
@@ -68,6 +69,7 @@ const AlertCenter = () => {
   const handleMarkRead = async (id: number) => {
     try {
       await markAlertRead(id)
+      acknowledgeStoreAlert(id)
       setEvents((prev) =>
         prev.map((e) => (e.id === id ? { ...e, isRead: 1 } : e)),
       )
@@ -203,9 +205,37 @@ const AlertCenter = () => {
             fetch(p)
           },
         }}
+        expandable={{
+          expandedRowRender: (record) => (
+            <div className="alert-detail">
+              <div>
+                <span>告警分析</span>
+                <p>{record.aiAnalysis || '暂无分析'}</p>
+              </div>
+              <div>
+                <span>调度建议</span>
+                <p>{record.suggestion || '暂无建议'}</p>
+              </div>
+            </div>
+          ),
+        }}
         locale={{ emptyText: '暂无告警，系统运行正常' }}
         style={{ background: 'transparent' }}
       />
+      <style>{`
+        .alert-detail {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 24px;
+          padding: 8px 12px;
+          border-left: 2px solid #FF2A2A;
+        }
+        .alert-detail span { color: #888; font-size: 11px; }
+        .alert-detail p { color: #D8D8D8; margin: 5px 0 0; line-height: 1.65; }
+        @media (max-width: 720px) {
+          .alert-detail { grid-template-columns: 1fr; gap: 12px; }
+        }
+      `}</style>
     </div>
   )
 }

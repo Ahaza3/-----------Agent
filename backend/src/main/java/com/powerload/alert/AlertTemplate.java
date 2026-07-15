@@ -30,24 +30,24 @@ public class AlertTemplate {
      * @return 中文告警描述
      */
     public String generateAnalysis(String level, float currentValue, float thresholdValue) {
-        float exceedRatio = (currentValue - thresholdValue) / thresholdValue * 100;
-        String ratioStr = String.format("%.1f", Math.abs(exceedRatio));
+        float usageRatio = thresholdValue > 0 ? currentValue / thresholdValue * 100 : 0;
+        float exceedRatio = Math.max(0, usageRatio - 100);
 
         return switch (level) {
             case "RED" -> String.format(
-                    "⚠️ 紧急告警：当前负荷 %.0f MW，超出安全上限 %.0f MW 的 %.1s%%，"
+                    "⚠️ 紧急告警：当前负荷 %.0f MW，超出安全上限 %.0f MW 的 %.1f%%，"
                             + "已触发红色预警。建议立即启动调峰预案，关注后续负荷变化趋势。",
-                    currentValue, thresholdValue, ratioStr
+                    currentValue, thresholdValue, exceedRatio
             );
             case "ORANGE" -> String.format(
-                    "🔶 重要告警：当前负荷 %.0f MW，已达到安全上限 %.0f MW 的 %.1s%%，"
+                    "🔶 重要告警：当前负荷 %.0f MW，已达到安全上限 %.0f MW 的 %.1f%%，"
                             + "触发橙色预警。请密切关注负荷变化，必要时启动调峰措施。",
-                    currentValue, thresholdValue, ratioStr
+                    currentValue, thresholdValue, usageRatio
             );
             case "YELLOW" -> String.format(
-                    "🟡 提示告警：当前负荷 %.0f MW，接近安全上限 %.0f MW（已达 %.1s%%），"
+                    "🟡 提示告警：当前负荷 %.0f MW，接近安全上限 %.0f MW（已达 %.1f%%），"
                             + "触发黄色预警。建议加强监控，做好调峰准备。",
-                    currentValue, thresholdValue, ratioStr
+                    currentValue, thresholdValue, usageRatio
             );
             default -> String.format("当前负荷 %.0f MW，阈值 %.0f MW。", currentValue, thresholdValue);
         };
