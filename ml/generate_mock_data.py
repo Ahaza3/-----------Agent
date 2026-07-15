@@ -18,7 +18,7 @@ import random
 from datetime import datetime, timedelta
 
 # ─── 参数配置 ───
-START_DATE = datetime(2024, 1, 1)
+START_DATE = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=730)
 DAYS = 730  # 2 年
 HOURS_PER_DAY = 24
 OUTPUT_FILE = "mock_load_data.csv"

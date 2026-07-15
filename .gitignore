@@ -29,6 +29,7 @@ venv/
 # ===== OS =====
 .DS_Store
 Thumbs.db
+.claude/
 
 # ===== Docker =====
 .docker/
@@ -59,5 +60,10 @@ logs/
 .ipynb_checkpoints/
 *.ipynb
 
+# ===== Generated data =====
+*.csv
+
 # ===== Flyway (local dev cache) =====
 flyway*.jar
+mock_load_data.csv
+featured_load_data.csv

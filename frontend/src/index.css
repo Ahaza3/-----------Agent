@@ -2,10 +2,110 @@
 @tailwind components;
 @tailwind utilities;
 
-/* 全局样式 — 大屏底色 */
+/* ===== CRT Terminal 全局样式 ===== */
 body {
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  background: #0a0e27;
-  color: #e0e6f0;
+  font-family:
+    'Inter', 'SF Pro Display', 'Helvetica Neue', -apple-system, sans-serif;
+  background: #0a0a0a;
+  color: #eaeaea;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ---- CRT 扫描线叠加层 ---- */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0, 0, 0, 0.06) 2px,
+    rgba(0, 0, 0, 0.06) 4px
+  );
+  opacity: 0.4;
+}
+
+/* ---- 全局噪点纹理 ---- */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+  background-size: 256px 256px;
+  opacity: 0.3;
+}
+
+/* ---- monospace 工具类 ---- */
+.font-mono {
+  font-family: 'JetBrains Mono', 'IBM Plex Mono', 'SF Mono', 'Cascadia Code',
+    'Consolas', monospace !important;
+}
+
+/* ---- 可见水平分隔线 ---- */
+hr.brutalist {
+  border: none;
+  border-top: 1px solid #2a2a2a;
+  margin: 6px 0;
+  width: 100%;
+}
+
+/* ---- ASCII 装饰帧 ---- */
+.brutalist-frame {
+  display: inline-block;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #666666;
+}
+
+/* ---- Ant Design 全局覆盖 — 强制零圆角 ----
+   (部分组件可能需要更细粒度的覆盖) ---- */
+.ant-card,
+.ant-btn,
+.ant-input,
+.ant-select-selector,
+.ant-table,
+.ant-table-wrapper,
+.ant-pagination-item,
+.ant-tag,
+.ant-modal-content,
+.ant-dropdown-menu,
+.ant-picker,
+.ant-picker-dropdown,
+.ant-segmented,
+.ant-statistic-content,
+.ant-badge {
+  border-radius: 0 !important;
+}
+
+/* ---- 按钮悬停发光 — 危险红微光 ----
+   (仅用于主要交互按钮，非所有) ---- */
+.ant-btn-primary {
+  box-shadow: none !important;
+}
+.ant-btn-primary:hover {
+  box-shadow: 0 0 12px rgba(255, 42, 42, 0.25) !important;
+}
+
+/* ---- 滚动条 CRT 风格 ---- */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #0a0a0a;
+}
+::-webkit-scrollbar-thumb {
+  background: #2a2a2a;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #3a3a3a;
 }

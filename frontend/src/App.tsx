@@ -1,6 +1,8 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
-import { ConfigProvider } from 'antd'
+import { ConfigProvider, App as AntApp } from 'antd'
 import zhCN from 'antd/locale/zh_CN'
+import themeToken from './theme/tokens'
+import MainLayout from './layouts/MainLayout'
 
 // 页面（Day 4 占位，后续 Sprint 实现）
 import Dashboard from './pages/Dashboard'
@@ -11,15 +13,19 @@ import Admin from './pages/Admin'
 
 function App() {
   return (
-    <ConfigProvider locale={zhCN}>
-      <Routes>
-        <Route path="/" element={<Navigate to="/dashboard" replace />} />
-        <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="/alerts" element={<AlertCenter />} />
-        <Route path="/agent" element={<AgentChat />} />
-        <Route path="/data" element={<DataQuery />} />
-        <Route path="/admin" element={<Admin />} />
-      </Routes>
+    <ConfigProvider theme={themeToken} locale={zhCN}>
+      <AntApp>
+        <Routes>
+          <Route element={<MainLayout />}>
+            <Route path="/" element={<Navigate to="/dashboard" replace />} />
+            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/alerts" element={<AlertCenter />} />
+            <Route path="/agent" element={<AgentChat />} />
+            <Route path="/data" element={<DataQuery />} />
+            <Route path="/admin" element={<Admin />} />
+          </Route>
+        </Routes>
+      </AntApp>
     </ConfigProvider>
   )
 }
