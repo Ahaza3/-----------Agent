@@ -5,7 +5,7 @@
  * 默认展示实时负荷曲线，点击"预测"后加载预测对比图
  */
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import { DatePicker, Row, Col, Segmented, Button, message } from 'antd'
+import { DatePicker, Row, Col, Segmented, message } from 'antd'
 import { ThunderboltOutlined } from '@ant-design/icons'
 import dayjs, { type Dayjs } from 'dayjs'
 import type { EChartsOption } from 'echarts'
