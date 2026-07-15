@@ -32,16 +32,17 @@ public class MockDataFeeder {
         0.98, 1.00, 0.96, 0.90, 0.85, 0.80, 0.75, 0.70,
     };
 
-    @Scheduled(fixedRate = 1000)
+    /** 每 5 秒产出一条新数据，与历史小时粒度匹配展示 */
+    @Scheduled(fixedRate = 5_000)
     public void feed() {
         try {
             LoadData latest = loadDataService.getLatest();
             if (latest == null || latest.getLoadMw() == null) return;
 
-            // 从最后一条的时间往后推 1 秒
-            LocalDateTime nextTime = latest.getTime().plusSeconds(1);
+            // 从最后一条的时间往后推 5 秒
+            LocalDateTime nextTime = latest.getTime().plusSeconds(5);
 
-            // 如果已经有下一秒的数据了（并发或重复执行），跳过
+            // 并发保护：已有下一秒数据则跳过
             LoadData after = loadDataService.getLatest();
             if (after != null && after.getTime() != null
                     && !after.getTime().isBefore(nextTime)) {
@@ -52,7 +53,7 @@ public class MockDataFeeder {
             float pattern = (float) HOURLY_PATTERN[nextTime.getHour()];
             float prevLoad = latest.getLoadMw();
             float delta = (float) random.nextGaussian() * 2f;
-            float loadMw = (float) (prevLoad * 0.85 + pattern * 1000 * 0.15) + delta;
+            float loadMw = (float) (prevLoad * 0.90 + pattern * 1000 * 0.10) + delta;
             loadMw = Math.max(50, loadMw);
 
             // 温度/湿度：小幅漂移

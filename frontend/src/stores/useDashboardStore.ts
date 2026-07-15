@@ -63,7 +63,7 @@ const useDashboardStore = create<DashboardState>((set) => ({
 
   appendLoadData: (data) =>
     set((state) => ({
-      loadData: [...state.loadData.slice(-199), data], // 保留最近 200 条
+      loadData: [...state.loadData.slice(-999), data], // 5s→约 83 分钟
     })),
 
   setForecast: (data) => set({ forecast: data }),
