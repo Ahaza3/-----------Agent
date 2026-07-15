@@ -194,13 +194,13 @@ const Dashboard = () => {
           markLine: {
             silent: true, symbol: 'none',
             lineStyle: { color: YELLOW, type: 'dashed', width: 1 },
-            data: [{ xAxis: lastTime.toISOString() }],
+            data: [{ xAxis: (liveLoad?.time ?? lastTime.toISOString()) }],
             label: { formatter: '现在', color: YELLOW, fontSize: 11 },
           },
         },
       ],
     }
-  }, [loadData, forecast])
+  }, [loadData, forecast, liveLoad])
 
   // ---- 统计卡片 ----
   const statCards = useMemo(() => {
