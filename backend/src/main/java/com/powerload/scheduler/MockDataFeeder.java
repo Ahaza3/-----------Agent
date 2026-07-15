@@ -45,8 +45,7 @@ public class MockDataFeeder {
                 LocalDateTime nextHour = cursor.plusHours(1);
 
                 float pattern = (float) HOURLY_PATTERN[nextHour.getHour()];
-                float prevLoad = latest.getLoadMw(); // 始终基于最新一条
-                latest = latest; // keep reference
+                float prevLoad = latest.getLoadMw();
 
                 float loadMw = (float) (prevLoad * 0.8 + pattern * 1000 * 0.2 + random.nextGaussian() * 10);
                 loadMw = Math.max(50, loadMw);
@@ -68,6 +67,7 @@ public class MockDataFeeder {
                 loadDataMapper.insert(row);
                 pushService.pushLoad(row);
                 cursor = nextHour;
+                latest = row;
                 latest = row;
             }
         } catch (Exception e) {

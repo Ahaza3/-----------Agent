@@ -2,19 +2,19 @@
  * 告警中心 — 告警事件列表 + 筛选
  * P0 · Sprint 2 (Day 9)
  */
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { Table, Tag, Button, Segmented, Space, message, Badge } from 'antd'
 import {
   BellOutlined,
   CheckCircleOutlined,
   AlertOutlined,
-  ThunderboltOutlined,
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { fetchAlertEvents, markAlertRead } from '../../services/alertApi'
 import { ALERT_LEVEL_CONFIG } from '../../types/alert'
 import type { AlertEvent, AlertLevel } from '../../types/alert'
 import type { ColumnsType } from 'antd/es/table'
+import useDashboardStore from '../../stores/useDashboardStore'
 
 type LevelFilter = AlertLevel | 'ALL'
 
@@ -25,6 +25,22 @@ const AlertCenter = () => {
   const [loading, setLoading] = useState(false)
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
+  const wsAlerts = useDashboardStore((s) => s.alerts)
+  const seenIds = useRef(new Set<number>())
+
+  // 实时注入 WebSocket 新告警
+  useEffect(() => {
+    if (wsAlerts.length === 0) return
+    const fresh = wsAlerts.filter((a) => !seenIds.current.has(a.id))
+    if (fresh.length === 0) return
+    fresh.forEach((a) => seenIds.current.add(a.id))
+    setEvents((prev) => {
+      const existing = new Set(prev.map((e) => e.id))
+      const toAdd = fresh.filter((a) => !existing.has(a.id))
+      return [...toAdd, ...prev]
+    })
+    setTotal((t) => t + fresh.length)
+  }, [wsAlerts])
 
   const fetch = useCallback(async (p: number) => {
     setLoading(true)

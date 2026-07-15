@@ -52,13 +52,16 @@ const useDashboardStore = create<DashboardState>((set) => ({
 
   setLoadData: (data) =>
     set((state) => {
-      const lastWs = state.loadData[state.loadData.length - 1]
-      if (!lastWs || data.length === 0) return { loadData: data }
+      if (data.length === 0) return { loadData: data }
       const lastRest = data[data.length - 1]
+      const restTimes = new Set(data.map((d) => d.time))
+      // 保留 REST 请求期间到达的 WS 数据，但排除 REST 已包含的时间
       const wsTail = state.loadData.filter(
-        (d) => new Date(d.time) > new Date(lastRest.time),
+        (d) => !restTimes.has(d.time) && new Date(d.time) > new Date(lastRest.time),
       )
-      return { loadData: [...data, ...wsTail] }
+      const merged = [...data, ...wsTail]
+      // 截断
+      return { loadData: merged.length > MAX_POINTS ? merged.slice(-MAX_POINTS) : merged }
     }),
 
   appendLoadData: (data) =>

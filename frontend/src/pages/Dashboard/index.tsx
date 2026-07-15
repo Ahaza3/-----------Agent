@@ -152,22 +152,23 @@ const Dashboard = () => {
 
   // ---- 预测曲线（独立图表） ----
   const predChartOption = useMemo<EChartsOption>(() => {
-    if (!forecast || loadData.length === 0) {
-      return {
-        series: [],
-      }
+    if (!forecast) {
+      return { series: [] }
     }
-    const recent48 = loadData.length > 48 ? loadData.slice(-48) : loadData
-    const last = recent48[recent48.length - 1]
+    const PRED_CTX: Record<QuickRange, number> = { '24h': 48, '7d': 168, '30d': 336 }
+    const ctxLen = PRED_CTX[quickRange]
+    const recent = loadData.length > ctxLen ? loadData.slice(-ctxLen) : loadData
+    const last = recent[recent.length - 1]
 
-    // 预测从当前真实时刻开始（liveLoad 优先，其次历史数据末尾）
-    const now = liveLoad?.time
+    // 预测从当前真实时刻开始（liveLoad 优先，其次历史末尾，兜底当前时间）
+    const startTime = liveLoad?.time
       ? dayjs(liveLoad.time).startOf('hour')
-      : dayjs(last.time).startOf('hour')
-    // 如果当前整点 ≤ 历史末尾，说明数据已是最新，从下一整点开始
-    const startTime = now.isAfter(dayjs(last.time)) ? now : now.add(1, 'hour')
+      : last
+        ? dayjs(last.time).startOf('hour')
+        : dayjs().startOf('hour')
 
-    const forecastData: [string, number][] = [[startTime.toISOString(), last.loadMw]]
+    const lastVal = liveLoad?.loadMw ?? last?.loadMw ?? 800
+    const forecastData: [string, number][] = [[startTime.toISOString(), lastVal]]
     forecast.predictions.forEach((v, i) => {
       forecastData.push([startTime.add(i + 1, 'hour').toISOString(), v])
     })
@@ -189,13 +190,13 @@ const Dashboard = () => {
         },
       ],
       series: [
-        {
+        ...(recent.length > 0 ? [{
           name: '实际',
-          type: 'line',
-          data: recent48.map((d) => [d.time, d.loadMw]),
-          smooth: true, symbol: 'none',
+          type: 'line' as const,
+          data: recent.map((d: typeof recent[0]) => [d.time, d.loadMw]),
+          smooth: true, symbol: 'none' as const,
           lineStyle: { color: WHITE, width: 1 },
-        },
+        }] : []),
         {
           name: '预测',
           type: 'line',
@@ -205,7 +206,7 @@ const Dashboard = () => {
           markLine: {
             silent: true, symbol: 'none',
             lineStyle: { color: YELLOW, type: 'dashed', width: 1 },
-            data: [{ xAxis: (liveLoad?.time ?? last.time) }],
+            data: [{ xAxis: (liveLoad?.time ?? last?.time ?? startTime.toISOString()) }],
             label: { formatter: '现在', color: YELLOW, fontSize: 11 },
           },
         },
@@ -261,6 +262,16 @@ const Dashboard = () => {
         sub: '均值 / 峰值',
       },
     )
+    // 天气信息
+    if (liveLoad?.temperature != null) {
+      cards.push({
+        title: '当前温度 / 湿度',
+        value: `${liveLoad.temperature.toFixed(1)}°C`,
+        suffix: '',
+        color: WHITE,
+        sub: `湿度 ${liveLoad.humidity?.toFixed(0) ?? '--'}%`,
+      })
+    }
     return cards
   }, [stats, liveLoad])
 
