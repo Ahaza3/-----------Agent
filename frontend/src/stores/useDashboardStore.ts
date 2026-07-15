@@ -11,7 +11,11 @@ import type { ForecastResponse } from '../types/prediction'
 const MAX_POINTS = 1000
 
 interface DashboardState {
+  /** 图表数据（小时级，来自 REST + MockDataFeeder 小时插入） */
   loadData: LoadData[]
+  /** 实时当前值（秒级 WebSocket，仅用于仪表读数，不混入图表） */
+  liveLoad: LoadData | null
+
   predictions: PredictionResult[]
   forecast: ForecastResponse | null
   alerts: AlertEvent[]
@@ -19,8 +23,10 @@ interface DashboardState {
   loading: boolean
 
   setLoadData: (data: LoadData[]) => void
-  /** 追加 + 去重：time 相同则跳过 */
+  /** 追加小时级数据到图表（MockDataFeeder 插入后推送） */
   appendLoadData: (data: LoadData) => void
+  /** 设置实时当前值（LoadScheduler 推送） */
+  setLiveLoad: (data: LoadData) => void
   setForecast: (data: ForecastResponse) => void
   setPredictions: (data: PredictionResult[]) => void
   setAlerts: (data: AlertEvent[]) => void
@@ -33,6 +39,7 @@ interface DashboardState {
 
 const initialState = {
   loadData: [] as LoadData[],
+  liveLoad: null as LoadData | null,
   predictions: [] as PredictionResult[],
   forecast: null as ForecastResponse | null,
   alerts: [] as AlertEvent[],
@@ -45,12 +52,9 @@ const useDashboardStore = create<DashboardState>((set) => ({
 
   setLoadData: (data) =>
     set((state) => {
-      // 智能合并：保留 HTTP 请求期间到达的 WebSocket 实时数据
       const lastWs = state.loadData[state.loadData.length - 1]
       if (!lastWs || data.length === 0) return { loadData: data }
-
       const lastRest = data[data.length - 1]
-      // REST 数据终止时间之后的 WS 数据全部保留
       const wsTail = state.loadData.filter(
         (d) => new Date(d.time) > new Date(lastRest.time),
       )
@@ -60,12 +64,12 @@ const useDashboardStore = create<DashboardState>((set) => ({
   appendLoadData: (data) =>
     set((state) => {
       const last = state.loadData[state.loadData.length - 1]
-      // 去重：同一时间不重复追加
       if (last && last.time === data.time) return state
-      // 时间不回退
       if (last && new Date(data.time) <= new Date(last.time)) return state
       return { loadData: [...state.loadData.slice(1 - MAX_POINTS), data] }
     }),
+
+  setLiveLoad: (data) => set({ liveLoad: data }),
 
   setForecast: (data) => set({ forecast: data }),
   setPredictions: (data) => set({ predictions: data }),

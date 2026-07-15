@@ -1,5 +1,8 @@
 /**
- * WebSocket 自定义 Hook — 原生 WebSocket → STOMP 三通道订阅
+ * WebSocket Hook — /topic/load(alerts/predictions
+ * 负荷推送 → setLiveLoad（独立实时读数）
+ * 告警推送 → appendAlert
+ * 预测推送 → setForecast
  */
 import { useEffect, useRef, useCallback } from 'react'
 import { Client } from '@stomp/stompjs'
@@ -9,10 +12,9 @@ import type { WsLoadPayload, WsAlertPayload, WsPredictionPayload } from '../type
 
 const WS_URL = `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}/ws/dashboard`
 
-/** 订阅并自动重连 */
 export function useWebSocket() {
   const clientRef = useRef<Client | null>(null)
-  const appendLoadData = useDashboardStore((s) => s.appendLoadData)
+  const setLiveLoad = useDashboardStore((s) => s.setLiveLoad)
   const appendAlert = useDashboardStore((s) => s.appendAlert)
 
   const connect = useCallback(() => {
@@ -28,59 +30,51 @@ export function useWebSocket() {
     })
 
     client.onConnect = () => {
-      // 实时负荷
       client.subscribe('/topic/load', (msg) => {
         try {
-          const payload: WsLoadPayload = JSON.parse(msg.body)
-          if (payload.type === 'load_update') {
-            const item: LoadData = {
-              id: 0,
-              time: payload.data.time,
-              loadMw: payload.data.loadMw,
-              temperature: payload.data.temperature,
-              humidity: payload.data.humidity,
-              isHoliday: 0,
-              hour: new Date(payload.data.time).getHours(),
-              dayOfWeek: new Date(payload.data.time).getDay(),
-              month: new Date(payload.data.time).getMonth() + 1,
-              createdAt: new Date().toISOString(),
-            }
-            appendLoadData(item)
-          }
-        } catch { /* ignore parse error */ }
-      })
-
-      // 告警推送
-      client.subscribe('/topic/alerts', (msg) => {
-        try {
-          const payload: WsAlertPayload = JSON.parse(msg.body)
-          if (payload.type === 'alert') {
-            appendAlert({
-              id: payload.data.id,
-              triggerTime: payload.data.triggerTime,
-              level: payload.data.level,
-              type: 'THRESHOLD',
-              currentValue: payload.data.currentValue,
-              thresholdValue: payload.data.thresholdValue,
-              ruleId: 0,
-              aiAnalysis: payload.data.aiAnalysis,
-              suggestion: payload.data.suggestion,
-              isRead: 0,
-              resolvedAt: null,
+          const p: WsLoadPayload = JSON.parse(msg.body)
+          if (p.type === 'load_update') {
+            setLiveLoad({
+              id: 0, isHoliday: 0,
+              time: p.data.time,
+              loadMw: p.data.loadMw,
+              temperature: p.data.temperature,
+              humidity: p.data.humidity,
+              hour: new Date(p.data.time).getHours(),
+              dayOfWeek: new Date(p.data.time).getDay(),
+              month: new Date(p.data.time).getMonth() + 1,
               createdAt: new Date().toISOString(),
             })
           }
         } catch { /* ignore */ }
       })
 
-      // 预测推送
+      client.subscribe('/topic/alerts', (msg) => {
+        try {
+          const p: WsAlertPayload = JSON.parse(msg.body)
+          if (p.type === 'alert') {
+            appendAlert({
+              id: p.data.id, type: 'THRESHOLD',
+              triggerTime: p.data.triggerTime,
+              level: p.data.level,
+              currentValue: p.data.currentValue,
+              thresholdValue: p.data.thresholdValue,
+              ruleId: 0, resolvedAt: null,
+              aiAnalysis: p.data.aiAnalysis,
+              suggestion: p.data.suggestion,
+              isRead: 0, createdAt: new Date().toISOString(),
+            })
+          }
+        } catch { /* ignore */ }
+      })
+
       client.subscribe('/topic/predictions', (msg) => {
         try {
-          const payload: WsPredictionPayload = JSON.parse(msg.body)
-          if (payload.type === 'prediction_update') {
+          const p: WsPredictionPayload = JSON.parse(msg.body)
+          if (p.type === 'prediction_update') {
             useDashboardStore.getState().setForecast({
-              predictions: payload.data.predictions,
-              model: payload.data.model,
+              predictions: p.data.predictions,
+              model: p.data.model,
             })
           }
         } catch { /* ignore */ }
@@ -90,11 +84,10 @@ export function useWebSocket() {
     }
 
     client.onDisconnect = () => console.log('[WS] disconnected')
-    client.onStompError = (f) => console.error('[WS] STOMP error', f)
-
+    client.onStompError = (f) => console.error('[WS] error', f)
     client.activate()
     clientRef.current = client
-  }, [appendLoadData, appendAlert])
+  }, [setLiveLoad, appendAlert])
 
   const disconnect = useCallback(() => {
     clientRef.current?.deactivate()
