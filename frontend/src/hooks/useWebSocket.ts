@@ -1,12 +1,13 @@
 /**
- * WebSocket 自定义 Hook — SockJS → STOMP 三通道订阅
+ * WebSocket 自定义 Hook — 原生 WebSocket → STOMP 三通道订阅
  */
 import { useEffect, useRef, useCallback } from 'react'
 import { Client } from '@stomp/stompjs'
-import SockJS from 'sockjs-client'
 import useDashboardStore from '../stores/useDashboardStore'
 import type { LoadData } from '../types/load'
 import type { WsLoadPayload, WsAlertPayload, WsPredictionPayload } from '../types/alert'
+
+const WS_URL = `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}/ws/dashboard`
 
 /** 订阅并自动重连 */
 export function useWebSocket() {
@@ -18,7 +19,7 @@ export function useWebSocket() {
     if (clientRef.current?.active) return
 
     const client = new Client({
-      webSocketFactory: () => new (SockJS as any)('/ws/dashboard'),
+      brokerURL: WS_URL,
       connectHeaders: {},
       debug: () => {},
       reconnectDelay: 5000,

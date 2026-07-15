@@ -9,7 +9,7 @@ import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerCo
 /**
  * WebSocket 配置 — STOMP over SockJS
  *
- * <p>端点: /ws/dashboard
+ * <p>端点: /ws/dashboard（原生 WebSocket，无 SockJS 包装）
  * 订阅主题: /topic/load（实时负荷）/ /topic/alerts（告警）/ /topic/predictions（预测）</p>
  */
 @Configuration
@@ -27,7 +27,6 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
         registry.addEndpoint("/ws/dashboard")
-                .setAllowedOriginPatterns("*")
-                .withSockJS();
+                .setAllowedOriginPatterns("*");
     }
 }
