@@ -78,7 +78,7 @@ const Dashboard = () => {
     fetchBase()
   }, [fetchBase])
 
-  // 每 30 秒静默刷新图表数据（不显示 loading）
+  // 每 30 秒静默刷新（有新数据才更新，避免覆盖用户缩放/图例操作）
   useEffect(() => {
     const timer = setInterval(() => {
       const range = customRange ?? quickToRange(quickRange)
@@ -86,12 +86,17 @@ const Dashboard = () => {
         fetchLoadRange(range[0].toISOString(), range[1].toISOString()),
         fetchLoadStats(range[0].toISOString(), range[1].toISOString()),
       ]).then(([data, st]) => {
-        setLoadData(data)
-        setStats(st)
+        // 只有新增了数据才更新，避免重置 ECharts 状态
+        const currentLast = useDashboardStore.getState().loadData.slice(-1)[0]
+        const newLast = data[data.length - 1]
+        if (!currentLast || (newLast && newLast.time !== currentLast.time)) {
+          useDashboardStore.getState().setLoadData(data)
+          setStats(st)
+        }
       }).catch(() => {})
     }, 30_000)
     return () => clearInterval(timer)
-  }, [quickRange, customRange, setLoadData, setStats])
+  }, [quickRange, customRange])
 
   // ---- 首次加载时拉预测 ----
   useEffect(() => {
