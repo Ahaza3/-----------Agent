@@ -1,8 +1,9 @@
 /**
- * WebSocket 自定义 Hook — 订阅 /topic/load /topic/alerts /topic/predictions
+ * WebSocket 自定义 Hook — SockJS → STOMP 三通道订阅
  */
 import { useEffect, useRef, useCallback } from 'react'
 import { Client } from '@stomp/stompjs'
+import SockJS from 'sockjs-client'
 import useDashboardStore from '../stores/useDashboardStore'
 import type { LoadData } from '../types/load'
 import type { WsLoadPayload, WsAlertPayload, WsPredictionPayload } from '../types/alert'
@@ -17,7 +18,7 @@ export function useWebSocket() {
     if (clientRef.current?.active) return
 
     const client = new Client({
-      brokerURL: 'ws://localhost:8080/ws/dashboard',
+      webSocketFactory: () => new (SockJS as any)('/ws/dashboard'),
       connectHeaders: {},
       debug: () => {},
       reconnectDelay: 5000,
