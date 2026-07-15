@@ -3,19 +3,18 @@ package com.powerload.scheduler;
 import com.powerload.entity.LoadData;
 import com.powerload.mapper.LoadDataMapper;
 import com.powerload.service.LoadDataService;
+import com.powerload.websocket.PushService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.Random;
 
 /**
- * 模拟实时数据源
- *
- * <p>每次执行时取数据库最后一条记录，在其时间基础上 +1 秒插入新行。
- * 不管历史数据截止到何时，始终紧接延伸，天然连续无断档。</p>
+ * 模拟实时数据源 — 每 5 秒产出一条新数据并直接推送 WebSocket
  */
 @Slf4j
 @Component
@@ -24,6 +23,7 @@ public class MockDataFeeder {
 
     private final LoadDataMapper loadDataMapper;
     private final LoadDataService loadDataService;
+    private final PushService pushService;
     private final Random random = new Random();
 
     private static final double[] HOURLY_PATTERN = {
@@ -32,7 +32,6 @@ public class MockDataFeeder {
         0.98, 1.00, 0.96, 0.90, 0.85, 0.80, 0.75, 0.70,
     };
 
-    /** 每 5 秒产出一条新数据，与历史小时粒度匹配展示 */
     @Scheduled(fixedRate = 5_000)
     public void feed() {
         try {
@@ -42,21 +41,13 @@ public class MockDataFeeder {
             // 从最后一条的时间往后推 5 秒
             LocalDateTime nextTime = latest.getTime().plusSeconds(5);
 
-            // 并发保护：已有下一秒数据则跳过
-            LoadData after = loadDataService.getLatest();
-            if (after != null && after.getTime() != null
-                    && !after.getTime().isBefore(nextTime)) {
-                return;
-            }
-
-            // 负荷：小时模式 × 基线 + 基于上一值的微调
+            // 负荷：小时模式 + 微调
             float pattern = (float) HOURLY_PATTERN[nextTime.getHour()];
             float prevLoad = latest.getLoadMw();
             float delta = (float) random.nextGaussian() * 2f;
             float loadMw = (float) (prevLoad * 0.90 + pattern * 1000 * 0.10) + delta;
             loadMw = Math.max(50, loadMw);
 
-            // 温度/湿度：小幅漂移
             float prevTemp = latest.getTemperature() != null ? latest.getTemperature() : 20;
             float prevHum = latest.getHumidity() != null ? latest.getHumidity() : 60;
 
@@ -72,6 +63,9 @@ public class MockDataFeeder {
             row.setCreatedAt(LocalDateTime.now());
 
             loadDataMapper.insert(row);
+
+            // 写入后立即推送，零延迟
+            pushService.pushLoad(row);
         } catch (Exception e) {
             if (!e.getMessage().contains("Duplicate")) {
                 log.error("Feed error: {}", e.getMessage());

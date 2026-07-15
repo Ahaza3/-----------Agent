@@ -19,7 +19,7 @@ public class LoadScheduler {
     private final LoadDataService loadDataService;
     private final PushService pushService;
 
-    @Scheduled(fixedRate = 1000)
+    @Scheduled(fixedRate = 5_000) // 兜底，主推送在 MockDataFeeder
     public void pushLatestLoad() {
         try {
             LoadData latest = loadDataService.getLatest();
