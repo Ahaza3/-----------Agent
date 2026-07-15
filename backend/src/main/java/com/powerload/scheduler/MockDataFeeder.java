@@ -10,10 +10,17 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.Random;
 
 /**
- * 模拟实时数据源 — 每分钟产出一条，波动幅度匹配真实负荷变化
+ * 模拟实时数据源
+ *
+ * <p>只插入小时级数据，与历史粒度一致。
+ * 每 30 秒检查一次：如果有缺口（最新整点 < 当前整点），补一条小时数据。</p>
+ *
+ * <p>当前负荷的实时读数由 LoadScheduler 通过 WebSocket 每秒推送，
+ * 不插入 DB，图表上也不会有粒度不匹配的问题。</p>
  */
 @Slf4j
 @Component
@@ -31,44 +38,42 @@ public class MockDataFeeder {
         0.98, 1.00, 0.96, 0.90, 0.85, 0.80, 0.75, 0.70,
     };
 
-    /**
-     * 每分钟产出一条新数据。
-     * 时间 = 上一行 + 1 分钟，值 = 小时模式 × 1000 + 随机 ±25MW
-     */
-    @Scheduled(fixedRate = 60_000)
+    @Scheduled(fixedRate = 30_000)
     public void feed() {
         try {
             LoadData latest = loadDataService.getLatest();
             if (latest == null || latest.getLoadMw() == null) return;
 
-            LocalDateTime nextTime = latest.getTime().plusMinutes(1);
+            LocalDateTime lastTime = latest.getTime();
+            LocalDateTime nextHour = lastTime.plusHours(1).truncatedTo(ChronoUnit.HOURS);
+            LocalDateTime now = LocalDateTime.now();
 
-            // 目标值：按当前小时的日模式曲线走
-            float pattern = (float) HOURLY_PATTERN[nextTime.getHour()];
-            float target = (float) (pattern * 1000);
+            // 还没到下一个整点，不插入
+            if (!now.isAfter(nextHour)) return;
+
+            float pattern = (float) HOURLY_PATTERN[nextHour.getHour()];
             float prevLoad = latest.getLoadMw();
-
-            // 向目标值靠近 + 随机波动
-            float towardTarget = prevLoad + (target - prevLoad) * 0.05f;
-            float noise = (float) random.nextGaussian() * 8f;
-            float loadMw = Math.max(50, towardTarget + noise);
+            // 继承 80% 上一值 + 20% 目标值 + 噪声
+            float loadMw = (float) (prevLoad * 0.8 + pattern * 1000 * 0.2 + random.nextGaussian() * 10);
+            loadMw = Math.max(50, loadMw);
 
             float prevTemp = latest.getTemperature() != null ? latest.getTemperature() : 20;
             float prevHum = latest.getHumidity() != null ? latest.getHumidity() : 60;
 
             LoadData row = new LoadData();
-            row.setTime(nextTime);
+            row.setTime(nextHour);
             row.setLoadMw(loadMw);
-            row.setTemperature(prevTemp + (float) random.nextGaussian() * 0.2f);
-            row.setHumidity((float) Math.max(0, Math.min(100, prevHum + random.nextGaussian() * 1)));
-            row.setHour(nextTime.getHour());
-            row.setDayOfWeek(nextTime.getDayOfWeek().getValue() % 7);
-            row.setMonth(nextTime.getMonthValue());
+            row.setTemperature(prevTemp + (float) random.nextGaussian() * 0.3f);
+            row.setHumidity((float) Math.max(0, Math.min(100, prevHum + random.nextGaussian() * 1.5)));
+            row.setHour(nextHour.getHour());
+            row.setDayOfWeek(nextHour.getDayOfWeek().getValue() % 7);
+            row.setMonth(nextHour.getMonthValue());
             row.setIsHoliday(0);
             row.setCreatedAt(LocalDateTime.now());
 
             loadDataMapper.insert(row);
             pushService.pushLoad(row);
+            log.info("Hourly data inserted: {} → {}MW", nextHour, loadMw);
         } catch (Exception e) {
             if (!e.getMessage().contains("Duplicate")) {
                 log.error("Feed error: {}", e.getMessage());
