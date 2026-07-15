@@ -1,69 +1,75 @@
 /**
- * 告警等级
+ * 告警类型 — 对应后端 alert_event / alert_rule 表
  */
-export type AlertLevel = 'info' | 'warning' | 'critical'
 
-/**
- * 告警事件
- * 对应后端 alert_event 表
- */
+export type AlertLevel = 'RED' | 'ORANGE' | 'YELLOW'
+export type AlertType = 'THRESHOLD' | 'TREND' | 'ANOMALY'
+
+/** 告警事件 */
 export interface AlertEvent {
-  /** 主键 */
   id: number
-  /** 告警触发时间 (ISO 8601) */
-  alertTime: string
-  /** 告警等级 */
+  triggerTime: string
   level: AlertLevel
-  /** 告警标题 */
-  title: string
-  /** 告警详情文案 */
-  message: string
-  /** 当前实际值 */
+  type: AlertType
   currentValue: number
-  /** 触发阈值 */
   thresholdValue: number
-  /** 关联变电站 */
-  substation?: string
-  /** 是否已确认/已读 */
-  acknowledged: boolean
-  /** 确认人 */
-  acknowledgedBy?: string
-  /** 确认时间 */
-  acknowledgedAt?: string
-  /** 创建时间 */
-  createTime: string
+  ruleId: number
+  aiAnalysis: string
+  suggestion: string
+  isRead: number
+  resolvedAt: string | null
+  createdAt: string
 }
 
-/**
- * 告警规则
- * 对应后端 alert_rule 表
- */
+/** 告警事件分页响应 */
+export interface AlertPageResult {
+  records: AlertEvent[]
+  total: number
+  page: number
+  size: number
+  pages: number
+}
+
+/** 告警规则 */
 export interface AlertRule {
-  /** 主键 */
   id: number
-  /** 规则名称 */
   name: string
-  /** 监控指标 */
-  metric: string
-  /** 比较运算符 */
-  operator: 'gt' | 'lt' | 'gte' | 'lte'
-  /** 阈值 */
-  threshold: number
-  /** 触发等级 */
-  level: AlertLevel
-  /** 是否启用 */
-  enabled: boolean
-  /** 创建时间 */
-  createTime: string
-  /** 更新时间 */
-  updateTime: string
+  type: string
+  config: string
+  isActive: number
+  createdAt: string
+  updatedAt: string
 }
 
-/**
- * 告警等级配置（前端展示用）
- */
-export const ALERT_LEVEL_CONFIG: Record<AlertLevel, { label: string; color: string }> = {
-  info: { label: '提示', color: '#60a5fa' },
-  warning: { label: '预警', color: '#fbbf24' },
-  critical: { label: '严重', color: '#f87171' },
+/** WebSocket 实时负荷推送 */
+export interface WsLoadPayload {
+  type: 'load_update'
+  data: { time: string; loadMw: number; temperature: number; humidity: number }
+}
+
+/** WebSocket 告警推送 */
+export interface WsAlertPayload {
+  type: 'alert'
+  data: {
+    id: number
+    triggerTime: string
+    level: AlertLevel
+    currentValue: number
+    thresholdValue: number
+    aiAnalysis: string
+    suggestion: string
+  }
+}
+
+/** WebSocket 预测推送 */
+export interface WsPredictionPayload {
+  type: 'prediction_update'
+  data: { predictions: number[]; model: string }
+}
+
+/** 前端展示配置 */
+export const ALERT_LEVEL_CONFIG: Record<AlertLevel, { label: string; color: string; bg: string }> = {
+  RED:    { label: '紧急', color: '#FF2A2A', bg: 'rgba(255,42,42,0.12)' },
+  ORANGE: { label: '重要', color: '#E6C300', bg: 'rgba(230,195,0,0.12)' },
+  YELLOW: { label: '提示', color: '#4AF626', bg: 'rgba(74,246,38,0.10)' },
 }
