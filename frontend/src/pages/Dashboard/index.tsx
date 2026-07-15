@@ -49,6 +49,7 @@ const Dashboard = () => {
 
   const {
     loadData,
+    liveLoad,
     stats,
     forecast,
     setLoadData,
@@ -56,7 +57,7 @@ const Dashboard = () => {
     setForecast,
   } = useDashboardStore()
 
-  // ---- 基础数据（不包含预测） ----
+  // ---- 基础数据 ----
   const fetchBase = useCallback(async () => {
     const range = customRange ?? quickToRange(quickRange)
     setFetching(true)
@@ -77,6 +78,21 @@ const Dashboard = () => {
   useEffect(() => {
     fetchBase()
   }, [fetchBase])
+
+  // 每 30 秒静默刷新图表数据（不显示 loading）
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const range = customRange ?? quickToRange(quickRange)
+      Promise.all([
+        fetchLoadRange(range[0].toISOString(), range[1].toISOString()),
+        fetchLoadStats(range[0].toISOString(), range[1].toISOString()),
+      ]).then(([data, st]) => {
+        setLoadData(data)
+        setStats(st)
+      }).catch(() => {})
+    }, 30_000)
+    return () => clearInterval(timer)
+  }, [quickRange, customRange, setLoadData, setStats])
 
   // ---- 点击预测按钮 ----
   const handleForecast = useCallback(async () => {
@@ -175,7 +191,17 @@ const Dashboard = () => {
   // ---- 统计卡片 ----
   const statCards = useMemo(() => {
     if (!stats) return null
-    return [
+    const cards = []
+    // 当前实时负荷（WebSocket 推送）
+    cards.push({
+      title: '当前负荷',
+      value: fmtMw(liveLoad?.loadMw),
+      suffix: ' MW',
+      color: RED,
+      icon: <ThunderboltOutlined style={{ color: RED, fontSize: 16 }} />,
+      sub: liveLoad?.time ? dayjs(liveLoad.time).format('HH:mm:ss') : '--',
+    })
+    cards.push(
       {
         title: '峰值负荷',
         value: fmtMw(stats.peakLoad),
@@ -209,8 +235,9 @@ const Dashboard = () => {
         color: YELLOW,
         sub: '均值 / 峰值',
       },
-    ]
-  }, [stats])
+    )
+    return cards
+  }, [stats, liveLoad])
 
   return (
     <div className="dashboard-root">
