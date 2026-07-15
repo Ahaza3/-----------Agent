@@ -3,8 +3,8 @@ import { ConfigProvider, App as AntApp } from 'antd'
 import zhCN from 'antd/locale/zh_CN'
 import themeToken from './theme/tokens'
 import MainLayout from './layouts/MainLayout'
+import WebSocketProvider from './hooks/WebSocketProvider'
 
-// 页面（Day 4 占位，后续 Sprint 实现）
 import Dashboard from './pages/Dashboard'
 import AlertCenter from './pages/AlertCenter'
 import AgentChat from './pages/AgentChat'
@@ -15,6 +15,7 @@ function App() {
   return (
     <ConfigProvider theme={themeToken} locale={zhCN}>
       <AntApp>
+        <WebSocketProvider />
         <Routes>
           <Route element={<MainLayout />}>
             <Route path="/" element={<Navigate to="/dashboard" replace />} />

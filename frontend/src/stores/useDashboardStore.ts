@@ -1,6 +1,5 @@
 /**
  * 仪表盘全局状态 — Zustand store
- * 管理实时负荷、预测结果、告警事件、概览统计
  */
 import { create } from 'zustand'
 import type { LoadData } from '../types/load'
@@ -9,41 +8,26 @@ import type { AlertEvent } from '../types/alert'
 import type { LoadStats } from '../types/load'
 import type { ForecastResponse } from '../types/prediction'
 
+const MAX_POINTS = 1000
+
 interface DashboardState {
-  // ---- 数据 ----
-  /** 实时负荷数据 (最新 N 条) */
   loadData: LoadData[]
-  /** 预测结果 */
   predictions: PredictionResult[]
-  /** 预测原始数据（来自 /predict/forecast） */
   forecast: ForecastResponse | null
-  /** 告警事件 */
   alerts: AlertEvent[]
-  /** 仪表盘统计概览 */
   stats: LoadStats | null
-  /** 数据加载中 */
   loading: boolean
 
-  // ---- 动作 ----
-  /** 设置负荷数据 */
   setLoadData: (data: LoadData[]) => void
-  /** 追加负荷数据（WebSocket 实时推送） */
+  /** 追加 + 去重：time 相同则跳过 */
   appendLoadData: (data: LoadData) => void
-  /** 设置预测原始数据 */
   setForecast: (data: ForecastResponse) => void
-  /** 设置预测结果 */
   setPredictions: (data: PredictionResult[]) => void
-  /** 设置告警事件 */
   setAlerts: (data: AlertEvent[]) => void
-  /** 追加新告警（WebSocket 实时推送） */
   appendAlert: (alert: AlertEvent) => void
-  /** 确认告警 */
   acknowledgeAlert: (alertId: number) => void
-  /** 设置统计概览 */
   setStats: (stats: LoadStats) => void
-  /** 设置加载状态 */
   setLoading: (loading: boolean) => void
-  /** 重置全部数据 */
   reset: () => void
 }
 
@@ -59,35 +43,49 @@ const initialState = {
 const useDashboardStore = create<DashboardState>((set) => ({
   ...initialState,
 
-  setLoadData: (data) => set({ loadData: data }),
+  setLoadData: (data) =>
+    set((state) => {
+      // 智能合并：保留 HTTP 请求期间到达的 WebSocket 实时数据
+      const lastWs = state.loadData[state.loadData.length - 1]
+      if (!lastWs || data.length === 0) return { loadData: data }
+
+      const lastRest = data[data.length - 1]
+      // REST 数据终止时间之后的 WS 数据全部保留
+      const wsTail = state.loadData.filter(
+        (d) => new Date(d.time) > new Date(lastRest.time),
+      )
+      return { loadData: [...data, ...wsTail] }
+    }),
 
   appendLoadData: (data) =>
-    set((state) => ({
-      loadData: [...state.loadData.slice(-999), data], // 5s→约 83 分钟
-    })),
+    set((state) => {
+      const last = state.loadData[state.loadData.length - 1]
+      // 去重：同一时间不重复追加
+      if (last && last.time === data.time) return state
+      // 时间不回退
+      if (last && new Date(data.time) <= new Date(last.time)) return state
+      return { loadData: [...state.loadData.slice(1 - MAX_POINTS), data] }
+    }),
 
   setForecast: (data) => set({ forecast: data }),
-
   setPredictions: (data) => set({ predictions: data }),
-
   setAlerts: (data) => set({ alerts: data }),
 
   appendAlert: (alert) =>
-    set((state) => ({
-      alerts: [alert, ...state.alerts], // 新告警置顶
-    })),
+    set((state) => {
+      if (state.alerts.some((a) => a.id === alert.id)) return state
+      return { alerts: [alert, ...state.alerts] }
+    }),
 
   acknowledgeAlert: (alertId) =>
     set((state) => ({
       alerts: state.alerts.map((a) =>
-        a.id === alertId ? { ...a, acknowledged: true } : a,
+        a.id === alertId ? { ...a, isRead: 1 } : a,
       ),
     })),
 
   setStats: (stats) => set({ stats }),
-
   setLoading: (loading) => set({ loading }),
-
   reset: () => set(initialState),
 }))
 

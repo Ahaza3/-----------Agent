@@ -13,7 +13,6 @@ import StatCard from '../../components/StatCard'
 import LoadChart from '../../components/LoadChart'
 import { fetchLoadRange, fetchLoadStats } from '../../services/dataApi'
 import { fetchForecast } from '../../services/predictApi'
-import { useWebSocket } from '../../hooks/useWebSocket'
 import useDashboardStore from '../../stores/useDashboardStore'
 
 const { RangePicker } = DatePicker
@@ -56,9 +55,6 @@ const Dashboard = () => {
     setStats,
     setForecast,
   } = useDashboardStore()
-
-  // ---- WebSocket 实时推送 ----
-  useWebSocket()
 
   // ---- 基础数据（不包含预测） ----
   const fetchBase = useCallback(async () => {
