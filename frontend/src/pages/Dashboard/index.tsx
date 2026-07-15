@@ -154,11 +154,17 @@ const Dashboard = () => {
     }
     const recent48 = loadData.length > 48 ? loadData.slice(-48) : loadData
     const last = recent48[recent48.length - 1]
-    const lastTime = dayjs(last.time)
 
-    const forecastData: [string, number][] = [[lastTime.toISOString(), last.loadMw]]
+    // 预测从当前真实时刻开始（liveLoad 优先，其次历史数据末尾）
+    const now = liveLoad?.time
+      ? dayjs(liveLoad.time).startOf('hour')
+      : dayjs(last.time).startOf('hour')
+    // 如果当前整点 ≤ 历史末尾，说明数据已是最新，从下一整点开始
+    const startTime = now.isAfter(dayjs(last.time)) ? now : now.add(1, 'hour')
+
+    const forecastData: [string, number][] = [[startTime.toISOString(), last.loadMw]]
     forecast.predictions.forEach((v, i) => {
-      forecastData.push([lastTime.add(i + 1, 'hour').toISOString(), v])
+      forecastData.push([startTime.add(i + 1, 'hour').toISOString(), v])
     })
 
     return {
@@ -194,7 +200,7 @@ const Dashboard = () => {
           markLine: {
             silent: true, symbol: 'none',
             lineStyle: { color: YELLOW, type: 'dashed', width: 1 },
-            data: [{ xAxis: (liveLoad?.time ?? lastTime.toISOString()) }],
+            data: [{ xAxis: (liveLoad?.time ?? last.time) }],
             label: { formatter: '现在', color: YELLOW, fontSize: 11 },
           },
         },
