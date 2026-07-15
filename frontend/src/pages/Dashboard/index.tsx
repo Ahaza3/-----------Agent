@@ -6,7 +6,7 @@
  */
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { DatePicker, Row, Col, Segmented, Button, message } from 'antd'
-import { ThunderboltOutlined, LineChartOutlined } from '@ant-design/icons'
+import { ThunderboltOutlined } from '@ant-design/icons'
 import dayjs, { type Dayjs } from 'dayjs'
 import type { EChartsOption } from 'echarts'
 import StatCard from '../../components/StatCard'
@@ -45,7 +45,6 @@ const Dashboard = () => {
   const [customRange, setCustomRange] = useState<[Dayjs, Dayjs] | null>(null)
   const [fetching, setFetching] = useState(false)
   const [fetchingForecast, setFetchingForecast] = useState(false)
-  const [showForecast, setShowForecast] = useState(false)
 
   const {
     loadData,
@@ -94,28 +93,16 @@ const Dashboard = () => {
     return () => clearInterval(timer)
   }, [quickRange, customRange, setLoadData, setStats])
 
-  // ---- 点击预测按钮 ----
-  const handleForecast = useCallback(async () => {
-    if (showForecast) {
-      setShowForecast(false)
-      return
-    }
+  // ---- 首次加载时拉预测 ----
+  useEffect(() => {
     setFetchingForecast(true)
-    try {
-      const fc = await fetchForecast()
-      setForecast(fc)
-      setShowForecast(true)
-    } catch {
-      message.error('预测数据加载失败')
-    } finally {
-      setFetchingForecast(false)
-    }
-  }, [showForecast, setForecast])
+    fetchForecast().then(setForecast).catch(() => {}).finally(() => setFetchingForecast(false))
+  }, [setForecast])
 
-  // ---- 负荷曲线（预测开启时叠加预测线） ----
+  // ---- 实时负荷曲线 ----
   const loadChartOption = useMemo<EChartsOption>(() => {
     const points = loadData.length > 500 ? loadData.slice(-500) : loadData
-    const baseOption: EChartsOption = {
+    return {
       grid: { top: 28, left: 56, right: 32, bottom: 52 },
       xAxis: {
         type: 'time',
@@ -136,57 +123,73 @@ const Dashboard = () => {
       ],
       series: [
         {
-          name: showForecast ? '实际负荷' : '负荷',
+          name: '负荷',
           type: 'line',
           data: points.map((d) => [d.time, d.loadMw]),
-          smooth: true,
-          symbol: 'none',
+          smooth: true, symbol: 'none',
           lineStyle: { color: WHITE, width: 1.5 },
           areaStyle: { color: 'rgba(255,42,42,0.06)' },
         },
       ],
     }
+  }, [loadData, quickRange])
 
-    // 预测开启时：追加预测 series + 标记线
-    if (showForecast && forecast && loadData.length > 0) {
-      const last = loadData[loadData.length - 1]
-      const lastTime = dayjs(last.time)
-      const lastVal = last.loadMw
+  // ---- 预测曲线（独立图表） ----
+  const predChartOption = useMemo<EChartsOption>(() => {
+    if (!forecast || loadData.length === 0) {
+      return {
+        series: [],
+      }
+    }
+    const recent48 = loadData.length > 48 ? loadData.slice(-48) : loadData
+    const last = recent48[recent48.length - 1]
+    const lastTime = dayjs(last.time)
 
-      const forecastData: [string, number][] = [
-        [lastTime.toISOString(), lastVal],
-      ]
-      forecast.predictions.forEach((v, i) => {
-        forecastData.push([lastTime.add(i + 1, 'hour').toISOString(), v])
-      })
+    const forecastData: [string, number][] = [[lastTime.toISOString(), last.loadMw]]
+    forecast.predictions.forEach((v, i) => {
+      forecastData.push([lastTime.add(i + 1, 'hour').toISOString(), v])
+    })
 
-      baseOption.series = [
-        ...(baseOption.series as object[]),
+    return {
+      grid: { top: 28, left: 56, right: 32, bottom: 52 },
+      xAxis: {
+        type: 'time',
+        axisLabel: { formatter: (v: number) => dayjs(v).format('MM-DD HH:mm') },
+      },
+      yAxis: { type: 'value', name: 'MW' },
+      dataZoom: [
+        { type: 'inside', start: 0, end: 100, minSpan: 5 },
         {
-          name: '预测负荷',
+          type: 'slider', start: 0, end: 100, height: 24, bottom: 6,
+          borderColor: '#2A2A2A', backgroundColor: '#0A0A0A',
+          fillerColor: 'rgba(230,195,0,0.12)',
+          handleStyle: { color: YELLOW }, textStyle: { color: '#888888' },
+        },
+      ],
+      series: [
+        {
+          name: '实际',
+          type: 'line',
+          data: recent48.map((d) => [d.time, d.loadMw]),
+          smooth: true, symbol: 'none',
+          lineStyle: { color: WHITE, width: 1 },
+        },
+        {
+          name: '预测',
           type: 'line',
           data: forecastData,
-          smooth: true,
-          symbol: 'none',
+          smooth: true, symbol: 'none',
           lineStyle: { color: YELLOW, width: 1.5, type: 'dashed' },
-          // 标记预测起点
           markLine: {
-            silent: true,
-            symbol: 'none',
+            silent: true, symbol: 'none',
             lineStyle: { color: YELLOW, type: 'dashed', width: 1 },
             data: [{ xAxis: lastTime.toISOString() }],
-            label: {
-              formatter: '预测开始',
-              color: YELLOW,
-              fontSize: 11,
-            },
+            label: { formatter: '现在', color: YELLOW, fontSize: 11 },
           },
         },
-      ]
+      ],
     }
-
-    return baseOption
-  }, [loadData, quickRange, showForecast, forecast])
+  }, [loadData, forecast])
 
   // ---- 统计卡片 ----
   const statCards = useMemo(() => {
@@ -278,15 +281,6 @@ const Dashboard = () => {
             allowClear={!!customRange}
             style={{ width: quickRange === '24h' ? 340 : 280 }}
           />
-          <Button
-            type={showForecast ? 'primary' : 'default'}
-            icon={<LineChartOutlined />}
-            onClick={handleForecast}
-            loading={fetchingForecast}
-            style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12 }}
-          >
-            {showForecast ? '隐藏预测' : '预测'}
-          </Button>
         </div>
       </div>
 
@@ -308,11 +302,19 @@ const Dashboard = () => {
 
       {/* ====== 图表区 ====== */}
       <LoadChart
-        title={showForecast ? '实时负荷曲线 · 预测对比' : '实时负荷曲线'}
+        title="实时负荷曲线"
         option={loadChartOption}
-        height={520}
+        height={420}
         loading={fetching}
         emptyText="暂无负荷数据"
+      />
+      <div style={{ height: 12 }} />
+      <LoadChart
+        title="24h 预测曲线"
+        option={predChartOption}
+        height={300}
+        loading={fetchingForecast}
+        emptyText="暂无预测数据"
       />
 
       <style>{`
