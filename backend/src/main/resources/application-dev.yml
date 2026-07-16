@@ -26,3 +26,7 @@ llm:
 logging:
   level:
     com.powerload: debug
+
+# 仅开发环境开放负荷异常演示控制
+demo:
+  enabled: true

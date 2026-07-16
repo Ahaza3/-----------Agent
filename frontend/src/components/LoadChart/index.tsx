@@ -134,7 +134,7 @@ const LoadChart = ({
           ref={chartRef}
           option={mergedOption}
           style={{ height, width: '100%' }}
-          notMerge
+          notMerge={false}
           lazyUpdate
         />
       )}

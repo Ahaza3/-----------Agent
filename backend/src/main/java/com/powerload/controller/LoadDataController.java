@@ -12,7 +12,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
 
 /**
@@ -28,24 +30,31 @@ public class LoadDataController {
 
     private final LoadDataService loadDataService;
 
+    /** 数据库存储的时区 */
+    private static final ZoneId DB_ZONE = ZoneId.of("Asia/Shanghai");
+
     /**
      * 时间范围查询负荷数据
      *
-     * @param start 起始时间（含），ISO 8601 格式
-     * @param end   结束时间（不含），ISO 8601 格式
+     * @param start 起始时间（含），ISO 8601 格式（支持带时区 offset）
+     * @param end   结束时间（不含），ISO 8601 格式（支持带时区 offset）
      * @return 按时间升序排列的负荷数据列表
      */
     @GetMapping("/range")
     public R<List<LoadData>> range(
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime start,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime end) {
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant start,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant end) {
 
         if (start.isAfter(end)) {
             throw new IllegalArgumentException("start 不能晚于 end");
         }
 
-        List<LoadData> data = loadDataService.queryRange(start, end);
-        log.debug("范围查询: {} ~ {} → {} 条记录", start, end, data.size());
+        // 转换到 Asia/Shanghai 时区以匹配数据库 DATETIME 字段
+        LocalDateTime startLdt = LocalDateTime.ofInstant(start, DB_ZONE);
+        LocalDateTime endLdt = LocalDateTime.ofInstant(end, DB_ZONE);
+
+        List<LoadData> data = loadDataService.queryRange(startLdt, endLdt);
+        log.debug("范围查询: {} ~ {} → {} 条记录", startLdt, endLdt, data.size());
         return R.ok(data);
     }
 
@@ -57,29 +66,30 @@ public class LoadDataController {
     @GetMapping("/latest")
     public R<LoadData> latest() {
         LoadData data = loadDataService.getLatest();
-        if (data == null) {
-            return R.ok(null);
-        }
         return R.ok(data);
     }
 
     /**
      * 负荷数据统计
      *
-     * @param start 统计起始时间（含），ISO 8601 格式
-     * @param end   统计结束时间（不含），ISO 8601 格式
+     * @param start 统计起始时间（含），ISO 8601 格式（支持带时区 offset）
+     * @param end   统计结束时间（不含），ISO 8601 格式（支持带时区 offset）
      * @return 峰值、谷值、均值、负荷率、标准差等统计信息
      */
     @GetMapping("/stats")
     public R<LoadStats> stats(
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime start,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime end) {
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant start,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant end) {
 
         if (start.isAfter(end)) {
             throw new IllegalArgumentException("start 不能晚于 end");
         }
 
-        LoadStats stats = loadDataService.getStats(start, end);
+        // 转换到 Asia/Shanghai 时区以匹配数据库 DATETIME 字段
+        LocalDateTime startLdt = LocalDateTime.ofInstant(start, DB_ZONE);
+        LocalDateTime endLdt = LocalDateTime.ofInstant(end, DB_ZONE);
+
+        LoadStats stats = loadDataService.getStats(startLdt, endLdt);
         return R.ok(stats);
     }
 }

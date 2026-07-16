@@ -2,9 +2,9 @@
  * 主布局 — Brutalist CRT Terminal 风格
  * 可见边框分隔 + 等宽时钟 + ASCII 标识
  */
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
-import { Layout, Menu, Button, Typography, Space } from 'antd'
+import { Layout, Menu, Button, Typography, Space, Badge, Tooltip } from 'antd'
 import {
   DashboardOutlined,
   AlertOutlined,
@@ -16,17 +16,10 @@ import {
   ThunderboltOutlined,
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
+import useDashboardStore from '../stores/useDashboardStore'
 
 const { Header, Sider, Content } = Layout
 const { Text } = Typography
-
-const menuItems = [
-  { key: '/dashboard', icon: <DashboardOutlined />, label: '可视化大屏' },
-  { key: '/alerts', icon: <AlertOutlined />, label: '告警中心' },
-  { key: '/agent', icon: <RobotOutlined />, label: '智能助手' },
-  { key: '/data', icon: <DatabaseOutlined />, label: '数据查询' },
-  { key: '/admin', icon: <SettingOutlined />, label: '系统管理' },
-]
 
 const SIDER_WIDTH = 220
 const SIDER_COLLAPSED_WIDTH = 56
@@ -36,6 +29,21 @@ const MainLayout = () => {
   const [clock, setClock] = useState(dayjs().format('YYYY-MM-DD HH:mm:ss'))
   const navigate = useNavigate()
   const location = useLocation()
+  const unreadAlerts = useDashboardStore(
+    (state) => state.alerts.filter((alert) => alert.isRead === 0).length,
+  )
+
+  const menuItems = useMemo(() => [
+    { key: '/dashboard', icon: <DashboardOutlined />, label: '可视化大屏' },
+    {
+      key: '/alerts',
+      icon: <Badge dot={unreadAlerts > 0}><AlertOutlined /></Badge>,
+      label: '告警中心',
+    },
+    { key: '/agent', icon: <RobotOutlined />, label: '智能助手' },
+    { key: '/data', icon: <DatabaseOutlined />, label: '数据查询' },
+    { key: '/admin', icon: <SettingOutlined />, label: '系统管理' },
+  ], [unreadAlerts])
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -127,6 +135,16 @@ const MainLayout = () => {
           />
 
           <Space size="middle">
+            <Tooltip title="未读告警">
+              <Badge count={unreadAlerts} size="small">
+                <Button
+                  type="text"
+                  icon={<AlertOutlined />}
+                  onClick={() => navigate('/alerts')}
+                  style={{ color: unreadAlerts > 0 ? '#FF2A2A' : '#666666' }}
+                />
+              </Badge>
+            </Tooltip>
             <span
               className="font-mono"
               style={{ color: '#4AF626', fontSize: 11, letterSpacing: '0.05em' }}
