@@ -28,6 +28,27 @@ export interface LoadData {
 }
 
 /**
+ * 实时负荷数据点（秒级，后端 RealtimeLoadPoint）
+ *
+ * 通过 WebSocket /topic/load 推送，前端累积形成连续曲线。
+ * timestamp 使用 epoch 毫秒，无需浏览器做时区解析。
+ */
+export interface RealtimeLoadPoint {
+  /** 数据生成时间（epoch 毫秒） */
+  timestamp: number
+  /** 单调递增序号，用于去重和排序 */
+  sequence: number
+  /** 实时负荷 (MW) */
+  loadMw: number
+  /** 温度 (°C) */
+  temperature: number | null
+  /** 湿度 (%) */
+  humidity: number | null
+  /** 数据来源 */
+  source: string
+}
+
+/**
  * 负荷查询参数
  */
 export interface LoadQuery {
@@ -49,11 +70,11 @@ export interface LoadStats {
   /** 峰值负荷 (MW) */
   peakLoad: number
   /** 峰值时间 */
-  peakTime: string
+  peakTime: string | null
   /** 谷值负荷 (MW) */
   valleyLoad: number
   /** 谷值时间 */
-  valleyTime: string
+  valleyTime: string | null
   /** 平均负荷 (MW) */
   avgLoad: number
   /** 负荷率 (avg / peak) */

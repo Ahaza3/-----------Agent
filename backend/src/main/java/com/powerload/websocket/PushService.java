@@ -1,13 +1,14 @@
 package com.powerload.websocket;
 
 import com.powerload.dto.response.ForecastResponse;
+import com.powerload.dto.response.RealtimeLoadPoint;
 import com.powerload.entity.AlertEvent;
-import com.powerload.entity.LoadData;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 
+import java.util.HashMap;
 import java.util.Map;
 
 /**
@@ -15,10 +16,12 @@ import java.util.Map;
  *
  * <p>封装 SimpMessagingTemplate，提供三个推送通道：
  * <ul>
- *   <li>/topic/load        — 实时负荷数据（每秒）</li>
+ *   <li>/topic/load        — 实时负荷（每秒，RealtimeLoadPoint）</li>
  *   <li>/topic/alerts       — 告警事件（触发时）</li>
- *   <li>/topic/predictions  — 预测结果更新（每小时）</li>
+ *   <li>/topic/predictions  — 预测结果更新（触发时）</li>
  * </ul>
+ *
+ * <p>使用原生 STOMP over WebSocket，端点为 /ws/dashboard。</p>
  */
 @Slf4j
 @Service
@@ -28,19 +31,20 @@ public class PushService {
     private final SimpMessagingTemplate messagingTemplate;
 
     /**
-     * 推送实时负荷
+     * 推送实时负荷（使用 RealtimeLoadPoint，epoch 毫秒时间戳）
      */
-    public void pushLoad(LoadData data) {
-        if (data == null) return;
-        Map<String, Object> payload = Map.of(
-                "type", "load_update",
-                "data", Map.of(
-                        "time", data.getTime() != null ? data.getTime().toString() : null,
-                        "loadMw", data.getLoadMw(),
-                        "temperature", data.getTemperature(),
-                        "humidity", data.getHumidity()
-                )
-        );
+    public void pushRealtimeLoad(RealtimeLoadPoint point) {
+        if (point == null) return;
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("type", "load_update");
+        Map<String, Object> data = new HashMap<>();
+        data.put("timestamp", point.getTimestamp());
+        data.put("sequence", point.getSequence());
+        data.put("loadMw", point.getLoadMw());
+        data.put("temperature", point.getTemperature());
+        data.put("humidity", point.getHumidity());
+        data.put("source", point.getSource());
+        payload.put("data", data);
         messagingTemplate.convertAndSend("/topic/load", payload);
     }
 
@@ -49,18 +53,17 @@ public class PushService {
      */
     public void pushAlert(AlertEvent event) {
         if (event == null) return;
-        Map<String, Object> payload = Map.of(
-                "type", "alert",
-                "data", Map.of(
-                        "id", event.getId(),
-                        "triggerTime", event.getTriggerTime() != null ? event.getTriggerTime().toString() : null,
-                        "level", event.getLevel(),
-                        "currentValue", event.getCurrentValue(),
-                        "thresholdValue", event.getThresholdValue(),
-                        "aiAnalysis", event.getAiAnalysis() != null ? event.getAiAnalysis() : "",
-                        "suggestion", event.getSuggestion() != null ? event.getSuggestion() : ""
-                )
-        );
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("type", "alert");
+        Map<String, Object> data = new HashMap<>();
+        data.put("id", event.getId());
+        data.put("triggerTime", event.getTriggerTime() != null ? event.getTriggerTime().toString() : null);
+        data.put("level", event.getLevel());
+        data.put("currentValue", event.getCurrentValue());
+        data.put("thresholdValue", event.getThresholdValue());
+        data.put("aiAnalysis", event.getAiAnalysis() != null ? event.getAiAnalysis() : "");
+        data.put("suggestion", event.getSuggestion() != null ? event.getSuggestion() : "");
+        payload.put("data", data);
         messagingTemplate.convertAndSend("/topic/alerts", payload);
         log.info("告警推送: level={}, current={}MW", event.getLevel(), event.getCurrentValue());
     }
@@ -70,13 +73,13 @@ public class PushService {
      */
     public void pushPrediction(ForecastResponse forecast) {
         if (forecast == null) return;
-        Map<String, Object> payload = Map.of(
-                "type", "prediction_update",
-                "data", Map.of(
-                        "predictions", forecast.getPredictions(),
-                        "model", forecast.getModel() != null ? forecast.getModel() : ""
-                )
-        );
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("type", "prediction_update");
+        Map<String, Object> data = new HashMap<>();
+        data.put("predictions", forecast.getPredictions());
+        data.put("model", forecast.getModel() != null ? forecast.getModel() : "");
+        data.put("forecastStartTime", forecast.getForecastStartTime() != null ? forecast.getForecastStartTime().toString() : null);
+        payload.put("data", data);
         messagingTemplate.convertAndSend("/topic/predictions", payload);
         log.debug("预测推送: model={}, {} values", forecast.getModel(),
                 forecast.getPredictions() != null ? forecast.getPredictions().size() : 0);

@@ -20,7 +20,8 @@ import java.util.stream.Collectors;
 /**
  * 负荷预测服务实现
  *
- * <p>查询最近 168h 数据 → 通过 Flask 推理 → 返回 24h 预测。</p>
+ * <p>查询最近 200h 数据 → 通过 Flask 推理 → 返回 24h 预测。
+ * 返回明确的 forecastStartTime，前端不再依赖本地时钟推算预测起点。</p>
  */
 @Slf4j
 @Service
@@ -72,13 +73,18 @@ public class PredictServiceImpl implements PredictService {
         // 3. 调用 Flask 推理
         List<Double> predictions = flaskInferenceService.forecast(rawData);
 
-        // 4. 封装响应
+        // 4. 封装响应 — 预测从当前整点下一小时开始
+        LocalDateTime forecastStart = LocalDateTime.now().plusHours(1).withMinute(0).withSecond(0).withNano(0);
+
         ForecastResponse response = new ForecastResponse();
         response.setPredictions(predictions);
         response.setModel("LSTM");
+        response.setForecastStartTime(forecastStart);
+
         double minP = predictions.stream().mapToDouble(Double::doubleValue).min().orElse(0);
         double maxP = predictions.stream().mapToDouble(Double::doubleValue).max().orElse(0);
-        log.debug("预测完成: {} 个值, 范围 [{}, {}]", predictions.size(), minP, maxP);
+        log.debug("预测完成: {} 个值, 基准时间={}, 范围 [{}, {}]",
+                predictions.size(), forecastStart, minP, maxP);
         return response;
     }
 }
