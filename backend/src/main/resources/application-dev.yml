@@ -16,11 +16,13 @@ ml:
   service:
     url: http://localhost:5000
 
-# LLM API
+# LLM API（API Key 为空时使用 Mock 模式，应用仍可启动）
 llm:
   api:
-    key: ${LLM_API_KEY:}
+    key: ${LLM_API_KEY:sk-930c30ec222546d7888adf5a0a1ad10f}
     url: ${LLM_API_URL:https://api.deepseek.com/v1}
+    model: ${LLM_MODEL:deepseek-chat}
+    timeout-seconds: 30
 
 # 开发日志
 logging:
