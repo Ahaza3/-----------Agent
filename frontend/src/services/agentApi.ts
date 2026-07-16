@@ -2,6 +2,7 @@
  * Agent 对话 API — SSE 流式调用
  */
 import type { EChartsOption } from 'echarts'
+import api from './api'
 
 export interface AgentEvent {
   type: 'thinking' | 'text' | 'chart' | 'done' | 'error'
@@ -9,6 +10,35 @@ export interface AgentEvent {
   option?: EChartsOption
   conversationId?: string
   message?: string
+}
+
+export interface ConversationSummary {
+  conversationId: string
+  title: string
+  lastMessage: string
+  messageCount: number
+  updatedAt: string
+}
+
+export interface ConversationMessage {
+  id: number
+  role: 'user' | 'assistant'
+  content: string
+  createdAt: string
+}
+
+export function fetchConversations(limit = 50): Promise<ConversationSummary[]> {
+  return api.get('/agent/conversations', { params: { limit } })
+}
+
+export function fetchConversationMessages(
+  conversationId: string,
+): Promise<ConversationMessage[]> {
+  return api.get(`/agent/conversations/${conversationId}`)
+}
+
+export function deleteConversation(conversationId: string): Promise<void> {
+  return api.delete(`/agent/conversations/${conversationId}`)
 }
 
 /**
@@ -48,6 +78,7 @@ export function agentChat(
 
       const decoder = new TextDecoder()
       let buffer = ''
+      let currentEvent = ''
 
       while (true) {
         const { done, value } = await reader.read()
@@ -57,7 +88,6 @@ export function agentChat(
         const lines = buffer.split('\n')
         buffer = lines.pop() || ''
 
-        let currentEvent = ''
         for (const line of lines) {
           const trimmed = line.trim()
           if (trimmed.startsWith('event:')) {

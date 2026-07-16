@@ -66,6 +66,30 @@ describe('agentApi — SSE 事件解析', () => {
     expect(events[3]).toEqual({ type: 'done', conversationId: 'abc123' })
   })
 
+  it('event 和 data 跨网络分片时仍应保留事件类型', async () => {
+    const events: AgentEvent[] = []
+    const encoder = new TextEncoder()
+    const stream = new ReadableStream({
+      start(controller) {
+        controller.enqueue(encoder.encode('event: text\n'))
+        controller.enqueue(encoder.encode('data: {"content":"跨分片消息"}\n\n'))
+        controller.enqueue(encoder.encode('event: done\n'))
+        controller.enqueue(encoder.encode('data: {"conversationId":"split-id"}\n\n'))
+        controller.close()
+      },
+    })
+    fetchSpy.mockResolvedValue(new Response(stream, { status: 200 }))
+
+    await new Promise<void>((resolve) => {
+      agentChat('test', undefined, (event) => events.push(event), resolve)
+    })
+
+    expect(events).toEqual([
+      { type: 'text', content: '跨分片消息' },
+      { type: 'done', conversationId: 'split-id' },
+    ])
+  })
+
   /* ─── chart 事件 ─── */
 
   it('应该正确解析 chart 事件', async () => {
