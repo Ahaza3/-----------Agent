@@ -45,6 +45,15 @@ public class LoadDataServiceImpl implements LoadDataService {
     }
 
     @Override
+    public LoadData getLatestHourly() {
+        LambdaQueryWrapper<LoadData> wrapper = new LambdaQueryWrapper<>();
+        wrapper.apply("MINUTE(time) = 0 AND SECOND(time) = 0")
+               .orderByDesc(LoadData::getTime)
+               .last("LIMIT 1");
+        return loadDataMapper.selectOne(wrapper);
+    }
+
+    @Override
     public LoadStats getStats(LocalDateTime start, LocalDateTime end) {
         List<LoadData> list = queryRange(start, end);
 

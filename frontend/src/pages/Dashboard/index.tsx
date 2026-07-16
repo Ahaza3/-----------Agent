@@ -66,6 +66,7 @@ const Dashboard = () => {
   const [customRange, setCustomRange] = useState<[Dayjs, Dayjs] | null>(null)
   const [fetching, setFetching] = useState(false)
   const [fetchingForecast, setFetchingForecast] = useState(false)
+  const [predictionError, setPredictionError] = useState('')
   const [alertThresholds, setAlertThresholds] = useState<AlertThresholds>({
     yellow: 990,
     orange: 1100,
@@ -178,7 +179,14 @@ const Dashboard = () => {
   // ---- 首次加载时拉预测 ----
   useEffect(() => {
     setFetchingForecast(true)
-    fetchForecast().then(setForecast).catch(() => {}).finally(() => setFetchingForecast(false))
+    setPredictionError('')
+    fetchForecast()
+      .then((data) => { setForecast(data); setPredictionError('') })
+      .catch((err) => {
+        setPredictionError(err?.message || '预测数据加载失败')
+        console.error('[Dashboard] 预测加载失败', err)
+      })
+      .finally(() => setFetchingForecast(false))
   }, [setForecast])
 
   // ---- 实时负荷曲线 ----
@@ -503,11 +511,11 @@ const Dashboard = () => {
       />
       <div style={{ height: 12 }} />
       <LoadChart
-        title="24h 预测曲线"
+        title={predictionError ? '24h 预测曲线 — 加载失败' : '24h 预测曲线'}
         option={predChartOption}
         height={300}
         loading={fetchingForecast}
-        emptyText="暂无预测数据"
+        emptyText={predictionError || '暂无预测数据'}
       />
 
       <style>{`

@@ -5,6 +5,7 @@ import com.powerload.mapper.LoadDataMapper;
 import com.powerload.service.LoadDataService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -15,8 +16,8 @@ import java.util.Random;
 /**
  * 模拟小时级数据源 — 每 15 秒检查并补齐缺口，使 DB 始终有到当前整点的数据
  *
- * <p>注意：此组件仅负责补齐小时级 DB 数据，不推送实时 WebSocket 消息。
- * 实时推送由 {@link LoadScheduler} 通过 {@link com.powerload.service.RealtimeLoadService} 完成。</p>
+ * <p>只使用最后一条合法整点（minute=0, second=0）作为起点，
+ * 新记录对齐 HH:00:00，不生成超过当前整点的未来记录。</p>
  */
 @Slf4j
 @Component
@@ -36,16 +37,22 @@ public class MockDataFeeder {
     @Scheduled(fixedRate = 15_000)
     public void feed() {
         try {
-            LoadData latest = loadDataService.getLatest();
+            // 只取合法整点记录作为起点，避免旧版本遗留的秒级数据污染
+            LoadData latest = loadDataService.getLatestHourly();
             if (latest == null || latest.getLoadMw() == null) return;
 
-            LocalDateTime cursor = latest.getTime();
+            // 从最后一条整点记录的下一小时开始
+            LocalDateTime cursor = latest.getTime()
+                    .withMinute(0).withSecond(0).withNano(0)
+                    .plusHours(1);
+
+            // 最大补齐到当前整点（不生成未来数据）
             LocalDateTime now = LocalDateTime.now().truncatedTo(ChronoUnit.HOURS);
 
-            while (cursor.isBefore(now)) {
-                LocalDateTime nextHour = cursor.plusHours(1);
+            while (!cursor.isAfter(now)) {
+                LocalDateTime targetHour = cursor;
 
-                float pattern = (float) HOURLY_PATTERN[nextHour.getHour()];
+                float pattern = (float) HOURLY_PATTERN[targetHour.getHour()];
                 float prevLoad = latest.getLoadMw();
 
                 float loadMw = (float) (prevLoad * 0.8 + pattern * 1000 * 0.2 + random.nextGaussian() * 10);
@@ -55,25 +62,28 @@ public class MockDataFeeder {
                 float prevHum = latest.getHumidity() != null ? latest.getHumidity() : 60;
 
                 LoadData row = new LoadData();
-                row.setTime(nextHour);
+                row.setTime(targetHour); // 对齐 HH:00:00
                 row.setLoadMw(loadMw);
                 row.setTemperature(prevTemp + (float) random.nextGaussian() * 0.3f);
                 row.setHumidity((float) Math.max(0, Math.min(100, prevHum + random.nextGaussian() * 1.5)));
-                row.setHour(nextHour.getHour());
-                row.setDayOfWeek(nextHour.getDayOfWeek().getValue() % 7);
-                row.setMonth(nextHour.getMonthValue());
+                row.setHour(targetHour.getHour());
+                row.setDayOfWeek(targetHour.getDayOfWeek().getValue() % 7);
+                row.setMonth(targetHour.getMonthValue());
                 row.setIsHoliday(0);
                 row.setCreatedAt(LocalDateTime.now());
 
-                loadDataMapper.insert(row);
-                // 不推送 WebSocket — 实时链路由 LoadScheduler + RealtimeLoadService 负责
-                cursor = nextHour;
+                try {
+                    loadDataMapper.insert(row);
+                } catch (DuplicateKeyException e) {
+                    // 幂等：该整点已存在则跳过
+                    log.debug("整点 {} 已存在，跳过", targetHour);
+                }
+
+                cursor = cursor.plusHours(1);
                 latest = row;
             }
         } catch (Exception e) {
-            if (!e.getMessage().contains("Duplicate")) {
-                log.error("Feed error: {}", e.getMessage());
-            }
+            log.error("Feed error: {}", e.getMessage());
         }
     }
 }

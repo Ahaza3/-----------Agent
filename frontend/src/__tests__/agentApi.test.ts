@@ -283,3 +283,6 @@ describe('agentApi — SSE 事件解析', () => {
     expect(events.filter((e) => e.type === 'done').length).toBe(1)
   })
 })
+
+/* ─── AgentMarkdown — 渲染与安全 ─── */
+
