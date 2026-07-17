@@ -44,7 +44,11 @@ public class MockDataFeeder {
                     .withMinute(0).withSecond(0).withNano(0)
                     .plusHours(1);
 
-            LocalDateTime now = LocalDateTime.now().truncatedTo(ChronoUnit.HOURS);
+            // 当前小时仍由秒级实时链路负责，只恢复已经完整结束的小时。
+            // 否则会同时存在“当前整点恢复值”和“当前实时值”，形成冲突跳点。
+            LocalDateTime lastCompletedHour = LocalDateTime.now()
+                    .truncatedTo(ChronoUnit.HOURS)
+                    .minusHours(1);
 
             // 历史偏移 = 最后一个实际值 - 该时刻的 profile 期望值
             double initialOffset = latest.getLoadMw() - MockLoadProfile.baseLoad(latest.getTime())
@@ -52,7 +56,7 @@ public class MockDataFeeder {
             long lastTimeEpoch = latest.getTime().atZone(java.time.ZoneId.of("Asia/Shanghai"))
                     .toEpochSecond();
 
-            while (!cursor.isAfter(now)) {
+            while (!cursor.isAfter(lastCompletedHour)) {
                 LocalDateTime target = cursor;
 
                 // 期望负荷

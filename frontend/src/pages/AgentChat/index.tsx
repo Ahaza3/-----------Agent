@@ -33,7 +33,16 @@ import {
   type AgentEvent,
   type ConversationSummary,
 } from '../../services/agentApi'
+import useAuthStore from '../../stores/useAuthStore'
+import { ROLE_CONFIG } from '../../config/roles'
+import type { Role } from '../../config/roles'
 import './index.css'
+
+const ROLE_FOCUS: Record<Role, string> = {
+  DISPATCHER: '运行风险、负荷趋势和调度建议',
+  OPERATOR: '数据源、模型服务、规则配置、设备和系统核查',
+  SYSTEM_ADMIN: '用户权限、系统健康、审计记录',
+}
 
 interface ChatMessage {
   id: string
@@ -95,6 +104,21 @@ const AgentChat = () => {
   }, [messages, thinking])
 
   useEffect(() => () => abortRef.current?.abort(), [])
+
+  const userRole = useAuthStore((s) => s.user?.role) as Role | undefined
+  const IdentityBanner = () => (
+    <div style={{
+      padding: '6px 16px', borderBottom: '1px solid #1f1f1f',
+      background: '#0c0c0c', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
+    }}>
+      <Tag color="blue" style={{ fontSize: 10 }}>
+        当前身份：{userRole ? ROLE_CONFIG[userRole]?.label : '未知'}
+      </Tag>
+      <span style={{ color: '#666', fontSize: 10 }}>
+        回答重点：{userRole ? ROLE_FOCUS[userRole] || '通用' : '通用'}
+      </span>
+    </div>
+  )
 
   const stopResponse = useCallback(() => {
     abortRef.current?.abort()
@@ -343,6 +367,9 @@ const AgentChat = () => {
             <span>{conversationId ? conversationId.slice(0, 8).toUpperCase() : '新会话'}</span>
           </div>
         </header>
+
+        {/* 角色身份提示 */}
+        <IdentityBanner />
 
         <section
           ref={listRef}

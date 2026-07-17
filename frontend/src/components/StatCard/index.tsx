@@ -22,7 +22,7 @@ const StatCard = ({
   return (
     <Card
       size="small"
-      bodyStyle={{ padding: '10px 14px' }}
+      styles={{ body: { padding: '10px 14px' } }}
       style={{ border: '1px solid #2A2A2A' }}
     >
       {/* 标题 */}

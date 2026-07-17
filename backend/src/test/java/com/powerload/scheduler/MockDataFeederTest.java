@@ -91,6 +91,24 @@ class MockDataFeederTest {
     }
 
     @Test
+    void shouldNotGenerateCurrentIncompleteHour() {
+        LocalDateTime currentHour = LocalDateTime.now()
+                .withMinute(0).withSecond(0).withNano(0);
+        LoadData latest = record(currentHour.minusHours(2), 900f);
+        when(loadDataService.getLatestHourly()).thenReturn(latest);
+        when(loadDataMapper.insert(any(LoadData.class))).thenAnswer(inv -> {
+            inserted.add(inv.getArgument(0, LoadData.class));
+            return 1;
+        });
+
+        feeder.feed();
+
+        assertEquals(1, inserted.size());
+        assertEquals(currentHour.minusHours(1), inserted.get(0).getTime());
+        assertTrue(inserted.stream().noneMatch(row -> row.getTime().equals(currentHour)));
+    }
+
+    @Test
     void shouldMaintainContinuityAfterShortGap() {
         // 停机 1 小时：11:00 有数据，恢复时从 12:00 开始补齐
         LoadData latest = record(LocalDateTime.of(2026, 7, 16, 11, 0), 900f);
