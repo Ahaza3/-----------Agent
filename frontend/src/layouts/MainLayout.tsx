@@ -33,6 +33,7 @@ const MainLayout = () => {
   const navigate = useNavigate()
   const location = useLocation()
   const user = useAuthStore((s) => s.user)
+  const role = user?.role
   const logout = useAuthStore((s) => s.logout)
   const unreadAlerts = useDashboardStore(
     (state) => state.alerts.filter((alert) => alert.isRead === 0).length,
@@ -42,13 +43,15 @@ const MainLayout = () => {
     { key: '/dashboard', icon: <DashboardOutlined />, label: '可视化大屏' },
     {
       key: '/alerts',
-      icon: <Badge dot={unreadAlerts > 0}><AlertOutlined /></Badge>,
+      icon: (role === 'DISPATCHER' || role === 'SYSTEM_ADMIN')
+        ? <Badge dot={unreadAlerts > 0}><AlertOutlined /></Badge>
+        : <AlertOutlined />,
       label: '告警中心',
     },
     { key: '/agent', icon: <RobotOutlined />, label: '智能助手' },
     { key: '/data', icon: <DatabaseOutlined />, label: '数据查询' },
     { key: '/admin', icon: <SettingOutlined />, label: '系统管理' },
-  ], [unreadAlerts])
+  ], [unreadAlerts, role])
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -140,16 +143,18 @@ const MainLayout = () => {
           />
 
           <Space size="middle">
-            <Tooltip title="未读告警">
-              <Badge count={unreadAlerts} size="small">
-                <Button
-                  type="text"
-                  icon={<AlertOutlined />}
-                  onClick={() => navigate('/alerts')}
-                  style={{ color: unreadAlerts > 0 ? '#FF2A2A' : '#666666' }}
-                />
-              </Badge>
-            </Tooltip>
+            {(role === 'DISPATCHER' || role === 'SYSTEM_ADMIN') && (
+              <Tooltip title="未读告警">
+                <Badge count={unreadAlerts} size="small">
+                  <Button
+                    type="text"
+                    icon={<AlertOutlined />}
+                    onClick={() => navigate('/alerts')}
+                    style={{ color: unreadAlerts > 0 ? '#FF2A2A' : '#666666' }}
+                  />
+                </Badge>
+              </Tooltip>
+            )}
             <span className="font-mono" style={{ color: '#4AF626', fontSize: 11, letterSpacing: '0.05em' }}>
               系统运行中
             </span>
