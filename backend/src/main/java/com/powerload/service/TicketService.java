@@ -13,9 +13,12 @@ import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.powerload.dto.response.AssigneeInfo;
+
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -116,6 +119,8 @@ public class TicketService {
         AlertTicket t = validate(ticketId, "ASSIGNED", user);
         SysUser au = sysUserMapper.selectById(assigneeId);
         if (au == null) throw new IllegalArgumentException("用户不存在");
+        if (!"OPERATOR".equals(au.getRole())) throw new IllegalArgumentException("只能指派给运维人员");
+        if (au.getIsActive() != 1) throw new IllegalArgumentException("该运维人员已被禁用");
         String from = t.getStatus();
         t.setAssigneeUserId(assigneeId); t.setAssigneeName(au.getUsername());
         t.setAssignedAt(LocalDateTime.now()); t.setStatus("ASSIGNED");
@@ -240,6 +245,19 @@ public class TicketService {
 
     private String mapPriority(String level) {
         return switch (level) { case "RED" -> "URGENT"; case "ORANGE" -> "HIGH"; default -> "NORMAL"; };
+    }
+
+    /* ─── Assignee 查询 ─── */
+
+    /** 返回所有启用的 OPERATOR 用户（最小信息） */
+    public List<AssigneeInfo> listAssignees() {
+        List<SysUser> operators = sysUserMapper.selectList(
+            new LambdaQueryWrapper<SysUser>()
+                .eq(SysUser::getRole, "OPERATOR")
+                .eq(SysUser::getIsActive, 1));
+        return operators.stream()
+            .map(u -> new AssigneeInfo(u.getId(), u.getDisplayName(), u.getUsername(), u.getIsActive() == 1))
+            .collect(Collectors.toList());
     }
 
     private void pushUpdate(AlertTicket t, String type) {
