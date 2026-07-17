@@ -60,6 +60,9 @@ public class SecurityConfig {
                 // 告警查看
                 .requestMatchers(HttpMethod.GET, "/api/v1/alert/**").authenticated()
                 .requestMatchers(HttpMethod.PUT, "/api/v1/alert/events/*/read").authenticated()
+                // 工单
+                .requestMatchers("/api/v1/tickets/**").authenticated()
+                .requestMatchers("/api/v1/alerts/*/ticket/**").authenticated()
                 // 管理操作
                 .requestMatchers("/api/v1/alert/rules/**").hasAnyRole("OPERATOR", "SYSTEM_ADMIN")
                 .requestMatchers(HttpMethod.GET, "/api/v1/system/health").authenticated()

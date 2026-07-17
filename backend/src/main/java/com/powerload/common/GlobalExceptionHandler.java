@@ -17,7 +17,14 @@ public class GlobalExceptionHandler {
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public R<Void> handleIllegalArgument(IllegalArgumentException e) {
         log.warn("参数校验失败: {}", e.getMessage());
-        return R.fail(400, "参数校验失败：" + e.getMessage());
+        return R.fail(400, e.getMessage());
+    }
+
+    @ExceptionHandler(IllegalStateException.class)
+    @ResponseStatus(HttpStatus.CONFLICT)
+    public R<Void> handleIllegalState(IllegalStateException e) {
+        log.warn("业务规则冲突: {}", e.getMessage());
+        return R.fail(409, e.getMessage());
     }
 
     @ExceptionHandler(org.springframework.security.authentication.BadCredentialsException.class)

@@ -12,6 +12,7 @@ import {
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { fetchAlertEvents, markAlertRead } from '../../services/alertApi'
+import TicketView from './TicketView'
 import api from '../../services/api'
 import { ALERT_LEVEL_CONFIG } from '../../types/alert'
 import type { AlertEvent, AlertLevel } from '../../types/alert'
@@ -262,7 +263,14 @@ const AlertCenter = () => {
           },
         }}
         expandable={{
-          expandedRowRender: (record) => <AlertAdvicePanel alertId={record.id} />,
+          expandedRowRender: (record) => (
+            <div>
+              <div style={{ padding: '8px 12px', borderBottom: '1px solid #1a1a1a' }}>
+                <TicketView alertId={record.id} />
+              </div>
+              <AlertAdvicePanel alertId={record.id} />
+            </div>
+          ),
         }}
         locale={{ emptyText: '暂无告警，系统运行正常' }}
         style={{ background: 'transparent' }}
