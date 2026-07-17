@@ -6,7 +6,7 @@ import {
 import {
   CheckCircleOutlined, DashboardOutlined, RiseOutlined, RollbackOutlined,
   SettingOutlined, UserOutlined, AuditOutlined, HeartOutlined, ThunderboltOutlined,
-  PlusOutlined, KeyOutlined, EditOutlined, AlertOutlined, RobotOutlined,
+  PlusOutlined, KeyOutlined, EditOutlined, AlertOutlined, RobotOutlined, FileTextOutlined,
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import api from '../../services/api'
@@ -18,6 +18,19 @@ import AlertRuleForm from './AlertRuleForm'
 import {
   fetchDemoLoadStatus, setDemoLoadMode, type DemoLoadStatus,
 } from '../../services/demoApi'
+
+const WHITE = '#EAEAEA'
+const GREEN = '#52C41A'
+
+/** 通过 label 查找并点击对应的 Ant Design Tab */
+const TabSwitchButton = ({ icon, label }: { icon: React.ReactNode; label: string }) => (
+  <Button size="small" icon={icon} onClick={() => {
+    const tabs = document.querySelectorAll('.ant-tabs-tab')
+    tabs.forEach((t) => {
+      if (t.textContent?.includes(label)) (t as HTMLElement).click()
+    })
+  }}>{label}</Button>
+)
 
 const MODE_CONFIG = {
   NORMAL: { label: '正常运行', color: '#4AF626' },
@@ -378,6 +391,199 @@ const ModelPanel = () => {
 }
 
 /* ══════════════════════════════════════════════
+ *  运维概览面板（OPERATOR 首页）
+ * ══════════════════════════════════════════════ */
+const OperatorOverviewPanel = () => {
+  const user = useAuthStore((s) => s.user)
+  const [summary, setSummary] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
+
+  const refresh = useCallback(async () => {
+    setLoading(true)
+    try {
+      const [ticketsResp, healthResp] = await Promise.allSettled([
+        api.get('/tickets', { params: { page: 1, size: 50, assigneeUserId: user?.id } }),
+        api.get('/system/health'),
+      ])
+      const tickets = ticketsResp.status === 'fulfilled' ? ticketsResp.value : {}
+      const health = healthResp.status === 'fulfilled' ? healthResp.value : null
+      const records = (tickets as any)?.records || []
+      setSummary({
+        total: (tickets as any)?.total || 0,
+        assigned: records.filter((t: any) => t.assigneeUserId === user?.id && t.status !== 'RESOLVED' && t.status !== 'CLOSED').length,
+        pending: records.filter((t: any) => t.status === 'PENDING').length,
+        inProgress: records.filter((t: any) => t.status === 'IN_PROGRESS' && t.assigneeUserId === user?.id).length,
+        resolved: records.filter((t: any) => t.status === 'RESOLVED').length,
+        oldest: records.filter((t: any) => t.status !== 'CLOSED' && t.status !== 'CANCELLED').sort((a: any, b: any) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())[0],
+        health,
+      })
+    } catch {} finally { setLoading(false) }
+  }, [user?.id])
+
+  useEffect(() => { refresh() }, [refresh])
+
+  if (loading) return <Skeleton active paragraph={{ rows: 4 }} />
+
+  return (
+    <div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 8, marginBottom: 16 }}>
+        <div style={{ border: '1px solid #2A2A2A', padding: '10px 12px', background: '#0c0c0c' }}>
+          <div style={{ color: '#888', fontSize: 10 }}>分配给我</div>
+          <div className="font-mono" style={{ color: WHITE, fontSize: 22, fontWeight: 700 }}>{summary?.assigned || 0}</div>
+        </div>
+        <div style={{ border: '1px solid #2A2A2A', padding: '10px 12px', background: '#0c0c0c' }}>
+          <div style={{ color: '#888', fontSize: 10 }}>待认领</div>
+          <div className="font-mono" style={{ color: '#FAAD14', fontSize: 22, fontWeight: 700 }}>{summary?.pending || 0}</div>
+        </div>
+        <div style={{ border: '1px solid #2A2A2A', padding: '10px 12px', background: '#0c0c0c' }}>
+          <div style={{ color: '#888', fontSize: 10 }}>处理中</div>
+          <div className="font-mono" style={{ color: '#177ddc', fontSize: 22, fontWeight: 700 }}>{summary?.inProgress || 0}</div>
+        </div>
+        <div style={{ border: '1px solid #2A2A2A', padding: '10px 12px', background: '#0c0c0c' }}>
+          <div style={{ color: '#888', fontSize: 10 }}>今日已解决</div>
+          <div className="font-mono" style={{ color: GREEN, fontSize: 22, fontWeight: 700 }}>{summary?.resolved || 0}</div>
+        </div>
+      </div>
+
+      {summary?.oldest && (
+        <div style={{ border: '1px solid #FAAD14', padding: '8px 12px', marginBottom: 16, background: 'rgba(250,173,20,0.08)' }}>
+          <span style={{ color: '#FAAD14', fontSize: 11 }}>最久未处理: </span>
+          <span style={{ color: '#ccc', fontSize: 12 }}>
+            {summary.oldest.ticketNo} — {summary.oldest.summary || '无概要'} ({dayjs(summary.oldest.createdAt).format('MM-DD HH:mm')})
+          </span>
+        </div>
+      )}
+
+      {summary?.health && (
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <Tag color={summary.health.flask === 'UP' ? 'green' : 'red'}>Flask: {summary.health.flask === 'UP' ? '正常' : '异常'}</Tag>
+          <Tag color={summary.health.mysql === 'UP' ? 'green' : 'red'}>MySQL: {summary.health.mysql === 'UP' ? '正常' : '异常'}</Tag>
+          <Tag color="green">数据源: 模拟</Tag>
+        </div>
+      )}
+    </div>
+  )
+}
+
+/* ══════════════════════════════════════════════
+ *  系统概览面板（SYSTEM_ADMIN 首页）
+ * ══════════════════════════════════════════════ */
+const OverviewPanel = () => {
+  const [loading, setLoading] = useState(true)
+  const [health, setHealth] = useState<any>(null)
+  const [users, setUsers] = useState<any[]>([])
+  const [forecast, setForecast] = useState<any>(null)
+  const [logs, setLogs] = useState<any[]>([])
+  const [error, setError] = useState('')
+
+  const refresh = useCallback(async () => {
+    setLoading(true)
+    setError('')
+    try {
+      const [h, u, f, l] = await Promise.allSettled([
+        api.get('/system/health'),
+        api.get('/system/users'),
+        api.get('/predict/forecast'),
+        api.get('/system/logs', { params: { page: 1, size: 5, result: 'FAILURE' } }),
+      ])
+      setHealth(h.status === 'fulfilled' ? h.value : null)
+      setUsers(u.status === 'fulfilled' ? (u.value as any) : [])
+      setForecast(f.status === 'fulfilled' ? f.value : null)
+      setLogs(l.status === 'fulfilled' ? (l.value as any)?.records || [] : [])
+    } catch {
+      setError('加载失败')
+    } finally { setLoading(false) }
+  }, [])
+
+  useEffect(() => { refresh() }, [refresh])
+
+  // 30s 静默刷新
+  useEffect(() => {
+    const t = setInterval(refresh, 30_000)
+    return () => clearInterval(t)
+  }, [refresh])
+
+  if (loading && !health) return <Skeleton active paragraph={{ rows: 6 }} />
+
+  const roleCounts = users.reduce((acc: Record<string, number>, u: any) => {
+    acc[u.role] = (acc[u.role] || 0) + 1
+    return acc
+  }, {})
+
+  const statusTag = (val: string | null, label: string) => {
+    if (!val) return <Tag color="default">{label}: N/A</Tag>
+    const up = val === 'UP'
+    return <Tag color={up ? 'green' : 'red'}>{label}: {up ? '正常' : '异常'}</Tag>
+  }
+
+  return (
+    <div>
+      {error && (
+        <div style={{ color: '#FF2A2A', fontSize: 12, marginBottom: 8 }}>{error}</div>
+      )}
+
+      {/* 服务状态 */}
+      <h4 style={{ color: '#888', fontSize: 11, marginBottom: 8 }}>服务状态</h4>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
+        {health && (
+          <>
+            {statusTag(health.mysql, 'MySQL')}
+            {statusTag(health.redis || 'UP', 'Redis')}
+            {statusTag(health.flask, 'Flask')}
+            {statusTag(health.llm?.configured ? 'UP' : null, 'LLM')}
+            <Tag color="green">WebSocket: /ws/dashboard</Tag>
+          </>
+        )}
+        {!health && <Tag color="default">服务状态不可用</Tag>}
+      </div>
+
+      {/* 用户统计 */}
+      <h4 style={{ color: '#888', fontSize: 11, marginBottom: 8 }}>用户统计</h4>
+      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 16 }}>
+        <div className="font-mono" style={{ color: WHITE, fontSize: 20 }}>{users.length} <small style={{ color: '#888', fontSize: 11 }}>启用用户</small></div>
+        <span style={{ color: '#888' }}>调度员: {roleCounts['DISPATCHER'] || 0}</span>
+        <span style={{ color: '#888' }}>运维: {roleCounts['OPERATOR'] || 0}</span>
+        <span style={{ color: '#888' }}>管理员: {roleCounts['SYSTEM_ADMIN'] || 0}</span>
+      </div>
+
+      {/* 审计摘要 */}
+      <h4 style={{ color: '#888', fontSize: 11, marginBottom: 8 }}>
+        最近失败操作
+        {logs.length > 0 && <TabSwitchButton icon={null} label="操作日志" />}
+      </h4>
+      <div style={{ marginBottom: 16, fontSize: 11, color: '#888' }}>
+        {logs.length === 0 ? <span>近24小时无失败操作</span> : logs.map((l: any) => (
+          <div key={l.id} style={{ marginBottom: 4 }}>
+            <Tag color="red">{l.result}</Tag> {l.username} · {l.module} · {l.action}
+            <span style={{ color: '#555', marginLeft: 8 }}>{l.createdAt ? dayjs(l.createdAt).format('MM-DD HH:mm') : ''}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* 模型 */}
+      <h4 style={{ color: '#888', fontSize: 11, marginBottom: 8 }}>当前模型</h4>
+      <div style={{ marginBottom: 16 }}>
+        {forecast ? (
+          <span style={{ color: '#ccc', fontSize: 12 }}>{forecast.model || 'N/A'} · 最近预测: {forecast.forecastStartTime ? dayjs(forecast.forecastStartTime).format('MM-DD HH:mm') : 'N/A'}</span>
+        ) : (
+          <span style={{ color: '#666' }}>暂无预测数据</span>
+        )}
+      </div>
+
+      {/* 快捷入口 — 通过模拟点击 tab 切换 */}
+      <h4 style={{ color: '#888', fontSize: 11, marginBottom: 8 }}>快捷入口</h4>
+      <Space wrap>
+        <TabSwitchButton icon={<UserOutlined />} label="用户管理" />
+        <TabSwitchButton icon={<AuditOutlined />} label="操作日志" />
+        <TabSwitchButton icon={<HeartOutlined />} label="系统健康" />
+        <TabSwitchButton icon={<AlertOutlined />} label="告警规则" />
+        <TabSwitchButton icon={<RobotOutlined />} label="模型管理" />
+      </Space>
+    </div>
+  )
+}
+
+/* ══════════════════════════════════════════════
  *  Admin 主页面
  * ══════════════════════════════════════════════ */
 const Admin = () => {
@@ -385,7 +591,18 @@ const Admin = () => {
 
   const tabs = useMemo(() => {
     const adminTabs = getAdminTabs(role)
-    return adminTabs.map((tab) => {
+    const items: { key: string; label: React.ReactNode; children: React.ReactNode }[] = []
+
+    // SYSTEM_ADMIN 首页增加概览
+    if (role === 'SYSTEM_ADMIN') {
+      items.push({ key: 'overview', label: <span><HeartOutlined />系统概览</span>, children: <OverviewPanel /> })
+    }
+    // OPERATOR 首页增加工单摘要
+    if (role === 'OPERATOR') {
+      items.push({ key: 'overview', label: <span><FileTextOutlined />运维概览</span>, children: <OperatorOverviewPanel /> })
+    }
+
+    items.push(...adminTabs.map((tab) => {
       switch (tab.key) {
         case 'users':  return { key: 'users',  label: <span><UserOutlined />用户管理</span>, children: <UsersPanel /> }
         case 'logs':   return { key: 'logs',   label: <span><AuditOutlined />操作日志</span>, children: <LogsPanel /> }
@@ -395,7 +612,8 @@ const Admin = () => {
         case 'demo':   return { key: 'demo',   label: <span><ThunderboltOutlined />演示控制</span>, children: <DemoPanel /> }
         default: return null
       }
-    }).filter(Boolean) as { key: string; label: React.ReactNode; children: React.ReactNode }[]
+    }).filter(Boolean) as { key: string; label: React.ReactNode; children: React.ReactNode }[])
+    return items
   }, [role])
 
   return (

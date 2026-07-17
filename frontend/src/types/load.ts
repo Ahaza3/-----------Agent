@@ -25,6 +25,8 @@ export interface LoadData {
   month: number
   /** 创建时间 */
   createdAt: string
+  /** 数据来源：历史、恢复模拟或其他采集来源 */
+  dataSource?: string
 }
 
 /**

@@ -119,11 +119,11 @@ const useDashboardStore = create<DashboardState>((set) => ({
 
   appendRealtimeLoad: (point) =>
     set((state) => {
-      // 拒绝倒序或重复的消息
-      const lastSeq = state.realtimeLoads.length > 0
-        ? state.realtimeLoads[state.realtimeLoads.length - 1].sequence
+      // sequence 会在后端重启后归零，时间戳才是跨会话的稳定顺序依据。
+      const lastTimestamp = state.realtimeLoads.length > 0
+        ? state.realtimeLoads[state.realtimeLoads.length - 1].timestamp
         : -1
-      if (point.sequence <= lastSeq) return state
+      if (point.timestamp <= lastTimestamp) return state
 
       const next = [...state.realtimeLoads, point]
       if (next.length > MAX_REALTIME_POINTS) {
@@ -145,17 +145,17 @@ const useDashboardStore = create<DashboardState>((set) => ({
     set((state) => {
       if (points.length === 0) return state
 
-      // 按 sequence 去重合并
-      const existingSeqs = new Set(state.realtimeLoads.map((p) => p.sequence))
+      // 后端重启后 sequence 会重复，使用采样时间去重并按时间排序。
+      const existingTimestamps = new Set(state.realtimeLoads.map((p) => p.timestamp))
       const merged = [...state.realtimeLoads]
       for (const p of points) {
-        if (!existingSeqs.has(p.sequence)) {
+        if (!existingTimestamps.has(p.timestamp)) {
           merged.push(p)
+          existingTimestamps.add(p.timestamp)
         }
       }
 
-      // 按 sequence 排序（防御性排序，快照和推送都是有序的但合并后可能乱）
-      merged.sort((a, b) => a.sequence - b.sequence)
+      merged.sort((a, b) => a.timestamp - b.timestamp || a.sequence - b.sequence)
 
       // 溢出淘汰
       if (merged.length > MAX_REALTIME_POINTS) {

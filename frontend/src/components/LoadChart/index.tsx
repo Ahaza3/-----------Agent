@@ -106,7 +106,7 @@ const LoadChart = ({
           </span>
         ) : undefined
       }
-      bodyStyle={{ padding: isEmpty ? 40 : 8 }}
+      styles={{ body: { padding: isEmpty ? 40 : 8 } }}
       style={{ border: '1px solid #2A2A2A' }}
     >
       {loading ? (

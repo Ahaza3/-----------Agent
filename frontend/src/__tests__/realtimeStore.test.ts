@@ -150,4 +150,27 @@ describe('RealtimeLoadPoint Store', () => {
     const after = useDashboardStore.getState().lastRealtimeAt
     expect(after).toBeGreaterThanOrEqual(before)
   })
+
+  it('11. 后端重启导致 sequence 归零时仍接收时间更新的点', () => {
+    const store = useDashboardStore.getState()
+    store.appendRealtimeLoad(makePoint(200, 1000, 800))
+    store.appendRealtimeLoad(makePoint(1, 2000, 801))
+
+    const points = useDashboardStore.getState().realtimeLoads
+    expect(points.map((point) => point.sequence)).toEqual([200, 1])
+    expect(useDashboardStore.getState().liveLoad?.loadMw).toBe(801)
+  })
+
+  it('12. 合并跨重启快照时保留 sequence 相同但时间不同的点', () => {
+    const store = useDashboardStore.getState()
+    store.mergeRealtimeLoads([
+      makePoint(1, 1000, 800),
+      makePoint(1, 2000, 801),
+      makePoint(1, 2000, 801),
+    ])
+
+    const points = useDashboardStore.getState().realtimeLoads
+    expect(points).toHaveLength(2)
+    expect(points.map((point) => point.timestamp)).toEqual([1000, 2000])
+  })
 })
