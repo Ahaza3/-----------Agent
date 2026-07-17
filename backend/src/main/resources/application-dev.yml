@@ -19,7 +19,7 @@ ml:
 # LLM API（API Key 为空时使用 Mock 模式，应用仍可启动）
 llm:
   api:
-    key: ${LLM_API_KEY:sk-499ab5b4a21542309ceed69539a9d653}
+    key: ${LLM_API_KEY:}
     url: ${LLM_API_URL:https://api.deepseek.com/v1}
     model: ${LLM_MODEL:deepseek-chat}
     timeout-seconds: 30
