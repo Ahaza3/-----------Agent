@@ -1,12 +1,13 @@
 /**
- * WebSocket 持久连接 — 挂载在 App 层，跨页面保持连接
- * 渲染 null（不产生 DOM），仅管理连接生命周期
+ * WebSocket 持久连接 — 挂在 AuthGuard 内部，认证后才挂载
+ * 渲染 <Outlet /> 让子路由正常工作
  */
+import { Outlet } from 'react-router-dom'
 import { useWebSocket } from './useWebSocket'
 
 const WebSocketProvider = () => {
   useWebSocket()
-  return null
+  return <Outlet />
 }
 
 export default WebSocketProvider

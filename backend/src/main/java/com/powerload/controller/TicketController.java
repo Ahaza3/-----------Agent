@@ -5,6 +5,7 @@ import com.powerload.common.R;
 import com.powerload.dto.request.CreateTicketRequest;
 import com.powerload.dto.request.TicketAssignRequest;
 import com.powerload.dto.request.TicketResolveRequest;
+import com.powerload.dto.response.AssigneeInfo;
 import com.powerload.entity.AlertTicket;
 import com.powerload.entity.AlertTicketAction;
 import com.powerload.security.SysUserPrincipal;
@@ -26,6 +27,11 @@ public class TicketController {
     private final TicketService ticketService;
 
     /* ─── Query ─── */
+
+    @GetMapping("/tickets/assignees")
+    public R<List<AssigneeInfo>> assignees() {
+        return R.ok(ticketService.listAssignees());
+    }
 
     @GetMapping("/tickets")
     public R<Map<String, Object>> list(
@@ -56,7 +62,7 @@ public class TicketController {
     @GetMapping("/alerts/{alertId}/ticket")
     public R<AlertTicket> getByAlert(@PathVariable Long alertId) {
         AlertTicket t = ticketService.getByAlertId(alertId);
-        if (t == null) throw new IllegalArgumentException("该告警暂无工单");
+        // 无工单时返回 null（不抛异常，由前端判断）
         return R.ok(t);
     }
 

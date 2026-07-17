@@ -90,9 +90,66 @@ hr.brutalist {
    (仅用于主要交互按钮，非所有) ---- */
 .ant-btn-primary {
   box-shadow: none !important;
+  background: #177ddc !important;
+  border-color: #177ddc !important;
 }
 .ant-btn-primary:hover {
-  box-shadow: 0 0 12px rgba(255, 42, 42, 0.25) !important;
+  box-shadow: 0 0 12px rgba(23, 125, 220, 0.35) !important;
+  background: #1a8af0 !important;
+}
+
+/* 危险按钮 — 仅用于删除/取消/禁用/紧急告警 */
+.ant-btn-dangerous,
+.ant-btn-dangerous.ant-btn-primary {
+  background: #a8071a !important;
+  border-color: #a8071a !important;
+}
+.ant-btn-dangerous:hover {
+  background: #cf1322 !important;
+  border-color: #cf1322 !important;
+}
+
+/* 默认按钮 — 用于新建/查询/刷新/保存等普通操作 */
+.ant-btn-default {
+  background: #1a1a1a !important;
+  border-color: #333 !important;
+  color: #ccc !important;
+}
+.ant-btn-default:hover {
+  background: #262626 !important;
+  border-color: #444 !important;
+  color: #EAEAEA !important;
+}
+
+/* 成功/确认按钮 — green */
+.ant-btn-color-success {
+  background: #135200 !important;
+  border-color: #237804 !important;
+}
+.ant-btn-color-success:hover {
+  background: #237804 !important;
+}
+
+/* ---- 交互过渡 ---- */
+.ant-btn, .ant-input, .ant-select-selector, .ant-tag, .ant-switch {
+  transition: all 200ms ease !important;
+}
+
+/* ---- 可见 focus ring ---- */
+.ant-btn:focus-visible,
+.ant-input:focus-visible,
+.ant-select-focused .ant-select-selector {
+  outline: 2px solid #4AF626 !important;
+  outline-offset: 1px !important;
+}
+
+/* ---- prefers-reduced-motion ---- */
+@media (prefers-reduced-motion: reduce) {
+  .ant-btn, .ant-input, .ant-select-selector, .ant-tag, .ant-switch,
+  *, *::before, *::after {
+    transition: none !important;
+    animation: none !important;
+  }
 }
 
 /* ---- 滚动条 CRT 风格 ---- */

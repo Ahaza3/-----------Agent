@@ -56,7 +56,7 @@ class TicketServiceTest {
         when(ticketMapper.selectById(1L)).thenReturn(t);
         doReturn(1).when(ticketMapper).updateById((AlertTicket) any());
         doReturn(1).when(actionMapper).insert((AlertTicketAction) any());
-        SysUser op = new SysUser(); op.setId(2L); op.setUsername("oper");
+        SysUser op = new SysUser(); op.setId(2L); op.setUsername("oper"); op.setRole("OPERATOR"); op.setIsActive(1);
         when(sysUserMapper.selectById(2L)).thenReturn(op);
 
         var r = service.assign(1L, 2L, dispatcher);
@@ -111,7 +111,7 @@ class TicketServiceTest {
         when(ticketMapper.selectById(1L)).thenReturn(t);
         doReturn(1).when(ticketMapper).updateById((AlertTicket) any());
         doReturn(1).when(actionMapper).insert((AlertTicketAction) any());
-        SysUser op = new SysUser(); op.setId(2L); op.setUsername("oper");
+        SysUser op = new SysUser(); op.setId(2L); op.setUsername("oper"); op.setRole("OPERATOR"); op.setIsActive(1);
         when(sysUserMapper.selectById(2L)).thenReturn(op);
 
         service.assign(1L, 2L, dispatcher);

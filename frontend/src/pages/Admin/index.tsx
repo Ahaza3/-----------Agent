@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  Button, Progress, Space, Tag, Tabs, Table, message, Modal, Input, Select, Form, Empty, Skeleton, Descriptions, Switch,
+  Button, Progress, Space, Tag, Tabs, Table, message, Modal, Input, Select, Form, Empty, Skeleton, Descriptions,
 } from 'antd'
 import {
   CheckCircleOutlined, DashboardOutlined, RiseOutlined, RollbackOutlined,
@@ -12,6 +12,9 @@ import dayjs from 'dayjs'
 import api from '../../services/api'
 import { fetchAlertRules } from '../../services/alertApi'
 import useAuthStore from '../../stores/useAuthStore'
+import { getAdminTabs } from '../../config/roles'
+import type { Role } from '../../config/roles'
+import AlertRuleForm from './AlertRuleForm'
 import {
   fetchDemoLoadStatus, setDemoLoadMode, type DemoLoadStatus,
 } from '../../services/demoApi'
@@ -256,15 +259,38 @@ const RulesPanel = () => {
   }, [])
   useEffect(() => { refresh() }, [refresh])
 
-  const openCreate = () => { setEditing(null); form.resetFields(); setEditOpen(true) }
-  const openEdit = (r: any) => { setEditing(r); form.setFieldsValue(r); setEditOpen(true) }
+  const openCreate = () => { setEditing(null); setEditOpen(true) }
+  const openEdit = (r: any) => { setEditing(r); setEditOpen(true) }
 
   const handleSave = async (v: any) => {
     try {
+      // 从表单字段构造 config JSON
+      const config = JSON.stringify({
+        threshold: v.threshold,
+        yellowRatio: v.yellowRatio,
+        orangeRatio: v.orangeRatio,
+        redRatio: v.redRatio,
+        coolingTime: v.coolingTime,
+      })
+
+      // 前端校验
+      if (v.threshold <= 0) { message.error('基准阈值必须大于 0'); return }
+      if (v.yellowRatio > v.orangeRatio || v.orangeRatio > v.redRatio) {
+        message.error('告警比例必须满足：黄色 ≤ 橙色 ≤ 红色'); return
+      }
+      if (v.coolingTime < 0) { message.error('冷却时间不能为负数'); return }
+
+      const payload = {
+        name: v.name,
+        type: v.type || 'THRESHOLD',
+        config,
+        isActive: v.isActive ? 1 : 0,
+      }
+
       if (editing) {
-        await api.put(`/alert/rules/${editing.id}`, v)
+        await api.put(`/alert/rules/${editing.id}`, payload)
       } else {
-        await api.post('/alert/rules', v)
+        await api.post('/alert/rules', payload)
       }
       message.success(editing ? '已更新' : '已创建'); setEditOpen(false); refresh()
     } catch (e: any) { message.error(e?.response?.data?.message || e.message) }
@@ -275,7 +301,7 @@ const RulesPanel = () => {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
         <h3 style={{ color: '#ccc', margin: 0 }}>告警规则</h3>
-        <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>新建规则</Button>
+        <Button icon={<PlusOutlined />} onClick={openCreate}>新建规则</Button>
       </div>
       <Table
         dataSource={rules} rowKey="id" size="small" pagination={false}
@@ -283,7 +309,12 @@ const RulesPanel = () => {
           { title: '名称', dataIndex: 'name', key: 'name' },
           { title: '类型', dataIndex: 'type', key: 'type', render: (v: string) => <Tag>{v}</Tag> },
           { title: '启用', dataIndex: 'isActive', key: 'isActive', render: (v: number) => <Tag color={v ? 'green' : 'default'}>{v ? '启用' : '禁用'}</Tag> },
-          { title: '配置', dataIndex: 'config', key: 'config', ellipsis: true },
+          { title: '配置', dataIndex: 'config', key: 'config', ellipsis: true,
+            render: (v: string) => {
+              try { const c = JSON.parse(v); return `${c.threshold || 0}MW / Y${c.yellowRatio??0} O${c.orangeRatio??0} R${c.redRatio??0}` }
+              catch { return <Tag color="red">配置异常</Tag> }
+            }
+          },
           {
             title: '操作', key: 'actions', render: (_: any, r: any) => (
               <Button size="small" icon={<EditOutlined />} onClick={() => openEdit(r)}>编辑</Button>
@@ -293,14 +324,7 @@ const RulesPanel = () => {
       />
       <Modal title={editing ? '编辑规则' : '新建规则'} open={editOpen} onCancel={() => setEditOpen(false)} onOk={() => form.submit()} okText="保存" width={560}>
         <Form form={form} layout="vertical" onFinish={handleSave}>
-          <Form.Item name="name" label="规则名称" rules={[{ required: true }]}><Input /></Form.Item>
-          <Form.Item name="type" label="类型" initialValue="THRESHOLD"><Input /></Form.Item>
-          <Form.Item name="isActive" label="启用" valuePropName="checked" initialValue={1}>
-            <Switch checkedChildren="启用" unCheckedChildren="禁用" />
-          </Form.Item>
-          <Form.Item name="config" label="配置 (JSON)" rules={[{ required: true }]}>
-            <Input.TextArea rows={4} style={{ fontFamily: 'monospace' }} placeholder='{"threshold":1100,"yellowRatio":0.9,"orangeRatio":1.0,"redRatio":1.1,"coolingTime":3600}' />
-          </Form.Item>
+          <AlertRuleForm form={form} editing={editing} />
         </Form>
       </Modal>
     </div>
@@ -357,27 +381,27 @@ const ModelPanel = () => {
  *  Admin 主页面
  * ══════════════════════════════════════════════ */
 const Admin = () => {
-  const role = useAuthStore((s) => s.user?.role)
+  const role = useAuthStore((s) => s.user?.role) as Role | undefined
 
   const tabs = useMemo(() => {
-    const items = []
-    if (role === 'SYSTEM_ADMIN') {
-      items.push({ key: 'users', label: <span><UserOutlined />用户管理</span>, children: <UsersPanel /> })
-      items.push({ key: 'logs', label: <span><AuditOutlined />操作日志</span>, children: <LogsPanel /> })
-      items.push({ key: 'health', label: <span><HeartOutlined />系统健康</span>, children: <HealthPanel /> })
-    }
-    if (role === 'OPERATOR' || role === 'SYSTEM_ADMIN') {
-      items.push({ key: 'rules', label: <span><AlertOutlined />告警规则</span>, children: <RulesPanel /> })
-      items.push({ key: 'model', label: <span><RobotOutlined />模型管理</span>, children: <ModelPanel /> })
-    }
-    items.push({ key: 'demo', label: <span><ThunderboltOutlined />演示控制</span>, children: <DemoPanel /> })
-    return items
+    const adminTabs = getAdminTabs(role)
+    return adminTabs.map((tab) => {
+      switch (tab.key) {
+        case 'users':  return { key: 'users',  label: <span><UserOutlined />用户管理</span>, children: <UsersPanel /> }
+        case 'logs':   return { key: 'logs',   label: <span><AuditOutlined />操作日志</span>, children: <LogsPanel /> }
+        case 'health': return { key: 'health', label: <span><HeartOutlined />系统健康</span>, children: <HealthPanel /> }
+        case 'rules':  return { key: 'rules',  label: <span><AlertOutlined />告警规则</span>, children: <RulesPanel /> }
+        case 'model':  return { key: 'model',  label: <span><RobotOutlined />模型管理</span>, children: <ModelPanel /> }
+        case 'demo':   return { key: 'demo',   label: <span><ThunderboltOutlined />演示控制</span>, children: <DemoPanel /> }
+        default: return null
+      }
+    }).filter(Boolean) as { key: string; label: React.ReactNode; children: React.ReactNode }[]
   }, [role])
 
   return (
     <div className="admin-root">
       <div className="admin-toolbar">
-        <h1><SettingOutlined /> 系统管理 <span>//</span> <small>{role ? ROLE_LABELS[role] : ''}</small></h1>
+        <h1><SettingOutlined /> {role === 'OPERATOR' ? '运维管理' : '系统管理'} <span>//</span> <small>{role ? ROLE_LABELS[role] : ''}</small></h1>
       </div>
       <hr className="brutalist" />
       <Tabs defaultActiveKey={tabs[0]?.key} items={tabs} style={{ marginTop: 8 }} />

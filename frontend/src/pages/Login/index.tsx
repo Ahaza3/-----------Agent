@@ -3,6 +3,8 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { Button, Card, Input, message } from 'antd'
 import { ThunderboltOutlined } from '@ant-design/icons'
 import useAuthStore from '../../stores/useAuthStore'
+import { getDefaultRoute } from '../../config/navigation'
+import type { Role } from '../../config/roles'
 import api from '../../services/api'
 
 const Login = () => {
@@ -12,11 +14,16 @@ const Login = () => {
   const navigate = useNavigate()
   const location = useLocation()
   const token = useAuthStore((s) => s.accessToken)
+  const userRole = useAuthStore((s) => s.user?.role) as Role | undefined
   const setAuth = useAuthStore((s) => s.setAuth)
-  const from = (location.state as any)?.from || '/dashboard'
+  const from = (location.state as any)?.from
 
-  // 已登录则直接跳转
-  useEffect(() => { if (token) navigate(from, { replace: true }) }, [token, navigate, from])
+  // 已登录则按角色跳转默认首页
+  useEffect(() => {
+    if (token) {
+      navigate(from || getDefaultRoute(userRole), { replace: true })
+    }
+  }, [token, navigate, from, userRole])
 
   const doLogin = async () => {
     if (!username || !password) { message.warning('请输入用户名和密码'); return }
@@ -24,7 +31,8 @@ const Login = () => {
     try {
       const resp = await api.post('/auth/login', { username, password }) as any
       setAuth(resp.accessToken, resp.refreshToken, resp.user)
-      navigate(from, { replace: true })
+      const role = resp.user?.role as Role | undefined
+      navigate(from || getDefaultRoute(role), { replace: true })
     } catch (err: any) {
       message.error(err?.response?.data?.message || err?.message || '登录失败')
     } finally { setLoading(false) }
