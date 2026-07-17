@@ -24,6 +24,7 @@ import dayjs from 'dayjs'
 import type { EChartsOption } from 'echarts'
 import type { TextAreaRef } from 'antd/es/input/TextArea'
 import LoadChart from '../../components/LoadChart'
+import AgentMarkdown from './AgentMarkdown'
 import {
   agentChat,
   deleteConversation,
@@ -378,8 +379,11 @@ const AgentChat = () => {
                   <strong>{item.role === 'user' ? '你' : item.role === 'error' ? '请求异常' : '智能助手'}</strong>
                   <time>{dayjs(item.createdAt).format('HH:mm')}</time>
                 </div>
-                <div className="agent-message-content">
-                  {item.content || (item.pending ? '正在准备回答…' : '')}
+                <div className="agent-message-content" style={item.role === 'assistant' ? { whiteSpace: 'normal' } : undefined}>
+                  {item.role === 'assistant' && item.content
+                    ? <AgentMarkdown content={item.content} />
+                    : (item.content || (item.pending ? '正在准备回答…' : ''))
+                  }
                 </div>
                 {item.chart && (
                   <div className="agent-message-chart">

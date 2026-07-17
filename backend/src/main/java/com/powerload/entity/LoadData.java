@@ -46,4 +46,7 @@ public class LoadData {
 
     /** 创建时间 */
     private LocalDateTime createdAt;
+
+    /** 数据来源（MOCK_HISTORY / RECOVERED_SIMULATION） */
+    private String dataSource;
 }

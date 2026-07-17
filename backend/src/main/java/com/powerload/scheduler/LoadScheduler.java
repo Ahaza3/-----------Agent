@@ -49,7 +49,7 @@ public class LoadScheduler {
     }
 
     private void initFromDb() {
-        LoadData latest = loadDataService.getLatest();
+        LoadData latest = loadDataService.getLatestHourly();
         if (latest == null || latest.getLoadMw() == null) {
             log.warn("DB 无小时级数据，使用默认值初始化实时模拟器");
             realtimeLoadService.initialize(800, 25, 60);
@@ -68,7 +68,7 @@ public class LoadScheduler {
         if (now - lastTargetSync < 60_000) return; // 每分钟刷新一次
         lastTargetSync = now;
 
-        LoadData latest = loadDataService.getLatest();
+        LoadData latest = loadDataService.getLatestHourly();
         if (latest != null && latest.getLoadMw() != null) {
             realtimeLoadService.setTargetLoad(latest.getLoadMw());
         }
