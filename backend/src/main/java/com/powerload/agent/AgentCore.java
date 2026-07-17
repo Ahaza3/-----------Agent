@@ -2,6 +2,7 @@ package com.powerload.agent;
 
 import cn.hutool.json.JSONUtil;
 import com.powerload.agent.prompt.AgentPrompt;
+import com.powerload.security.SysUserPrincipal;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
@@ -37,9 +38,11 @@ public class AgentCore {
      * @param userMessage  用户输入（已截断）
      * @param history      历史消息（system + 之前对话）
      * @param callback     事件回调（thinking / text / chart / debug）
+     * @param user         当前登录用户（可为 null，未认证时工具返回角色无关数据）
      * @return 最终 assistant 回答
      */
-    public AgentResponse run(String userMessage, List<AgentMessage> history, AgentCallback callback) {
+    public AgentResponse run(String userMessage, List<AgentMessage> history,
+                              AgentCallback callback, SysUserPrincipal user) {
         if (userMessage == null || userMessage.isBlank()) {
             return AgentResponse.error("消息不能为空");
         }
@@ -47,23 +50,29 @@ public class AgentCore {
             userMessage = userMessage.substring(0, MAX_USER_MESSAGE_LENGTH);
         }
 
-        List<AgentMessage> messages = new ArrayList<>();
-        messages.add(AgentMessage.system(AgentPrompt.systemPrompt()));
-        if (history != null) {
-            messages.addAll(history);
-        }
-        messages.add(AgentMessage.user(userMessage));
-
-        List<Map<String, Object>> toolDefs = toolRegistry.getToolDefinitions();
-
+        UserContextHolder.set(user);
         try {
-            return runLoop(messages, toolDefs, 0, callback);
-        } catch (LlmException e) {
-            log.error("Agent LLM 异常", e);
-            return AgentResponse.error("LLM 调用失败: " + e.getMessage());
-        } catch (Exception e) {
-            log.error("Agent 未知异常", e);
-            return AgentResponse.error("Agent 处理异常: " + e.getMessage());
+            List<AgentMessage> messages = new ArrayList<>();
+            String prompt = AgentPrompt.systemPrompt(user != null ? user.getRole() : null);
+            messages.add(AgentMessage.system(prompt));
+            if (history != null) {
+                messages.addAll(history);
+            }
+            messages.add(AgentMessage.user(userMessage));
+
+            List<Map<String, Object>> toolDefs = toolRegistry.getToolDefinitions();
+
+            try {
+                return runLoop(messages, toolDefs, 0, callback);
+            } catch (LlmException e) {
+                log.error("Agent LLM 异常", e);
+                return AgentResponse.error("LLM 调用失败: " + e.getMessage());
+            } catch (Exception e) {
+                log.error("Agent 未知异常", e);
+                return AgentResponse.error("Agent 处理异常: " + e.getMessage());
+            }
+        } finally {
+            UserContextHolder.clear();
         }
     }
 

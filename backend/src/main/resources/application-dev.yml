@@ -29,6 +29,12 @@ logging:
   level:
     com.powerload: debug
 
+# JWT 配置（开发环境默认密钥，生产环境必须通过 JWT_SECRET 环境变量覆盖）
+jwt:
+  secret: ${JWT_SECRET:power-load-dev-jwt-secret-key-32chars}
+  access-expiration-ms: 1800000
+  refresh-expiration-ms: 604800000
+
 # 仅开发环境开放负荷异常演示控制
 demo:
   enabled: true

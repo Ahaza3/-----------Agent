@@ -1,5 +1,6 @@
 package com.powerload.scheduler;
 
+import com.powerload.alert.AlertCreatedEvent;
 import com.powerload.alert.AlertTemplate;
 import com.powerload.alert.ThresholdDetector;
 import com.powerload.dto.response.RealtimeLoadPoint;
@@ -46,6 +47,7 @@ public class AlertScheduler {
     private final ThresholdDetector thresholdDetector;
     private final AlertTemplate alertTemplate;
     private final PushService pushService;
+    private final org.springframework.context.ApplicationEventPublisher eventPublisher;
 
     /** 当前仍处于告警状态的最高级别，恢复安全后清除。 */
     private final Map<Long, String> activeLevels = new ConcurrentHashMap<>();
@@ -100,6 +102,7 @@ public class AlertScheduler {
 
                 alertEventService.save(event);
                 pushService.pushAlert(event);
+                eventPublisher.publishEvent(new AlertCreatedEvent(this, event));
                 activeLevels.put(rule.getId(), level);
                 lastTriggeredAt.put(coolingKey, now);
                 log.info("告警触发: level={}, current={}MW, threshold={}MW", level, currentLoad, threshold);

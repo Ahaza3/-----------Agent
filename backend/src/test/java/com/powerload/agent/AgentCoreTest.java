@@ -29,7 +29,7 @@ class AgentCoreTest {
     void shouldReturnTextWhenNoToolCalls() {
         mockLlm.setNextResponse(AgentMessage.assistant("你好，我是助手。"));
 
-        AgentCore.AgentResponse r = agentCore.run("你好", List.of(), thinkingLog::append);
+        AgentCore.AgentResponse r = agentCore.run("你好", List.of(), thinkingLog::append, null);
 
         assertTrue(r.isSuccess());
         assertEquals("你好，我是助手。", r.getContent());
@@ -56,7 +56,7 @@ class AgentCoreTest {
         // Actually, let's just test the initial tool call flow since MockLlmClient
         // returns the same response each time. We'll verify the tool was dispatched.
 
-        AgentCore.AgentResponse r = agentCore.run("查询数据", List.of(), thinkingLog::append);
+        AgentCore.AgentResponse r = agentCore.run("查询数据", List.of(), thinkingLog::append, null);
 
         // The mock returns a tool call, tool executes with ok, then second LLM
         // call also gets the tool call (MockLlmClient always returns same).
@@ -80,7 +80,7 @@ class AgentCoreTest {
         );
         AgentCore core = new AgentCore(sequenced, toolRegistry);
 
-        AgentCore.AgentResponse r = core.run("当前负荷", List.of(), thinkingLog::append);
+        AgentCore.AgentResponse r = core.run("当前负荷", List.of(), thinkingLog::append, null);
 
         assertTrue(r.isSuccess());
         assertTrue(r.getContent().contains("900 MW"));
@@ -104,7 +104,7 @@ class AgentCoreTest {
         );
         AgentCore core = new AgentCore(sequenced, toolRegistry);
 
-        AgentCore.AgentResponse r = core.run("复杂查询", List.of(), thinkingLog::append);
+        AgentCore.AgentResponse r = core.run("复杂查询", List.of(), thinkingLog::append, null);
 
         assertTrue(r.isSuccess());
         assertTrue(r.getContent().contains("最终结果"));
@@ -121,7 +121,7 @@ class AgentCoreTest {
         ));
         mockLlm.setNextResponse(alwaysTool);
 
-        AgentCore.AgentResponse r = agentCore.run("查询", List.of(), thinkingLog::append);
+        AgentCore.AgentResponse r = agentCore.run("查询", List.of(), thinkingLog::append, null);
 
         assertFalse(r.isSuccess());
         assertTrue(r.getContent().contains("最大工具调用轮次"));
@@ -147,7 +147,7 @@ class AgentCoreTest {
         );
         AgentCore core = new AgentCore(sequenced, crashRegistry);
 
-        AgentCore.AgentResponse r = core.run("test", List.of(), thinkingLog::append);
+        AgentCore.AgentResponse r = core.run("test", List.of(), thinkingLog::append, null);
         // Should not throw — tool error is captured and LLM gets the error
         assertTrue(r.isSuccess());
     }
@@ -156,7 +156,7 @@ class AgentCoreTest {
 
     @Test
     void shouldReturnErrorForBlankMessage() {
-        AgentCore.AgentResponse r = agentCore.run("   ", List.of(), thinkingLog::append);
+        AgentCore.AgentResponse r = agentCore.run("   ", List.of(), thinkingLog::append, null);
         assertFalse(r.isSuccess());
         assertTrue(r.getContent().contains("不能为空"));
     }
@@ -167,7 +167,7 @@ class AgentCoreTest {
     void shouldTruncateLongMessage() {
         mockLlm.setNextResponse(AgentMessage.assistant("ok"));
         String longMsg = "A".repeat(3000);
-        AgentCore.AgentResponse r = agentCore.run(longMsg, List.of(), thinkingLog::append);
+        AgentCore.AgentResponse r = agentCore.run(longMsg, List.of(), thinkingLog::append, null);
         assertTrue(r.isSuccess());
     }
 
@@ -184,7 +184,7 @@ class AgentCoreTest {
         );
         AgentCore core = new AgentCore(sequenced, toolRegistry);
 
-        AgentCore.AgentResponse r = core.run("test", List.of(), thinkingLog::append);
+        AgentCore.AgentResponse r = core.run("test", List.of(), thinkingLog::append, null);
         assertTrue(r.isSuccess());
     }
 
@@ -197,7 +197,7 @@ class AgentCoreTest {
         nullContent.setContent(null);
         mockLlm.setNextResponse(nullContent);
 
-        AgentCore.AgentResponse r = agentCore.run("hello", List.of(), thinkingLog::append);
+        AgentCore.AgentResponse r = agentCore.run("hello", List.of(), thinkingLog::append, null);
         assertFalse(r.isSuccess());
     }
 

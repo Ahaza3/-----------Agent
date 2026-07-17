@@ -20,6 +20,24 @@ public class GlobalExceptionHandler {
         return R.fail(400, "参数校验失败：" + e.getMessage());
     }
 
+    @ExceptionHandler(org.springframework.security.authentication.BadCredentialsException.class)
+    @ResponseStatus(HttpStatus.UNAUTHORIZED)
+    public R<Void> handleBadCredentials(org.springframework.security.authentication.BadCredentialsException e) {
+        return R.fail(401, "用户名或密码错误");
+    }
+
+    @ExceptionHandler(org.springframework.security.authentication.DisabledException.class)
+    @ResponseStatus(HttpStatus.FORBIDDEN)
+    public R<Void> handleDisabled(org.springframework.security.authentication.DisabledException e) {
+        return R.fail(403, "账户已禁用");
+    }
+
+    @ExceptionHandler(org.springframework.security.access.AccessDeniedException.class)
+    @ResponseStatus(HttpStatus.FORBIDDEN)
+    public R<Void> handleAccessDenied(org.springframework.security.access.AccessDeniedException e) {
+        return R.fail(403, "权限不足");
+    }
+
     @ExceptionHandler(Exception.class)
     @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
     public R<Void> handleException(Exception e) {

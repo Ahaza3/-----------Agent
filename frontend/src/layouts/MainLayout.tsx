@@ -4,7 +4,7 @@
  */
 import { useState, useEffect, useMemo } from 'react'
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
-import { Layout, Menu, Button, Typography, Space, Badge, Tooltip } from 'antd'
+import { Layout, Menu, Button, Typography, Space, Badge, Tooltip, Tag } from 'antd'
 import {
   DashboardOutlined,
   AlertOutlined,
@@ -14,9 +14,12 @@ import {
   MenuFoldOutlined,
   MenuUnfoldOutlined,
   ThunderboltOutlined,
+  LogoutOutlined,
+  UserOutlined,
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import useDashboardStore from '../stores/useDashboardStore'
+import useAuthStore from '../stores/useAuthStore'
 
 const { Header, Sider, Content } = Layout
 const { Text } = Typography
@@ -29,6 +32,8 @@ const MainLayout = () => {
   const [clock, setClock] = useState(dayjs().format('YYYY-MM-DD HH:mm:ss'))
   const navigate = useNavigate()
   const location = useLocation()
+  const user = useAuthStore((s) => s.user)
+  const logout = useAuthStore((s) => s.logout)
   const unreadAlerts = useDashboardStore(
     (state) => state.alerts.filter((alert) => alert.isRead === 0).length,
   )
@@ -145,12 +150,19 @@ const MainLayout = () => {
                 />
               </Badge>
             </Tooltip>
-            <span
-              className="font-mono"
-              style={{ color: '#4AF626', fontSize: 11, letterSpacing: '0.05em' }}
-            >
+            <span className="font-mono" style={{ color: '#4AF626', fontSize: 11, letterSpacing: '0.05em' }}>
               系统运行中
             </span>
+            {user && (
+              <>
+                <Tag icon={<UserOutlined />} color="default" style={{ fontSize: 11 }}>
+                  {user.displayName || user.username}
+                </Tag>
+                <Button type="text" icon={<LogoutOutlined />} size="small"
+                  onClick={() => { logout(); navigate('/login') }}
+                  style={{ color: '#888' }}>退出</Button>
+              </>
+            )}
             <Text
               className="font-mono"
               style={{
