@@ -3,20 +3,76 @@
  * P0 · Sprint 2 (Day 9)
  */
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Table, Tag, Button, Segmented, Space, message, Badge } from 'antd'
+import { Table, Tag, Button, Segmented, Space, message, Badge, Spin, Typography } from 'antd'
 import {
   BellOutlined,
   CheckCircleOutlined,
   AlertOutlined,
+  RobotOutlined,
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { fetchAlertEvents, markAlertRead } from '../../services/alertApi'
+import api from '../../services/api'
 import { ALERT_LEVEL_CONFIG } from '../../types/alert'
 import type { AlertEvent, AlertLevel } from '../../types/alert'
 import type { ColumnsType } from 'antd/es/table'
 import useDashboardStore from '../../stores/useDashboardStore'
 
 type LevelFilter = AlertLevel | 'ALL'
+
+/* ─── AI 建议面板 ─── */
+const AlertAdvicePanel = ({ alertId }: { alertId: number }) => {
+  const [advice, setAdvice] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    setLoading(true)
+    api.get(`/alert/events/${alertId}/advice`)
+      .then((d: any) => setAdvice(Array.isArray(d) ? d : []))
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [alertId])
+
+  if (loading) return <div style={{ padding: 16 }}><Spin size="small" /> 加载建议中…</div>
+  if (!advice.length) return <div style={{ padding: 16, color: '#666' }}>暂无 AI 建议（异步生成中或 LLM 未配置）</div>
+
+  const statusTag = (s: string) => {
+    const map: Record<string, { color: string; text: string }> = {
+      PENDING: { color: 'default', text: '生成中' },
+      SUCCESS: { color: 'green', text: 'AI 已生成' },
+      FAILED: { color: 'red', text: '生成失败' },
+      FALLBACK: { color: 'gold', text: '降级建议' },
+    }
+    const m = map[s] || { color: 'default', text: s }
+    return <Tag color={m.color} style={{ fontSize: 10 }}>{m.text}</Tag>
+  }
+
+  const roleLabel = (r: string) => r === 'DISPATCHER' ? '调度员' : '运维管理员'
+
+  return (
+    <div className="alert-detail">
+      {advice.map((a: any) => (
+        <div key={a.id} style={{ border: '1px solid #2A2A2A', padding: 12, background: '#0c0c0c' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+            <span style={{ color: '#aaa', fontWeight: 600 }}>
+              <RobotOutlined style={{ marginRight: 4, color: '#FF2A2A' }} />
+              {roleLabel(a.audienceRole)}建议
+            </span>
+            {statusTag(a.status)}
+          </div>
+          {a.analysis && <Typography.Paragraph style={{ color: '#ccc', fontSize: 12, marginBottom: 8 }}>{a.analysis}</Typography.Paragraph>}
+          {a.actions && (
+            <ul style={{ color: '#aaa', fontSize: 11, margin: 0, paddingLeft: 16 }}>
+              {(() => { try { return JSON.parse(a.actions).map((act: string, i: number) => <li key={i}>{act}</li>) } catch { return <li>{a.actions}</li> } })()}
+            </ul>
+          )}
+          {a.modelName && <div style={{ color: '#555', fontSize: 10, marginTop: 6 }}>模型: {a.modelName}</div>}
+          {a.generatedAt && <div style={{ color: '#555', fontSize: 10 }}>{dayjs(a.generatedAt).format('MM-DD HH:mm:ss')}</div>}
+        </div>
+      ))}
+    </div>
+  )
+}
 
 const AlertCenter = () => {
   const [events, setEvents] = useState<AlertEvent[]>([])
@@ -206,18 +262,7 @@ const AlertCenter = () => {
           },
         }}
         expandable={{
-          expandedRowRender: (record) => (
-            <div className="alert-detail">
-              <div>
-                <span>告警分析</span>
-                <p>{record.aiAnalysis || '暂无分析'}</p>
-              </div>
-              <div>
-                <span>调度建议</span>
-                <p>{record.suggestion || '暂无建议'}</p>
-              </div>
-            </div>
-          ),
+          expandedRowRender: (record) => <AlertAdvicePanel alertId={record.id} />,
         }}
         locale={{ emptyText: '暂无告警，系统运行正常' }}
         style={{ background: 'transparent' }}
@@ -226,14 +271,12 @@ const AlertCenter = () => {
         .alert-detail {
           display: grid;
           grid-template-columns: repeat(2, minmax(0, 1fr));
-          gap: 24px;
-          padding: 8px 12px;
+          gap: 12px;
+          padding: 8px 12px 12px;
           border-left: 2px solid #FF2A2A;
         }
-        .alert-detail span { color: #888; font-size: 11px; }
-        .alert-detail p { color: #D8D8D8; margin: 5px 0 0; line-height: 1.65; }
         @media (max-width: 720px) {
-          .alert-detail { grid-template-columns: 1fr; gap: 12px; }
+          .alert-detail { grid-template-columns: 1fr; gap: 8px; }
         }
       `}</style>
     </div>

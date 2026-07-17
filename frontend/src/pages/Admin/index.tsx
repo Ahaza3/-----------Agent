@@ -1,15 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  Button, Progress, Space, Tag, Tabs, Table, message, Modal, Input, Select, Form, Empty, Skeleton, Descriptions,
+  Button, Progress, Space, Tag, Tabs, Table, message, Modal, Input, Select, Form, Empty, Skeleton, Descriptions, Switch,
 } from 'antd'
 import {
   CheckCircleOutlined, DashboardOutlined, RiseOutlined, RollbackOutlined,
   SettingOutlined, UserOutlined, AuditOutlined, HeartOutlined, ThunderboltOutlined,
-  PlusOutlined, KeyOutlined,
+  PlusOutlined, KeyOutlined, EditOutlined, AlertOutlined, RobotOutlined,
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import api from '../../services/api'
+import { fetchAlertRules } from '../../services/alertApi'
 import useAuthStore from '../../stores/useAuthStore'
 import {
   fetchDemoLoadStatus, setDemoLoadMode, type DemoLoadStatus,
@@ -238,6 +239,121 @@ const HealthPanel = () => {
 }
 
 /* ══════════════════════════════════════════════
+ *  告警规则管理面板（OPERATOR / SYSTEM_ADMIN）
+ * ══════════════════════════════════════════════ */
+const RulesPanel = () => {
+  const [rules, setRules] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [editOpen, setEditOpen] = useState(false)
+  const [editing, setEditing] = useState<any>(null)
+  const [form] = Form.useForm()
+
+  const refresh = useCallback(async () => {
+    setLoading(true)
+    try { setRules(await fetchAlertRules()) }
+    catch { message.error('规则加载失败') }
+    finally { setLoading(false) }
+  }, [])
+  useEffect(() => { refresh() }, [refresh])
+
+  const openCreate = () => { setEditing(null); form.resetFields(); setEditOpen(true) }
+  const openEdit = (r: any) => { setEditing(r); form.setFieldsValue(r); setEditOpen(true) }
+
+  const handleSave = async (v: any) => {
+    try {
+      if (editing) {
+        await api.put(`/alert/rules/${editing.id}`, v)
+      } else {
+        await api.post('/alert/rules', v)
+      }
+      message.success(editing ? '已更新' : '已创建'); setEditOpen(false); refresh()
+    } catch (e: any) { message.error(e?.response?.data?.message || e.message) }
+  }
+
+  if (loading) return <Skeleton active paragraph={{ rows: 5 }} />
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
+        <h3 style={{ color: '#ccc', margin: 0 }}>告警规则</h3>
+        <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>新建规则</Button>
+      </div>
+      <Table
+        dataSource={rules} rowKey="id" size="small" pagination={false}
+        columns={[
+          { title: '名称', dataIndex: 'name', key: 'name' },
+          { title: '类型', dataIndex: 'type', key: 'type', render: (v: string) => <Tag>{v}</Tag> },
+          { title: '启用', dataIndex: 'isActive', key: 'isActive', render: (v: number) => <Tag color={v ? 'green' : 'default'}>{v ? '启用' : '禁用'}</Tag> },
+          { title: '配置', dataIndex: 'config', key: 'config', ellipsis: true },
+          {
+            title: '操作', key: 'actions', render: (_: any, r: any) => (
+              <Button size="small" icon={<EditOutlined />} onClick={() => openEdit(r)}>编辑</Button>
+            ),
+          },
+        ]}
+      />
+      <Modal title={editing ? '编辑规则' : '新建规则'} open={editOpen} onCancel={() => setEditOpen(false)} onOk={() => form.submit()} okText="保存" width={560}>
+        <Form form={form} layout="vertical" onFinish={handleSave}>
+          <Form.Item name="name" label="规则名称" rules={[{ required: true }]}><Input /></Form.Item>
+          <Form.Item name="type" label="类型" initialValue="THRESHOLD"><Input /></Form.Item>
+          <Form.Item name="isActive" label="启用" valuePropName="checked" initialValue={1}>
+            <Switch checkedChildren="启用" unCheckedChildren="禁用" />
+          </Form.Item>
+          <Form.Item name="config" label="配置 (JSON)" rules={[{ required: true }]}>
+            <Input.TextArea rows={4} style={{ fontFamily: 'monospace' }} placeholder='{"threshold":1100,"yellowRatio":0.9,"orangeRatio":1.0,"redRatio":1.1,"coolingTime":3600}' />
+          </Form.Item>
+        </Form>
+      </Modal>
+    </div>
+  )
+}
+
+/* ══════════════════════════════════════════════
+ *  模型管理面板（OPERATOR / SYSTEM_ADMIN）
+ * ══════════════════════════════════════════════ */
+const ModelPanel = () => {
+  const [forecast, setForecast] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
+  const [triggering, setTriggering] = useState(false)
+
+  const refresh = useCallback(async () => {
+    setLoading(true)
+    try { setForecast(await api.get('/predict/forecast')); }
+    catch { /* Flask 可能未启动 */ }
+    finally { setLoading(false) }
+  }, [])
+  useEffect(() => { refresh() }, [refresh])
+
+  if (loading) return <Skeleton active paragraph={{ rows: 4 }} />
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
+        <h3 style={{ color: '#ccc', margin: 0 }}>预测模型</h3>
+        <Space>
+          <Button icon={<HeartOutlined />} onClick={refresh}>刷新</Button>
+          <Button type="primary" icon={<RobotOutlined />} loading={triggering} onClick={async () => {
+            setTriggering(true)
+            try { await api.get('/predict/forecast'); message.success('预测已触发'); refresh() }
+            catch (e: any) { message.error(e.message) }
+            finally { setTriggering(false) }
+          }}>触发预测</Button>
+        </Space>
+      </div>
+      {forecast ? (
+        <Descriptions bordered size="small" column={2}
+          items={[
+            { label: '模型名称', children: forecast.model || 'N/A' },
+            { label: '预测起点', children: forecast.forecastStartTime ? dayjs(forecast.forecastStartTime).format('MM-DD HH:mm') : 'N/A' },
+            { label: '预测点数', children: forecast.predictions?.length || 0 },
+            { label: '预测范围', children: forecast.predictions ? `${Math.min(...forecast.predictions).toFixed(0)} - ${Math.max(...forecast.predictions).toFixed(0)} MW` : 'N/A' },
+          ]}
+          labelStyle={{ color: '#888', background: '#0c0c0c' }} contentStyle={{ color: '#ccc', background: '#0e0e0e' }}
+        />
+      ) : <Empty description="暂无预测数据，请确认 Flask 推理服务已启动" />}
+    </div>
+  )
+}
+
+/* ══════════════════════════════════════════════
  *  Admin 主页面
  * ══════════════════════════════════════════════ */
 const Admin = () => {
@@ -249,6 +365,10 @@ const Admin = () => {
       items.push({ key: 'users', label: <span><UserOutlined />用户管理</span>, children: <UsersPanel /> })
       items.push({ key: 'logs', label: <span><AuditOutlined />操作日志</span>, children: <LogsPanel /> })
       items.push({ key: 'health', label: <span><HeartOutlined />系统健康</span>, children: <HealthPanel /> })
+    }
+    if (role === 'OPERATOR' || role === 'SYSTEM_ADMIN') {
+      items.push({ key: 'rules', label: <span><AlertOutlined />告警规则</span>, children: <RulesPanel /> })
+      items.push({ key: 'model', label: <span><RobotOutlined />模型管理</span>, children: <ModelPanel /> })
     }
     items.push({ key: 'demo', label: <span><ThunderboltOutlined />演示控制</span>, children: <DemoPanel /> })
     return items

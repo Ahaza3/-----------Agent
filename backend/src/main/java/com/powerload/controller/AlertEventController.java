@@ -1,8 +1,11 @@
 package com.powerload.controller;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.powerload.common.R;
+import com.powerload.entity.AlertAdvice;
 import com.powerload.entity.AlertEvent;
+import com.powerload.mapper.AlertAdviceMapper;
 import com.powerload.service.AlertEventService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -10,6 +13,7 @@ import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -22,6 +26,18 @@ import java.util.Map;
 public class AlertEventController {
 
     private final AlertEventService alertEventService;
+    private final AlertAdviceMapper alertAdviceMapper;
+
+    /**
+     * 查询某条告警的 AI 角色化建议
+     */
+    @GetMapping("/events/{id}/advice")
+    public R<List<AlertAdvice>> getAdvice(@PathVariable Long id) {
+        var wrapper = new LambdaQueryWrapper<AlertAdvice>()
+                .eq(AlertAdvice::getAlertId, id)
+                .orderByAsc(AlertAdvice::getAudienceRole);
+        return R.ok(alertAdviceMapper.selectList(wrapper));
+    }
 
     /**
      * 分页查询告警事件
