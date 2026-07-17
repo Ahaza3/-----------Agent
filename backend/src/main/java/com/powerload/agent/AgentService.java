@@ -1,5 +1,6 @@
 package com.powerload.agent;
 
+import com.powerload.security.SysUserPrincipal;
 import com.powerload.service.ConversationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -34,7 +35,7 @@ public class AgentService {
      * @param userMessage    用户消息
      * @return SseEmitter
      */
-    public SseEmitter chat(String conversationId, String userMessage) {
+    public SseEmitter chat(String conversationId, String userMessage, SysUserPrincipal user) {
         String convId = (conversationId == null || conversationId.isBlank())
                 ? UUID.randomUUID().toString().replace("-", "")
                 : conversationId;
@@ -58,7 +59,7 @@ public class AgentService {
                             } catch (IOException e) {
                                 throw new RuntimeException(e);
                             }
-                        });
+                        }, user);
 
                 if (!response.isSuccess()) {
                     sendEvent(emitter, "error", Map.of("message", response.getContent()));

@@ -4,7 +4,7 @@
  */
 import { useState, useEffect, useMemo } from 'react'
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
-import { Layout, Menu, Button, Typography, Space, Badge, Tooltip } from 'antd'
+import { Layout, Menu, Button, Typography, Space, Badge, Tooltip, Tag } from 'antd'
 import {
   DashboardOutlined,
   AlertOutlined,
@@ -14,9 +14,12 @@ import {
   MenuFoldOutlined,
   MenuUnfoldOutlined,
   ThunderboltOutlined,
+  LogoutOutlined,
+  UserOutlined,
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import useDashboardStore from '../stores/useDashboardStore'
+import useAuthStore from '../stores/useAuthStore'
 
 const { Header, Sider, Content } = Layout
 const { Text } = Typography
@@ -29,21 +32,33 @@ const MainLayout = () => {
   const [clock, setClock] = useState(dayjs().format('YYYY-MM-DD HH:mm:ss'))
   const navigate = useNavigate()
   const location = useLocation()
+  const user = useAuthStore((s) => s.user)
+  const role = user?.role
+  const logout = useAuthStore((s) => s.logout)
   const unreadAlerts = useDashboardStore(
     (state) => state.alerts.filter((alert) => alert.isRead === 0).length,
   )
 
-  const menuItems = useMemo(() => [
-    { key: '/dashboard', icon: <DashboardOutlined />, label: '可视化大屏' },
-    {
-      key: '/alerts',
-      icon: <Badge dot={unreadAlerts > 0}><AlertOutlined /></Badge>,
-      label: '告警中心',
-    },
-    { key: '/agent', icon: <RobotOutlined />, label: '智能助手' },
-    { key: '/data', icon: <DatabaseOutlined />, label: '数据查询' },
-    { key: '/admin', icon: <SettingOutlined />, label: '系统管理' },
-  ], [unreadAlerts])
+  const menuItems = useMemo(() => {
+    const items = [
+      { key: '/dashboard', icon: <DashboardOutlined />, label: '可视化大屏' },
+    ]
+    if (role !== 'SYSTEM_ADMIN') {
+      items.push({
+        key: '/alerts',
+        icon: role === 'DISPATCHER'
+          ? <Badge dot={unreadAlerts > 0}><AlertOutlined /></Badge>
+          : <AlertOutlined />,
+        label: '告警中心',
+      })
+    }
+    items.push(
+      { key: '/agent', icon: <RobotOutlined />, label: '智能助手' },
+      { key: '/data', icon: <DatabaseOutlined />, label: '数据查询' },
+      { key: '/admin', icon: <SettingOutlined />, label: '系统管理' },
+    )
+    return items
+  }, [unreadAlerts, role])
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -135,22 +150,31 @@ const MainLayout = () => {
           />
 
           <Space size="middle">
-            <Tooltip title="未读告警">
-              <Badge count={unreadAlerts} size="small">
-                <Button
-                  type="text"
-                  icon={<AlertOutlined />}
-                  onClick={() => navigate('/alerts')}
-                  style={{ color: unreadAlerts > 0 ? '#FF2A2A' : '#666666' }}
-                />
-              </Badge>
-            </Tooltip>
-            <span
-              className="font-mono"
-              style={{ color: '#4AF626', fontSize: 11, letterSpacing: '0.05em' }}
-            >
+            {(role === 'DISPATCHER' || role === 'SYSTEM_ADMIN') && (
+              <Tooltip title="未读告警">
+                <Badge count={unreadAlerts} size="small">
+                  <Button
+                    type="text"
+                    icon={<AlertOutlined />}
+                    onClick={() => navigate('/alerts')}
+                    style={{ color: unreadAlerts > 0 ? '#FF2A2A' : '#666666' }}
+                  />
+                </Badge>
+              </Tooltip>
+            )}
+            <span className="font-mono" style={{ color: '#4AF626', fontSize: 11, letterSpacing: '0.05em' }}>
               系统运行中
             </span>
+            {user && (
+              <>
+                <Tag icon={<UserOutlined />} color="default" style={{ fontSize: 11 }}>
+                  {user.displayName || user.username}
+                </Tag>
+                <Button type="text" icon={<LogoutOutlined />} size="small"
+                  onClick={() => { logout(); navigate('/login') }}
+                  style={{ color: '#888' }}>退出</Button>
+              </>
+            )}
             <Text
               className="font-mono"
               style={{

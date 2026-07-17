@@ -10,6 +10,7 @@ import com.powerload.service.AlertRuleService;
 import com.powerload.service.RealtimeLoadService;
 import com.powerload.websocket.PushService;
 import org.junit.jupiter.api.BeforeEach;
+import org.springframework.context.ApplicationEventPublisher;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
@@ -40,13 +41,15 @@ class AlertSchedulerTest {
         when(alertRuleService.listActive()).thenReturn(List.of(rule));
         when(alertEventService.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
+        ApplicationEventPublisher eventPublisher = mock(ApplicationEventPublisher.class);
         scheduler = new AlertScheduler(
                 realtimeLoadService,
                 alertRuleService,
                 alertEventService,
                 new ThresholdDetector(),
                 new AlertTemplate(),
-                pushService);
+                pushService,
+                eventPublisher);
     }
 
     @Test

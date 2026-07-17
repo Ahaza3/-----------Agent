@@ -3,6 +3,7 @@
  */
 import type { EChartsOption } from 'echarts'
 import api from './api'
+import useAuthStore from '../stores/useAuthStore'
 
 export interface AgentEvent {
   type: 'thinking' | 'text' | 'chart' | 'done' | 'error'
@@ -53,9 +54,13 @@ export function agentChat(
 ): AbortController {
   const controller = new AbortController()
 
+  const token = useAuthStore.getState().accessToken
   fetch('/api/v1/agent/chat', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
     body: JSON.stringify({
       message,
       conversationId: conversationId || null,

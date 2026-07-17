@@ -4,9 +4,11 @@ import com.powerload.agent.AgentService;
 import com.powerload.agent.MockLlmClient;
 import com.powerload.agent.LlmClient;
 import com.powerload.dto.request.AgentChatRequest;
+import com.powerload.security.SysUserPrincipal;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -31,7 +33,8 @@ public class AgentController {
     private final LlmClient llmClient;
 
     @PostMapping(value = "/chat", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public SseEmitter chat(@RequestBody AgentChatRequest request) {
+    public SseEmitter chat(@RequestBody AgentChatRequest request,
+                             @AuthenticationPrincipal SysUserPrincipal user) {
         String message = request.getMessage();
         if (message == null || message.isBlank()) {
             SseEmitter errEmitter = new SseEmitter(5000L);
@@ -52,7 +55,7 @@ public class AgentController {
             log.info("Agent 使用 Mock 模式回答");
         }
 
-        return agentService.chat(request.getConversationId(), message);
+        return agentService.chat(request.getConversationId(), message, user);
     }
 
     private void sendEvent(SseEmitter emitter, String event, Object data) throws IOException {

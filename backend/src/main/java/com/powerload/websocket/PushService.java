@@ -84,4 +84,13 @@ public class PushService {
         log.debug("预测推送: model={}, {} values", forecast.getModel(),
                 forecast.getPredictions() != null ? forecast.getPredictions().size() : 0);
     }
+
+    /** 通用推送：向指定 topic 发送任意 payload */
+    public void pushToTopic(String destination, Object payload) {
+        try {
+            messagingTemplate.convertAndSend(destination, payload);
+        } catch (Exception e) {
+            log.debug("WebSocket push failed: {}", e.getMessage());
+        }
+    }
 }
