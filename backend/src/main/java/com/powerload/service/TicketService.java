@@ -42,8 +42,12 @@ public class TicketService {
                                    String alertLevel, String keyword, int page, int size) {
         var w = new LambdaQueryWrapper<AlertTicket>();
         w.eq(status != null, AlertTicket::getStatus, status)
-         .eq(priority != null, AlertTicket::getPriority, priority)
-         .eq(assigneeUserId != null, AlertTicket::getAssigneeUserId, assigneeUserId);
+         .eq(priority != null, AlertTicket::getPriority, priority);
+        // assigneeUserId 过滤：包含分配给该用户的 + 所有 PENDING（可被认领）
+        if (assigneeUserId != null) {
+            w.and(q -> q.eq(AlertTicket::getAssigneeUserId, assigneeUserId)
+                        .or().eq(AlertTicket::getStatus, "PENDING"));
+        }
         if (keyword != null && !keyword.isBlank())
             w.and(q -> q.like(AlertTicket::getTicketNo, keyword).or().like(AlertTicket::getSummary, keyword));
         if (alertLevel != null) {

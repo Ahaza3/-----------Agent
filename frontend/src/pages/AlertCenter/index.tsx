@@ -2,7 +2,7 @@
  * 告警/工单中心 — DISPATCHER 看告警，OPERATOR 看工单
  */
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Table, Tag, Button, Segmented, Space, message, Badge, Typography, Modal, Input, Timeline, Descriptions } from 'antd'
+import { Table, Tag, Button, Segmented, Space, message, Badge, Typography, Modal, Input, Timeline, Descriptions, Select } from 'antd'
 import { BellOutlined, FileTextOutlined, CheckOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { fetchAlertEvents, markAlertRead } from '../../services/alertApi'
@@ -42,8 +42,10 @@ const DispatcherAlerts = () => {
   const seenIds = useRef(new Set<number>())
   const [createOpen, setCreateOpen] = useState<number | null>(null)
   const [summary, setSummary] = useState('')
+  const [assignUserId, setAssignUserId] = useState<number | undefined>()
   const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set())
   const [adviceCache, setAdviceCache] = useState<Record<number, any[]>>({})
+  const [ticketMap, setTicketMap] = useState<Record<number, any>>({})
 
   useEffect(() => {
     if (wsAlerts.length === 0) return
@@ -78,9 +80,30 @@ const DispatcherAlerts = () => {
     catch {}
   }
 
+  // 加载告警后批量获取关联工单
+  useEffect(() => {
+    if (events.length === 0) return
+    const fetchTickets = async () => {
+      const map: Record<number, any> = {}
+      await Promise.allSettled(events.map(async (e) => {
+        try { map[e.id] = await api.get(`/alerts/${e.id}/ticket`) } catch { map[e.id] = null }
+      }))
+      setTicketMap(map)
+    }
+    fetchTickets()
+  }, [events])
+
   const doCreateTicket = async () => {
     if (!createOpen) return
-    try { await api.post(`/alerts/${createOpen}/ticket`, { summary }); message.success('工单已创建'); setCreateOpen(null); setSummary('') }
+    try {
+      const t: any = await api.post(`/alerts/${createOpen}/ticket`, { summary })
+      if (assignUserId) {
+        await api.put(`/tickets/${t.id}/assign`, { assigneeUserId: assignUserId })
+      }
+      message.success('工单已创建' + (assignUserId ? '并指派' : ''))
+      setTicketMap((prev) => ({ ...prev, [createOpen]: t }))
+      setCreateOpen(null); setSummary(''); setAssignUserId(undefined)
+    }
     catch (e: any) { message.error(e?.response?.data?.message || e.message) }
   }
 
@@ -89,12 +112,19 @@ const DispatcherAlerts = () => {
     { title: '当前负荷', dataIndex: 'currentValue', width: 100, render: (v: number) => `${v?.toFixed(1)} MW` },
     { title: '阈值', dataIndex: 'thresholdValue', width: 90, render: (v: number) => `${v?.toFixed(0)} MW` },
     { title: '时间', dataIndex: 'triggerTime', width: 140, render: (v: string) => v ? dayjs(v).format('MM-DD HH:mm:ss') : '-' },
+    {
+      title: '工单', dataIndex: 'id', width: 100, render: (id: number) => {
+        const t = ticketMap[id]
+        if (!t) return <Button size="small" type="primary" icon={<FileTextOutlined />} onClick={() => { setCreateOpen(id); setSummary('') }}>发起处置</Button>
+        const st = STATUS[t.status] || { label: t.status, color: 'default' }
+        return <Tag color={st.color}>{st.label}</Tag>
+      },
+    },
     { title: '已读', dataIndex: 'isRead', width: 60, render: (v: number) => v === 0 ? <Badge status="error" /> : <Badge status="default" /> },
     {
-      title: '操作', key: 'actions', width: 160, render: (_: any, r: AlertEvent) => (
+      title: '操作', key: 'actions', width: 80, render: (_: any, r: AlertEvent) => (
         <Space size="small">
           {r.isRead === 0 && <Button size="small" onClick={() => handleMarkRead(r.id)}>标记已读</Button>}
-          <Button size="small" type="primary" icon={<FileTextOutlined />} onClick={() => { setCreateOpen(r.id); setSummary('') }}>发起处置</Button>
         </Space>
       ),
     },
@@ -122,15 +152,27 @@ const DispatcherAlerts = () => {
             setExpandedRows(next)
             if (expanded) loadAdvice(record.id)
           },
-          expandedRowRender: (record) => (
+          expandedRowRender: (record) => {
+            const t = ticketMap[record.id]
+            return (
             <div>
+              {t && t.resolution && (
+                <div style={{ padding: '8px 12px', borderBottom: '1px solid #1a1a1a', background: '#0c0c0c' }}>
+                  <span style={{ color: '#888', fontSize: 11 }}>处置结果：</span>
+                  <span style={{ color: '#ccc', fontSize: 12 }}>{t.resolution}</span>
+                  {t.assigneeName && <span style={{ color: '#555', fontSize: 10, marginLeft: 12 }}>处理人: {t.assigneeName}</span>}
+                  {t.resolvedAt && <span style={{ color: '#555', fontSize: 10, marginLeft: 8 }}>{dayjs(t.resolvedAt).format('MM-DD HH:mm')}</span>}
+                </div>
+              )}
               <AlertAdviceCards advices={adviceCache[record.id] || []} />
             </div>
-          ),
+          )},
         }}
       />
-      <Modal title="发起处置工单" open={createOpen !== null} onCancel={() => setCreateOpen(null)} onOk={doCreateTicket} okText="创建">
-        <Input.TextArea rows={3} value={summary} onChange={(e) => setSummary(e.target.value)} placeholder="工单概要（自动关联当前告警）" />
+      <Modal title="发起处置工单" open={createOpen !== null} onCancel={() => { setCreateOpen(null); setAssignUserId(undefined) }} onOk={doCreateTicket} okText="创建">
+        <Input.TextArea rows={3} value={summary} onChange={(e) => setSummary(e.target.value)} placeholder="工单概要" style={{ marginBottom: 12 }} />
+        <Select style={{ width: '100%' }} placeholder="指派运维人员（可选）" value={assignUserId} onChange={setAssignUserId} allowClear
+          options={[{ value: 3, label: 'operator (运维李四)' }]} />
       </Modal>
     </div>
   )
@@ -280,8 +322,16 @@ const OperatorTickets = () => {
 }
 
 /* ════════════════════ 主入口 ════════════════════ */
+import { useNavigate } from 'react-router-dom'
+
 const AlertCenter = () => {
+  const navigate = useNavigate()
   const role = useAuthStore((s) => s.user?.role)
+
+  if (role === 'SYSTEM_ADMIN') {
+    navigate('/admin', { replace: true })
+    return null
+  }
 
   if (role === 'OPERATOR') return (
     <div>

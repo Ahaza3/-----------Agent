@@ -25,5 +25,5 @@ public class AlertTicket {
     private LocalDateTime closedAt;
     private LocalDateTime cancelledAt;
     private LocalDateTime updatedAt;
-    @Version private Integer version;
+    private Integer version;
 }

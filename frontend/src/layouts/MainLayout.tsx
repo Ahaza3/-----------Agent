@@ -39,19 +39,26 @@ const MainLayout = () => {
     (state) => state.alerts.filter((alert) => alert.isRead === 0).length,
   )
 
-  const menuItems = useMemo(() => [
-    { key: '/dashboard', icon: <DashboardOutlined />, label: '可视化大屏' },
-    {
-      key: '/alerts',
-      icon: (role === 'DISPATCHER' || role === 'SYSTEM_ADMIN')
-        ? <Badge dot={unreadAlerts > 0}><AlertOutlined /></Badge>
-        : <AlertOutlined />,
-      label: '告警中心',
-    },
-    { key: '/agent', icon: <RobotOutlined />, label: '智能助手' },
-    { key: '/data', icon: <DatabaseOutlined />, label: '数据查询' },
-    { key: '/admin', icon: <SettingOutlined />, label: '系统管理' },
-  ], [unreadAlerts, role])
+  const menuItems = useMemo(() => {
+    const items = [
+      { key: '/dashboard', icon: <DashboardOutlined />, label: '可视化大屏' },
+    ]
+    if (role !== 'SYSTEM_ADMIN') {
+      items.push({
+        key: '/alerts',
+        icon: role === 'DISPATCHER'
+          ? <Badge dot={unreadAlerts > 0}><AlertOutlined /></Badge>
+          : <AlertOutlined />,
+        label: '告警中心',
+      })
+    }
+    items.push(
+      { key: '/agent', icon: <RobotOutlined />, label: '智能助手' },
+      { key: '/data', icon: <DatabaseOutlined />, label: '数据查询' },
+      { key: '/admin', icon: <SettingOutlined />, label: '系统管理' },
+    )
+    return items
+  }, [unreadAlerts, role])
 
   useEffect(() => {
     const timer = setInterval(() => {
