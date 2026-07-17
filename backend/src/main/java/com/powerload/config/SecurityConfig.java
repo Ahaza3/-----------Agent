@@ -62,8 +62,9 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.PUT, "/api/v1/alert/events/*/read").authenticated()
                 // 管理操作
                 .requestMatchers("/api/v1/alert/rules/**").hasAnyRole("OPERATOR", "SYSTEM_ADMIN")
-                .requestMatchers("/api/v1/demo/**").hasAnyRole("DISPATCHER", "OPERATOR", "SYSTEM_ADMIN")
+                .requestMatchers(HttpMethod.GET, "/api/v1/system/health").authenticated()
                 .requestMatchers("/api/v1/system/**").hasRole("SYSTEM_ADMIN")
+                .requestMatchers("/api/v1/demo/**").hasAnyRole("DISPATCHER", "OPERATOR", "SYSTEM_ADMIN")
                 // 其余需要认证
                 .anyRequest().authenticated()
             )
