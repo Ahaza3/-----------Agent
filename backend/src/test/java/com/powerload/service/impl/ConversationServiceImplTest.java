@@ -2,6 +2,7 @@ package com.powerload.service.impl;
 
 import com.powerload.entity.Conversation;
 import com.powerload.mapper.ConversationMapper;
+import com.powerload.security.SysUserPrincipal;
 import org.junit.jupiter.api.Test;
 
 import java.time.LocalDateTime;
@@ -9,6 +10,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
@@ -16,6 +18,7 @@ class ConversationServiceImplTest {
 
     private final ConversationMapper mapper = mock(ConversationMapper.class);
     private final ConversationServiceImpl service = new ConversationServiceImpl(mapper);
+    private final SysUserPrincipal dispatcher = new SysUserPrincipal(2L, "dispatcher", "DISPATCHER");
 
     @Test
     void listsConversationSummariesByRecentActivity() {
@@ -26,7 +29,7 @@ class ConversationServiceImplTest {
                 record(1L, "a", "user", "当前负荷是多少？", 1)
         ));
 
-        var result = service.listConversations(50);
+        var result = service.listConversations(dispatcher, 50);
 
         assertEquals(List.of("a", "b"),
                 result.stream().map(item -> item.getConversationId()).toList());
@@ -43,7 +46,7 @@ class ConversationServiceImplTest {
         ));
         when(mapper.selectList(any())).thenReturn(mapperResult);
 
-        var result = service.loadHistory("a", 10);
+        var result = service.loadHistory("a", dispatcher, 10);
 
         assertEquals(List.of("user", "assistant"),
                 result.stream().map(item -> item.getRole()).toList());
@@ -56,7 +59,7 @@ class ConversationServiceImplTest {
                 record(2L, "a", "assistant", "回答", 2)
         ));
 
-        var result = service.loadConversation("a");
+        var result = service.loadConversation("a", dispatcher);
 
         assertEquals(2, result.size());
         assertEquals("问题", result.get(0).getContent());
@@ -65,9 +68,28 @@ class ConversationServiceImplTest {
 
     @Test
     void deletesAllMessagesInConversation() {
-        service.deleteConversation("conversation-a");
+        service.deleteConversation("conversation-a", dispatcher);
 
         verify(mapper).delete(any());
+    }
+
+    @Test
+    void savesOwnerWhenPersistingMessages() {
+        service.saveMessage("conversation-a", dispatcher, "user", "当前负荷是多少？", null);
+
+        var captor = org.mockito.ArgumentCaptor.forClass(Conversation.class);
+        verify(mapper).insert(captor.capture());
+        Conversation record = captor.getValue();
+        assertEquals(2L, record.getUserId());
+        assertEquals("dispatcher", record.getUsername());
+        assertEquals("DISPATCHER", record.getUserRole());
+        assertEquals("conversation-a", record.getConversationId());
+    }
+
+    @Test
+    void rejectsMissingUserWhenQueryingHistory() {
+        assertThrows(IllegalArgumentException.class,
+                () -> service.loadHistory("conversation-a", null, 10));
     }
 
     private Conversation record(long id, String conversationId, String role,

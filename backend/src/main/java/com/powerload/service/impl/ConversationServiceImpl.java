@@ -6,6 +6,7 @@ import com.powerload.entity.Conversation;
 import com.powerload.dto.response.ConversationMessageResponse;
 import com.powerload.dto.response.ConversationSummary;
 import com.powerload.mapper.ConversationMapper;
+import com.powerload.security.SysUserPrincipal;
 import com.powerload.service.ConversationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -30,9 +31,10 @@ public class ConversationServiceImpl implements ConversationService {
     private final ConversationMapper conversationMapper;
 
     @Override
-    public void saveMessage(String conversationId, String role, String content, String toolName) {
+    public void saveMessage(String conversationId, SysUserPrincipal user, String role, String content, String toolName) {
         Conversation c = new Conversation();
         c.setConversationId(conversationId);
+        applyOwner(c, user);
         c.setRole(role);
         c.setContent(content);
         c.setToolName(toolName);
@@ -41,12 +43,13 @@ public class ConversationServiceImpl implements ConversationService {
     }
 
     @Override
-    public void saveMessages(String conversationId, List<AgentMessage> messages) {
+    public void saveMessages(String conversationId, SysUserPrincipal user, List<AgentMessage> messages) {
         if (messages == null || messages.isEmpty()) return;
         LocalDateTime now = LocalDateTime.now();
         var batch = messages.stream().map(m -> {
             Conversation c = new Conversation();
             c.setConversationId(conversationId);
+            applyOwner(c, user);
             c.setRole(m.getRole());
             c.setContent(m.getContent());
             c.setToolName(m.getToolName());
@@ -59,9 +62,10 @@ public class ConversationServiceImpl implements ConversationService {
     }
 
     @Override
-    public List<AgentMessage> loadHistory(String conversationId, int maxMessages) {
+    public List<AgentMessage> loadHistory(String conversationId, SysUserPrincipal user, int maxMessages) {
         var wrapper = new LambdaQueryWrapper<Conversation>()
                 .eq(Conversation::getConversationId, conversationId)
+                .eq(Conversation::getUserId, requireUserId(user))
                 .orderByDesc(Conversation::getCreatedAt)
                 .last("LIMIT " + maxMessages);
         List<Conversation> records = conversationMapper.selectList(wrapper);
@@ -76,9 +80,10 @@ public class ConversationServiceImpl implements ConversationService {
     }
 
     @Override
-    public List<ConversationSummary> listConversations(int limit) {
+    public List<ConversationSummary> listConversations(SysUserPrincipal user, int limit) {
         int safeLimit = Math.max(1, Math.min(limit, 100));
         var wrapper = new LambdaQueryWrapper<Conversation>()
+                .eq(Conversation::getUserId, requireUserId(user))
                 .orderByDesc(Conversation::getCreatedAt);
         List<Conversation> records = conversationMapper.selectList(wrapper);
         Map<String, ConversationSummary> summaries = new LinkedHashMap<>();
@@ -110,9 +115,10 @@ public class ConversationServiceImpl implements ConversationService {
     }
 
     @Override
-    public List<ConversationMessageResponse> loadConversation(String conversationId) {
+    public List<ConversationMessageResponse> loadConversation(String conversationId, SysUserPrincipal user) {
         var wrapper = new LambdaQueryWrapper<Conversation>()
                 .eq(Conversation::getConversationId, conversationId)
+                .eq(Conversation::getUserId, requireUserId(user))
                 .in(Conversation::getRole, "user", "assistant")
                 .orderByAsc(Conversation::getCreatedAt)
                 .last("LIMIT 200");
@@ -127,11 +133,25 @@ public class ConversationServiceImpl implements ConversationService {
     }
 
     @Override
-    public void deleteConversation(String conversationId) {
+    public void deleteConversation(String conversationId, SysUserPrincipal user) {
         var wrapper = new LambdaQueryWrapper<Conversation>()
-                .eq(Conversation::getConversationId, conversationId);
+                .eq(Conversation::getConversationId, conversationId)
+                .eq(Conversation::getUserId, requireUserId(user));
         conversationMapper.delete(wrapper);
-        log.info("Agent 会话已删除: {}", conversationId);
+        log.info("Agent 会话已删除: {}, userId={}", conversationId, user.getUserId());
+    }
+
+    private void applyOwner(Conversation conversation, SysUserPrincipal user) {
+        conversation.setUserId(requireUserId(user));
+        conversation.setUsername(user.getUsername());
+        conversation.setUserRole(user.getRole());
+    }
+
+    private Long requireUserId(SysUserPrincipal user) {
+        if (user == null || user.getUserId() == null) {
+            throw new IllegalArgumentException("当前用户身份无效");
+        }
+        return user.getUserId();
     }
 
     private String abbreviate(String value, int maxLength) {
