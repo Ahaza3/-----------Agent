@@ -3,6 +3,7 @@ package com.powerload.controller;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.powerload.common.R;
 import com.powerload.dto.request.CreateTicketRequest;
+import com.powerload.dto.request.CreatePrewarningTicketRequest;
 import com.powerload.dto.request.TicketAssignRequest;
 import com.powerload.dto.request.TicketResolveRequest;
 import com.powerload.dto.response.AssigneeInfo;
@@ -71,6 +72,14 @@ public class TicketController {
                                   @Valid @RequestBody CreateTicketRequest req,
                                   @AuthenticationPrincipal SysUserPrincipal user) {
         return R.ok(ticketService.create(alertId, req.getSummary(), user));
+    }
+
+    @PostMapping("/tickets/prewarning")
+    @PreAuthorize("hasAnyRole('DISPATCHER','SYSTEM_ADMIN')")
+    public R<AlertTicket> createPrewarning(@Valid @RequestBody CreatePrewarningTicketRequest req,
+                                           @AuthenticationPrincipal SysUserPrincipal user) {
+        return R.ok(ticketService.createPrewarning(
+                req.getSummary(), req.getRiskLevel(), req.getForecastTime(), req.getExpectedLoad(), user));
     }
 
     @PutMapping("/tickets/{id}/assign")

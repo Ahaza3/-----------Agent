@@ -75,6 +75,18 @@ const OperatorTicketWorkspace = () => {
   const openDetail = async (ticket: Ticket) => {
     setSelectedTicket(ticket)
     setDetailOpen(true)
+    if (ticket.sourceType === 'PREWARNING') {
+      setAlertInfo({
+        id: null,
+        level: ticket.riskLevel || 'YELLOW',
+        currentValue: ticket.expectedLoad || 0,
+        thresholdValue: ticket.riskLevel === 'RED' ? 1210 : ticket.riskLevel === 'ORANGE' ? 1100 : 990,
+        triggerTime: ticket.forecastTime || ticket.createdAt,
+        aiAnalysis: '该工单基于预测风险提前创建，并非已触发告警。',
+        suggestion: '请核对预测峰值、实时爬升趋势和阈值配置后再处理。',
+      })
+      return
+    }
     // 加载关联告警信息
     try {
       await api.get(`/alert/events?page=1&size=1`) as any
@@ -117,6 +129,7 @@ const OperatorTicketWorkspace = () => {
 
   const columns = [
     { title: '编号', dataIndex: 'ticketNo', width: 130 },
+    { title: '来源', dataIndex: 'sourceType', width: 76, render: (v: string) => v === 'PREWARNING' ? <Tag color="gold">预警</Tag> : <Tag color="red">告警</Tag> },
     { title: '优先级', dataIndex: 'priority', width: 60, render: (v: string) => <Tag color={PRIORITY[v]?.color}>{PRIORITY[v]?.label}</Tag> },
     { title: '状态', dataIndex: 'status', width: 70, render: (v: string) => <Tag color={STATUS[v]?.color}>{STATUS[v]?.label}</Tag> },
     { title: '概要', dataIndex: 'summary', ellipsis: true },

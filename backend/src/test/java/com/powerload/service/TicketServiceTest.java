@@ -7,6 +7,8 @@ import com.powerload.websocket.PushService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.time.LocalDateTime;
+
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
@@ -48,6 +50,31 @@ class TicketServiceTest {
         doReturn(1).when(ticketMapper).insert((AlertTicket) any());
         doReturn(1).when(actionMapper).insert((AlertTicketAction) any());
         assertEquals("URGENT", service.create(1L, "s", dispatcher).getPriority());
+    }
+
+    @Test
+    void shouldCreatePrewarningTicketWithoutAlertEvent() {
+        LocalDateTime forecastTime = LocalDateTime.of(2026, 7, 18, 20, 0);
+        doAnswer(invocation -> {
+            AlertTicket ticket = invocation.getArgument(0);
+            ticket.setId(88L);
+            return 1;
+        }).when(ticketMapper).insert((AlertTicket) any());
+        doReturn(1).when(actionMapper).insert((AlertTicketAction) any());
+
+        AlertTicket created = service.createPrewarning("未来峰值可能越过橙色阈值", "orange",
+                forecastTime, 1140f, dispatcher);
+
+        assertTrue(created.getTicketNo().startsWith("PW-"));
+        assertNull(created.getAlertId());
+        assertEquals("PREWARNING", created.getSourceType());
+        assertEquals("ORANGE", created.getRiskLevel());
+        assertEquals(forecastTime, created.getForecastTime());
+        assertEquals(1140f, created.getExpectedLoad());
+        assertEquals("HIGH", created.getPriority());
+        assertEquals("PENDING", created.getStatus());
+        verify(alertEventMapper, never()).selectById(any());
+        verify(actionMapper).insert((AlertTicketAction) any());
     }
 
     @Test

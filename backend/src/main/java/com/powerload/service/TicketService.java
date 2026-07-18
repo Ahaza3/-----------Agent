@@ -99,6 +99,8 @@ public class TicketService {
         String no = "TK-" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMddHHmmss"));
         AlertTicket t = new AlertTicket();
         t.setTicketNo(no); t.setAlertId(alertId);
+        t.setSourceType("ALERT");
+        t.setRiskLevel(alert.getLevel());
         t.setPriority(mapPriority(alert.getLevel()));
         t.setStatus("PENDING"); t.setSummary(summary);
         t.setCreatedBy(user.getUserId()); t.setCreatedByName(user.getUsername());
@@ -107,6 +109,39 @@ public class TicketService {
         catch (DuplicateKeyException e) { throw new IllegalStateException("该告警已存在工单"); }
 
         addAction(t.getId(), "CREATE", null, "PENDING", user, summary);
+        pushUpdate(t, "ticket_created");
+        return t;
+    }
+
+    @Transactional
+    @AuditLog(module = "工单管理", action = "创建预警工单")
+    public AlertTicket createPrewarning(String summary, String riskLevel,
+                                        LocalDateTime forecastTime, Float expectedLoad,
+                                        SysUserPrincipal user) {
+        if (summary == null || summary.isBlank()) throw new IllegalArgumentException("工单概要不能为空");
+        String normalizedRisk = normalizeRiskLevel(riskLevel);
+        if (forecastTime == null) throw new IllegalArgumentException("预测时间不能为空");
+        if (expectedLoad == null || expectedLoad <= 0) throw new IllegalArgumentException("预测负荷必须大于 0");
+
+        String no = "PW-" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMddHHmmss"))
+                + "-" + UUID.randomUUID().toString().substring(0, 4).toUpperCase(Locale.ROOT);
+        AlertTicket t = new AlertTicket();
+        t.setTicketNo(no);
+        t.setAlertId(null);
+        t.setSourceType("PREWARNING");
+        t.setRiskLevel(normalizedRisk);
+        t.setForecastTime(forecastTime);
+        t.setExpectedLoad(expectedLoad);
+        t.setPriority(mapPriority(normalizedRisk));
+        t.setStatus("PENDING");
+        t.setSummary(summary);
+        t.setCreatedBy(user.getUserId());
+        t.setCreatedByName(user.getUsername());
+        t.setCreatedAt(LocalDateTime.now());
+        ticketMapper.insert(t);
+
+        addAction(t.getId(), "CREATE", null, "PENDING", user,
+                "基于预测风险创建预警工单: " + summary);
         pushUpdate(t, "ticket_created");
         return t;
     }
@@ -180,7 +215,7 @@ public class TicketService {
         t.setResolution(resolution); t.setResolvedAt(LocalDateTime.now());
         t.setStatus("RESOLVED");
         ticketMapper.updateById(t);
-        AlertEvent alert = alertEventMapper.selectById(t.getAlertId());
+        AlertEvent alert = t.getAlertId() != null ? alertEventMapper.selectById(t.getAlertId()) : null;
         if (alert != null && alert.getResolvedAt() == null) {
             alert.setResolvedAt(LocalDateTime.now());
             alertEventMapper.updateById(alert);
@@ -247,6 +282,15 @@ public class TicketService {
         return switch (level) { case "RED" -> "URGENT"; case "ORANGE" -> "HIGH"; default -> "NORMAL"; };
     }
 
+    private String normalizeRiskLevel(String riskLevel) {
+        if (riskLevel == null) return "YELLOW";
+        String value = riskLevel.trim().toUpperCase(Locale.ROOT);
+        if (!Set.of("RED", "ORANGE", "YELLOW").contains(value)) {
+            throw new IllegalArgumentException("风险级别必须为 RED/ORANGE/YELLOW");
+        }
+        return value;
+    }
+
     /* ─── Assignee 查询 ─── */
 
     /** 返回所有启用的 OPERATOR 用户（最小信息） */
@@ -262,13 +306,16 @@ public class TicketService {
 
     private void pushUpdate(AlertTicket t, String type) {
         try {
-            pushService.pushToTopic("/topic/tickets", Map.of(
-                "type", type, "data", Map.of(
-                    "id", t.getId(), "ticketNo", t.getTicketNo(),
-                    "alertId", t.getAlertId(), "status", t.getStatus(),
-                    "priority", t.getPriority(),
-                    "assigneeName", t.getAssigneeName() != null ? t.getAssigneeName() : "",
-                    "updatedAt", t.getUpdatedAt() != null ? t.getUpdatedAt().toString() : "")));
+            Map<String, Object> data = new LinkedHashMap<>();
+            data.put("id", t.getId());
+            data.put("ticketNo", t.getTicketNo());
+            data.put("alertId", t.getAlertId());
+            data.put("sourceType", t.getSourceType());
+            data.put("status", t.getStatus());
+            data.put("priority", t.getPriority());
+            data.put("assigneeName", t.getAssigneeName() != null ? t.getAssigneeName() : "");
+            data.put("updatedAt", t.getUpdatedAt() != null ? t.getUpdatedAt().toString() : "");
+            pushService.pushToTopic("/topic/tickets", Map.of("type", type, "data", data));
         } catch (Exception ignored) {}
     }
 }

@@ -31,7 +31,7 @@ const PRIORITY: Record<string, { label: string; color: string }> = {
 }
 
 interface AlertInfo {
-  id: number
+  id: number | null
   level: AlertLevel
   currentValue: number
   thresholdValue: number
@@ -62,27 +62,31 @@ const AlertTicketDetail = ({
   const [actions, setActions] = useState<TimelineEntry[]>([])
   const [loading, setLoading] = useState(false)
   const [advices, setAdvices] = useState<any[]>([])
+  const ticketId = ticket?.id
 
   // 同步外部 ticket 变化
   useEffect(() => {
-    if (initialTicket) setTicket(initialTicket)
+    setTicket(initialTicket)
   }, [initialTicket])
 
   // 加载工单操作时间线
   useEffect(() => {
-    if (!ticket || !open) return
+    if (!ticketId || !open) return
     const load = async () => {
       try {
-        const acts = await ticketApi.fetchTicketActions(ticket.id)
+        const acts = await ticketApi.fetchTicketActions(ticketId)
         setActions(acts as TimelineEntry[])
       } catch { setActions([]) }
     }
     load()
-  }, [ticket?.id, open])
+  }, [ticketId, open])
 
   // 加载 AI 建议
   useEffect(() => {
-    if (!alert?.id || !open) return
+    if (!alert?.id || !open) {
+      setAdvices([])
+      return
+    }
     (api.get(`/alert/events/${alert.id}/advice`) as Promise<any[]>).then(setAdvices).catch(() => setAdvices([]))
   }, [alert?.id, open])
 
@@ -170,17 +174,17 @@ const AlertTicketDetail = ({
     >
       <Spin spinning={loading}>
 
-        {/* 告警信息 */}
+        {/* 告警/预警信息 */}
         <Descriptions
           size="small" bordered column={1}
           style={{ marginBottom: 12 }}
           labelStyle={{ color: '#888', background: '#0c0c0c', width: 90 }}
           contentStyle={{ color: '#ccc', background: '#0e0e0e' }}
           items={[
-            { label: '告警级别', children: alertLevelCfg ? <Tag color={alertLevelCfg.color}>{alertLevelCfg.label}</Tag> : alert.level },
-            { label: '当前负荷', children: `${alert.currentValue?.toFixed(1)} MW` },
+            { label: ticket?.sourceType === 'PREWARNING' ? '预警级别' : '告警级别', children: alertLevelCfg ? <Tag color={alertLevelCfg.color}>{alertLevelCfg.label}</Tag> : alert.level },
+            { label: ticket?.sourceType === 'PREWARNING' ? '预测负荷' : '当前负荷', children: `${alert.currentValue?.toFixed(1)} MW` },
             { label: '阈值', children: `${alert.thresholdValue?.toFixed(0)} MW` },
-            { label: '触发时间', children: alert.triggerTime ? dayjs(alert.triggerTime).format('MM-DD HH:mm:ss') : '-' },
+            { label: ticket?.sourceType === 'PREWARNING' ? '预测时间' : '触发时间', children: alert.triggerTime ? dayjs(alert.triggerTime).format('MM-DD HH:mm:ss') : '-' },
           ]}
         />
 
@@ -210,6 +214,7 @@ const AlertTicketDetail = ({
               contentStyle={{ color: '#ccc', background: '#0e0e0e' }}
               items={[
                 { label: '状态', children: st ? <Tag color={st.color}>{st.label}</Tag> : '--' },
+                { label: '来源', children: ticket.sourceType === 'PREWARNING' ? <Tag color="gold">预测预警</Tag> : <Tag color="red">告警触发</Tag> },
                 { label: '优先级', children: pr ? <Tag color={pr.color}>{pr.label}</Tag> : '--' },
                 { label: '概要', children: ticket.summary || '--' },
                 { label: '创建人', children: ticket.createdByName || '--' },
