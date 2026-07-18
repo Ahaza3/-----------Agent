@@ -2,91 +2,79 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ===== CRT Terminal 全局样式 ===== */
 body {
   margin: 0;
   font-family:
-    'Inter', 'SF Pro Display', 'Helvetica Neue', -apple-system, sans-serif;
-  background: #0a0a0a;
-  color: #eaeaea;
+    'Satoshi', 'Inter', 'SF Pro Display', 'Helvetica Neue', -apple-system, sans-serif;
+  background: #0b1117;
+  color: #e7edf3;
   -webkit-font-smoothing: antialiased;
+  font-variant-numeric: tabular-nums;
 }
 
-/* ---- CRT 扫描线叠加层 ---- */
 body::after {
-  content: '';
-  position: fixed;
-  inset: 0;
-  z-index: 9999;
-  pointer-events: none;
-  background: repeating-linear-gradient(
-    0deg,
-    transparent,
-    transparent 2px,
-    rgba(0, 0, 0, 0.06) 2px,
-    rgba(0, 0, 0, 0.06) 4px
-  );
-  opacity: 0.2;
-}
-
-/* ---- 全局噪点纹理 ---- */
-body::before {
   content: '';
   position: fixed;
   inset: 0;
   z-index: 9998;
   pointer-events: none;
+  background:
+    radial-gradient(circle at 15% 10%, rgba(79, 143, 186, 0.08), transparent 28rem),
+    radial-gradient(circle at 85% 0%, rgba(95, 167, 119, 0.05), transparent 26rem);
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  pointer-events: none;
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
   background-repeat: repeat;
   background-size: 256px 256px;
-  opacity: 0.15;
+  opacity: 0.1;
 }
 
-/* ---- monospace 工具类 ---- */
 .font-mono {
   font-family: 'JetBrains Mono', 'IBM Plex Mono', 'SF Mono', 'Cascadia Code',
     'Consolas', monospace !important;
   font-variant-numeric: tabular-nums;
 }
 
-/* ---- 统一区块标题 ---- */
 .section-title {
   font-size: 16px;
-  font-weight: 900;
-  color: #EAEAEA;
+  font-weight: 700;
+  color: #e7edf3;
   margin: 0 0 12px 0;
 }
 
-/* ---- 最小可读字号 ---- */
-.ant-table-cell, .ant-descriptions-item-label, .ant-descriptions-item-content {
+.ant-table-cell,
+.ant-descriptions-item-label,
+.ant-descriptions-item-content {
   font-size: 12px !important;
 }
 
-/* ---- 触摸目标最小 40px ---- */
 @media (max-width: 960px) {
-  .ant-btn-sm { min-height: 36px; min-width: 36px; }
+  .ant-btn-sm {
+    min-height: 36px;
+    min-width: 36px;
+  }
 }
 
-/* ---- 可见水平分隔线 ---- */
 hr.brutalist {
   border: none;
-  border-top: 1px solid #2a2a2a;
-  margin: 6px 0;
+  border-top: 1px solid #1c2935;
+  margin: 10px 0;
   width: 100%;
 }
 
-/* ---- ASCII 装饰帧 ---- */
 .brutalist-frame {
   display: inline-block;
   font-family: 'JetBrains Mono', monospace;
   font-size: 11px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: #666666;
+  color: #6f7d8a;
 }
 
-/* ---- Ant Design 全局覆盖 — 强制零圆角 ----
-   (部分组件可能需要更细粒度的覆盖) ---- */
 .ant-card,
 .ant-btn,
 .ant-input,
@@ -100,88 +88,96 @@ hr.brutalist {
 .ant-picker,
 .ant-picker-dropdown,
 .ant-segmented,
-.ant-statistic-content,
-.ant-badge {
-  border-radius: 0 !important;
+.ant-statistic-content {
+  border-radius: 6px !important;
 }
 
-/* ---- 按钮悬停发光 — 危险红微光 ----
-   (仅用于主要交互按钮，非所有) ---- */
 .ant-btn-primary {
   box-shadow: none !important;
-  background: #177ddc !important;
-  border-color: #177ddc !important;
-}
-.ant-btn-primary:hover {
-  box-shadow: 0 0 12px rgba(23, 125, 220, 0.35) !important;
-  background: #1a8af0 !important;
+  background: #4f8fba !important;
+  border-color: #4f8fba !important;
 }
 
-/* 危险按钮 — 仅用于删除/取消/禁用/紧急告警 */
+.ant-btn-primary:hover {
+  background: #639fc6 !important;
+  border-color: #639fc6 !important;
+}
+
 .ant-btn-dangerous,
 .ant-btn-dangerous.ant-btn-primary {
-  background: #a8071a !important;
-  border-color: #a8071a !important;
+  background: #b94f4f !important;
+  border-color: #b94f4f !important;
 }
+
 .ant-btn-dangerous:hover {
-  background: #cf1322 !important;
-  border-color: #cf1322 !important;
+  background: #d85c5c !important;
+  border-color: #d85c5c !important;
 }
 
-/* 默认按钮 — 用于新建/查询/刷新/保存等普通操作 */
 .ant-btn-default {
-  background: #1a1a1a !important;
-  border-color: #333 !important;
-  color: #ccc !important;
+  background: #111a23 !important;
+  border-color: #2a3949 !important;
+  color: #c4ced8 !important;
 }
+
 .ant-btn-default:hover {
-  background: #262626 !important;
-  border-color: #444 !important;
-  color: #EAEAEA !important;
+  background: #172331 !important;
+  border-color: #4f8fba !important;
+  color: #e7edf3 !important;
 }
 
-/* 成功/确认按钮 — green */
 .ant-btn-color-success {
-  background: #135200 !important;
-  border-color: #237804 !important;
-}
-.ant-btn-color-success:hover {
-  background: #237804 !important;
+  background: #3f7d55 !important;
+  border-color: #5fa777 !important;
 }
 
-/* ---- 交互过渡 ---- */
-.ant-btn, .ant-input, .ant-select-selector, .ant-tag, .ant-switch {
+.ant-btn-color-success:hover {
+  background: #5fa777 !important;
+}
+
+.ant-btn,
+.ant-input,
+.ant-select-selector,
+.ant-tag,
+.ant-switch {
   transition: all 200ms ease !important;
 }
 
-/* ---- 可见 focus ring ---- */
 .ant-btn:focus-visible,
 .ant-input:focus-visible,
 .ant-select-focused .ant-select-selector {
-  outline: 2px solid #4AF626 !important;
+  outline: 2px solid #7fa7c7 !important;
   outline-offset: 1px !important;
 }
 
-/* ---- prefers-reduced-motion ---- */
 @media (prefers-reduced-motion: reduce) {
-  .ant-btn, .ant-input, .ant-select-selector, .ant-tag, .ant-switch,
-  *, *::before, *::after {
+  .ant-btn,
+  .ant-input,
+  .ant-select-selector,
+  .ant-tag,
+  .ant-switch,
+  *,
+  *::before,
+  *::after {
     transition: none !important;
     animation: none !important;
   }
 }
 
-/* ---- 滚动条 CRT 风格 ---- */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
 }
+
 ::-webkit-scrollbar-track {
-  background: #0a0a0a;
+  background: #0b1117;
 }
+
 ::-webkit-scrollbar-thumb {
-  background: #2a2a2a;
+  background: #2a3949;
+  border-radius: 999px;
 }
+
 ::-webkit-scrollbar-thumb:hover {
-  background: #3a3a3a;
+  background: #3a5064;
 }

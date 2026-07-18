@@ -107,15 +107,12 @@ const AgentChat = () => {
 
   const userRole = useAuthStore((s) => s.user?.role) as Role | undefined
   const IdentityBanner = () => (
-    <div style={{
-      padding: '6px 16px', borderBottom: '1px solid #1f1f1f',
-      background: '#0c0c0c', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
-    }}>
-      <Tag color="blue" style={{ fontSize: 10 }}>
-        当前身份：{userRole ? ROLE_CONFIG[userRole]?.label : '未知'}
+    <div className="agent-identity-banner">
+      <Tag color="blue">
+        {userRole ? ROLE_CONFIG[userRole]?.label : '当前用户'}
       </Tag>
-      <span style={{ color: '#666', fontSize: 10 }}>
-        回答重点：{userRole ? ROLE_FOCUS[userRole] || '通用' : '通用'}
+      <span>
+        {userRole ? ROLE_FOCUS[userRole] || '通用运行分析' : '通用运行分析'}
       </span>
     </div>
   )
@@ -359,11 +356,10 @@ const AgentChat = () => {
             <div className="agent-title-icon"><RobotOutlined /></div>
             <div>
               <h1>智能负荷助手</h1>
-              <p>负荷查询 · 趋势分析 · 告警解读</p>
+              <p>负荷查询、趋势分析、告警处置建议</p>
             </div>
           </div>
           <div className="agent-session-meta">
-            <Tag color="default">模拟数据</Tag>
             <span>{conversationId ? conversationId.slice(0, 8).toUpperCase() : '新会话'}</span>
           </div>
         </header>
@@ -385,7 +381,7 @@ const AgentChat = () => {
             <div className="agent-empty-state">
               <div className="agent-empty-mark"><RobotOutlined /></div>
               <h2>从电力数据开始提问</h2>
-              <p>助手会调用实时负荷与历史统计工具，数值均来自当前系统中的模拟数据。</p>
+              <p>助手会结合实时负荷、历史统计、预测结果和告警上下文回答。</p>
               <div className="agent-quick-grid">
                 {QUICK_QUESTIONS.map((question) => (
                   <button type="button" key={question} onClick={() => sendMessage(question)}>
@@ -442,7 +438,7 @@ const AgentChat = () => {
               autoFocus
             />
             <div className="agent-composer-actions">
-              <span>{input.length}/2000 · Enter 发送 · Shift+Enter 换行</span>
+              <span>{input.length}/2000</span>
               {loading ? (
                 <Button danger icon={<StopOutlined />} onClick={stopResponse}>停止</Button>
               ) : (
