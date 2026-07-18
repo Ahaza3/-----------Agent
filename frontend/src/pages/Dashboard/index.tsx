@@ -2,7 +2,7 @@
  * 可视化大屏：调度员实时运行监控页。
  */
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
-import { DatePicker, Segmented, Tag, message, Button } from 'antd'
+import { DatePicker, Segmented, Tag, message, Button, Modal, Input } from 'antd'
 import {
   ThunderboltOutlined, ZoomInOutlined, DownloadOutlined,
   AlertOutlined, RobotOutlined, FileTextOutlined,
@@ -15,6 +15,7 @@ import { fetchLoadRange, fetchRealtimeRecent } from '../../services/dataApi'
 import { fetchForecast } from '../../services/predictApi'
 import { fetchAlertRules, fetchAlertEvents } from '../../services/alertApi'
 import * as ticketApi from '../../services/ticketApi'
+import { createPrewarningTicket } from '../../services/ticketApi'
 import useDashboardStore from '../../stores/useDashboardStore'
 import useAuthStore from '../../stores/useAuthStore'
 import type { Role } from '../../config/roles'
@@ -88,6 +89,9 @@ const Dashboard = () => {
   const [selectedAlert, setSelectedAlert] = useState<AlertEvent | null>(null)
   const [alertTicket, setAlertTicket] = useState<Ticket | null>(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const [prewarningOpen, setPrewarningOpen] = useState(false)
+  const [prewarningSummary, setPrewarningSummary] = useState('')
+  const [creatingPrewarning, setCreatingPrewarning] = useState(false)
   const chartRef = useRef<ReactECharts>(null)
   const connectedRef = useRef(true)
 
@@ -235,6 +239,7 @@ const Dashboard = () => {
     const riskLevel = crossesRed ? 'RED' : crossesOrange ? 'ORANGE' : crossesYellow ? 'YELLOW' : null
     return { peak, peakTime, valley, valleyTime, avg, riskLevel, model: forecast.model, crossesYellow, crossesOrange, crossesRed }
   }, [forecast, alertThresholds])
+  const prewarningRiskLevel = predSummary?.riskLevel || 'YELLOW'
 
   // -- 实时负荷曲线（全量构建，不设 dataZoom start/end，ECharts 自带保留缩放）--
   const loadChartOption = useMemo<EChartsOption>(() => {
@@ -409,6 +414,40 @@ const Dashboard = () => {
     },
   }), [handleAlertClick])
 
+  const openPrewarningTicket = useCallback(() => {
+    if (!predSummary) return
+    setPrewarningSummary(
+      '预测' + predSummary.peakTime.format('MM-DD HH:mm')
+      + '负荷可能达到 ' + predSummary.peak.toFixed(0)
+      + ' MW，建议提前核查调峰余量、实时爬升趋势和运维准备。',
+    )
+    setPrewarningOpen(true)
+  }, [predSummary])
+
+  const submitPrewarningTicket = useCallback(async () => {
+    if (!predSummary) return
+    if (!prewarningSummary.trim()) {
+      message.warning('请填写预警工单概要')
+      return
+    }
+    setCreatingPrewarning(true)
+    try {
+      await createPrewarningTicket({
+        summary: prewarningSummary.trim(),
+        riskLevel: prewarningRiskLevel,
+        forecastTime: predSummary.peakTime.toISOString(),
+        expectedLoad: predSummary.peak,
+      })
+      message.success('预警工单已创建')
+      setPrewarningOpen(false)
+      setPrewarningSummary('')
+    } catch (error: any) {
+      message.error(error?.response?.data?.message || error.message || '预警工单创建失败')
+    } finally {
+      setCreatingPrewarning(false)
+    }
+  }, [predSummary, prewarningRiskLevel, prewarningSummary])
+
   return (
     <div className="dashboard-root">
       <div className="dashboard-toolbar">
@@ -482,6 +521,11 @@ const Dashboard = () => {
           ) : (
             <Tag color="green">未越过告警阈值</Tag>
           )}
+          {role === 'DISPATCHER' && (
+            <Button size="small" type="primary" onClick={openPrewarningTicket}>
+              创建预警工单
+            </Button>
+          )}
         </section>
       )}
 
@@ -537,6 +581,27 @@ const Dashboard = () => {
           onResolve={() => {}}
         />
       )}
+
+      <Modal
+        title="创建预警工单"
+        open={prewarningOpen}
+        onCancel={() => setPrewarningOpen(false)}
+        onOk={submitPrewarningTicket}
+        okText="创建"
+        confirmLoading={creatingPrewarning}
+      >
+        <p style={{ color: '#7D8A97', fontSize: 12, marginTop: 0 }}>
+          该工单基于未来预测风险创建，不代表告警已经触发。
+        </p>
+        <Input.TextArea
+          rows={4}
+          value={prewarningSummary}
+          onChange={(event) => setPrewarningSummary(event.target.value)}
+          maxLength={500}
+          showCount
+          placeholder="填写预警工单概要"
+        />
+      </Modal>
 
       <style>{`
         .dashboard-root {

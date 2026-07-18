@@ -53,11 +53,23 @@ interface ChatMessage {
   pending?: boolean
 }
 
-const QUICK_QUESTIONS = [
-  '当前负荷是多少？',
-  '最近24小时最高负荷是多少？',
-  '最近24小时负荷趋势如何？',
-]
+const QUICK_QUESTIONS_BY_ROLE: Record<Role, string[]> = {
+  DISPATCHER: [
+    '生成当前运行风险简报',
+    '分析未来24小时峰值风险，是否需要提前建预警工单？',
+    '解释最近告警并给出调度建议',
+  ],
+  OPERATOR: [
+    '查看当前待处理工单和我的工作负载',
+    '生成告警排查清单',
+    '检查预测、告警和实时链路状态',
+  ],
+  SYSTEM_ADMIN: [
+    '查看最近操作日志异常',
+    '分析当前用户和权限配置',
+    '生成系统运行审计摘要',
+  ],
+}
 
 function createMessageId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
@@ -106,6 +118,10 @@ const AgentChat = () => {
   useEffect(() => () => abortRef.current?.abort(), [])
 
   const userRole = useAuthStore((s) => s.user?.role) as Role | undefined
+  const quickQuestions = useMemo(
+    () => QUICK_QUESTIONS_BY_ROLE[userRole || 'DISPATCHER'],
+    [userRole],
+  )
   const IdentityBanner = () => (
     <div className="agent-identity-banner">
       <Tag color="blue">
@@ -380,10 +396,10 @@ const AgentChat = () => {
           {!conversationLoading && messages.length === 0 && (
             <div className="agent-empty-state">
               <div className="agent-empty-mark"><RobotOutlined /></div>
-              <h2>从电力数据开始提问</h2>
-              <p>助手会结合实时负荷、历史统计、预测结果和告警上下文回答。</p>
+              <h2>从当前岗位任务开始</h2>
+              <p>助手会结合实时负荷、预测结果、告警工单和系统状态，按当前角色给出建议。</p>
               <div className="agent-quick-grid">
-                {QUICK_QUESTIONS.map((question) => (
+                {quickQuestions.map((question) => (
                   <button type="button" key={question} onClick={() => sendMessage(question)}>
                     <span>↗</span>{question}
                   </button>

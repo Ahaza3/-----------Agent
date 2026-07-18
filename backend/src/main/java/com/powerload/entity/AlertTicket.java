@@ -10,6 +10,10 @@ public class AlertTicket {
     @TableId(type = IdType.AUTO) private Long id;
     private String ticketNo;
     private Long alertId;
+    private String sourceType; // ALERT/PREWARNING
+    private String riskLevel;  // RED/ORANGE/YELLOW
+    private LocalDateTime forecastTime;
+    private Float expectedLoad;
     private String priority; // URGENT/HIGH/NORMAL
     private String status;   // PENDING/ASSIGNED/IN_PROGRESS/RESOLVED/CLOSED/CANCELLED
     private String summary;

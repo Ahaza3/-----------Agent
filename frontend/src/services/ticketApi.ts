@@ -13,7 +13,11 @@ export interface AssigneeInfo {
 export interface Ticket {
   id: number
   ticketNo: string
-  alertId: number
+  alertId: number | null
+  sourceType?: 'ALERT' | 'PREWARNING'
+  riskLevel?: string | null
+  forecastTime?: string | null
+  expectedLoad?: number | null
   status: string
   priority: string
   summary: string
@@ -86,6 +90,15 @@ export function fetchTicketByAlert(alertId: number): Promise<Ticket> {
 /* ─── 创建工单 ─── */
 export function createTicket(alertId: number, summary: string): Promise<Ticket> {
   return api.post(`/alerts/${alertId}/ticket`, { summary })
+}
+
+export function createPrewarningTicket(payload: {
+  summary: string
+  riskLevel: string
+  forecastTime: string
+  expectedLoad: number
+}): Promise<Ticket> {
+  return api.post('/tickets/prewarning', payload)
 }
 
 /* ─── 指派人 ─── */
