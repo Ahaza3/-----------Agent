@@ -19,8 +19,8 @@ import {
   fetchDemoLoadStatus, setDemoLoadMode, type DemoLoadStatus,
 } from '../../services/demoApi'
 
-const WHITE = '#EAEAEA'
-const GREEN = '#52C41A'
+const WHITE = '#E7EDF3'
+const GREEN = '#5FA777'
 
 /** 通过 label 查找并点击对应的 Ant Design Tab */
 const TabSwitchButton = ({ icon, label }: { icon: React.ReactNode; label: string }) => (
@@ -33,9 +33,9 @@ const TabSwitchButton = ({ icon, label }: { icon: React.ReactNode; label: string
 )
 
 const MODE_CONFIG = {
-  NORMAL: { label: '正常运行', color: '#4AF626' },
-  SPIKE: { label: '负荷突增', color: '#FF2A2A' },
-  RECOVERY: { label: '恢复中', color: '#FADB14' },
+  NORMAL: { label: '正常运行', color: '#5FA777' },
+  SPIKE: { label: '负荷突增', color: '#D85C5C' },
+  RECOVERY: { label: '恢复中', color: '#D7A447' },
 } as const
 
 const ROLE_LABELS: Record<string, string> = {
@@ -92,9 +92,9 @@ const DemoPanel = () => {
           </div>
           <Progress percent={progress} showInfo={false} strokeColor={mode.color} trailColor="#1A1A1A" strokeLinecap="butt" />
           <div className="threshold-grid">
-            <div style={{ borderColor: '#FADB14' }}><span>黄色阈值</span><strong>{status.yellowThreshold.toFixed(0)} MW</strong></div>
-            <div style={{ borderColor: '#FA8C16' }}><span>橙色阈值</span><strong>{status.orangeThreshold.toFixed(0)} MW</strong></div>
-            <div style={{ borderColor: '#FF2A2A' }}><span>红色阈值</span><strong>{status.redThreshold.toFixed(0)} MW</strong></div>
+            <div style={{ borderColor: '#D7A447' }}><span>黄色阈值</span><strong>{status.yellowThreshold.toFixed(0)} MW</strong></div>
+            <div style={{ borderColor: '#C9823D' }}><span>橙色阈值</span><strong>{status.orangeThreshold.toFixed(0)} MW</strong></div>
+            <div style={{ borderColor: '#D85C5C' }}><span>红色阈值</span><strong>{status.redThreshold.toFixed(0)} MW</strong></div>
           </div>
           <Space wrap size={8} className="demo-actions">
             <Button icon={<CheckCircleOutlined />} loading={commanding} onClick={() => runCommand('normal')}>正常运行</Button>
@@ -519,7 +519,7 @@ const OverviewPanel = () => {
   return (
     <div>
       {error && (
-        <div style={{ color: '#FF2A2A', fontSize: 12, marginBottom: 8 }}>{error}</div>
+        <div style={{ color: '#D85C5C', fontSize: 12, marginBottom: 8 }}>{error}</div>
       )}
 
       {/* 服务状态 */}
@@ -619,33 +619,31 @@ const Admin = () => {
   return (
     <div className="admin-root">
       <div className="admin-toolbar">
-        <h1><SettingOutlined /> {role === 'OPERATOR' ? '运维管理' : '系统管理'} <span>//</span> <small>{role ? ROLE_LABELS[role] : ''}</small></h1>
+        <h1><SettingOutlined /> {role === 'OPERATOR' ? '运维管理' : '系统管理'} <small>{role ? ROLE_LABELS[role] : ''}</small></h1>
       </div>
-      <hr className="brutalist" />
       <Tabs defaultActiveKey={tabs[0]?.key} items={tabs} style={{ marginTop: 8 }} />
       <style>{`
         .admin-root { min-height: calc(100vh - 132px); }
         .admin-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
-        .admin-toolbar h1 { margin: 0; color: #EAEAEA; font-size: 16px; font-weight: 900; }
-        .admin-toolbar h1 > .anticon { color: #FF2A2A; margin-right: 8px; }
-        .admin-toolbar h1 span { color: #666; margin: 0 6px; font-size: 12px; }
-        .admin-toolbar h1 small { color: #888; font-size: 11px; font-weight: 400; }
-        .demo-console { border: 1px solid #2A2A2A; margin-top: 14px; }
-        .demo-console__header { min-height: 72px; padding: 14px 16px; border-bottom: 1px solid #2A2A2A; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-        .section-label { color: #888; font-size: 11px; font-family: monospace; }
-        .section-value { color: #EAEAEA; font-size: 18px; font-weight: 700; margin-top: 4px; }
+        .admin-toolbar h1 { margin: 0; color: #E7EDF3; font-size: 22px; font-weight: 750; }
+        .admin-toolbar h1 > .anticon { color: #7FA7C7; margin-right: 8px; }
+        .admin-toolbar h1 small { margin-left: 10px; color: #7D8A97; font-size: 12px; font-weight: 500; }
+        .demo-console { border: 1px solid #1C2935; border-radius: 8px; margin-top: 14px; overflow: hidden; background: #111A23; }
+        .demo-console__header { min-height: 72px; padding: 14px 16px; border-bottom: 1px solid #1C2935; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+        .section-label { color: #7D8A97; font-size: 11px; font-family: monospace; }
+        .section-value { color: #E7EDF3; font-size: 18px; font-weight: 700; margin-top: 4px; }
         .demo-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
-        .demo-metrics > div { padding: 20px 16px; border-right: 1px solid #2A2A2A; }
+        .demo-metrics > div { padding: 20px 16px; border-right: 1px solid #1C2935; }
         .demo-metrics > div:last-child { border-right: 0; }
-        .demo-metrics span, .threshold-grid span { display: block; color: #888; font-size: 11px; }
-        .demo-metrics strong { display: block; color: #EAEAEA; font-size: 28px; margin-top: 5px; }
-        .demo-metrics small { color: #777; font-size: 11px; }
+        .demo-metrics span, .threshold-grid span { display: block; color: #7D8A97; font-size: 11px; }
+        .demo-metrics strong { display: block; color: #E7EDF3; font-size: 28px; margin-top: 5px; }
+        .demo-metrics small { color: #6F7D8A; font-size: 11px; }
         .demo-console .ant-progress { display: block; padding: 0 16px; margin: 2px 0 18px; }
         .threshold-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; padding: 0 16px 16px; }
-        .threshold-grid > div { border-left: 3px solid; padding: 8px 10px; background: #0E0E0E; }
-        .threshold-grid strong { display: block; color: #EAEAEA; font-size: 14px; margin-top: 3px; }
-        .demo-actions { padding: 14px 16px; border-top: 1px solid #2A2A2A; width: 100%; }
-        @media (max-width: 720px) { .demo-metrics, .threshold-grid { grid-template-columns: 1fr; } .demo-metrics > div { border-right: 0; border-bottom: 1px solid #2A2A2A; } }
+        .threshold-grid > div { border-left: 3px solid; border-radius: 6px; padding: 8px 10px; background: #0E1620; }
+        .threshold-grid strong { display: block; color: #E7EDF3; font-size: 14px; margin-top: 3px; }
+        .demo-actions { padding: 14px 16px; border-top: 1px solid #1C2935; width: 100%; }
+        @media (max-width: 720px) { .demo-metrics, .threshold-grid { grid-template-columns: 1fr; } .demo-metrics > div { border-right: 0; border-bottom: 1px solid #1C2935; } }
       `}</style>
     </div>
   )

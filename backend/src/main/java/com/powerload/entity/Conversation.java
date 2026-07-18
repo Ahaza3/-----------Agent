@@ -22,6 +22,15 @@ public class Conversation {
     /** 会话 ID (UUID) */
     private String conversationId;
 
+    /** 所属用户 ID */
+    private Long userId;
+
+    /** 所属用户名 */
+    private String username;
+
+    /** 所属用户角色 */
+    private String userRole;
+
     /** 角色: user / assistant / tool */
     private String role;
 

@@ -46,10 +46,10 @@ public class AgentService {
         new Thread(() -> {
             try {
                 // 加载历史
-                List<AgentMessage> history = conversationService.loadHistory(convId, MAX_HISTORY_MESSAGES);
+                List<AgentMessage> history = conversationService.loadHistory(convId, user, MAX_HISTORY_MESSAGES);
 
                 // 保存用户消息
-                conversationService.saveMessage(convId, "user", userMessage, null);
+                conversationService.saveMessage(convId, user, "user", userMessage, null);
 
                 // 执行 AgentCore
                 AgentCore.AgentResponse response = agentCore.run(userMessage, history,
@@ -64,7 +64,7 @@ public class AgentService {
                 if (!response.isSuccess()) {
                     sendEvent(emitter, "error", Map.of("message", response.getContent()));
                     // 保存错误作为 assistant 消息
-                    conversationService.saveMessage(convId, "assistant", response.getContent(), null);
+                    conversationService.saveMessage(convId, user, "assistant", response.getContent(), null);
                 } else {
                     // 发送文本（按段落拆分）
                     String text = response.getContent();
@@ -83,7 +83,7 @@ public class AgentService {
                     }
 
                     // 保存 assistant 最终回答
-                    conversationService.saveMessage(convId, "assistant", text, null);
+                    conversationService.saveMessage(convId, user, "assistant", text, null);
                 }
 
                 // 发送 done

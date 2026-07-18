@@ -67,35 +67,32 @@ const Login = () => {
   return (
     <div style={{
       display: 'flex', justifyContent: 'center', alignItems: 'center',
-      minHeight: '100vh', background: '#0a0a0a', padding: 16,
+      minHeight: '100vh', background: '#0B1117', padding: 16,
     }}>
       <Card style={{
-        width: 380, border: '1px solid #2A2A2A', background: '#0e0e0e',
-        maxWidth: '100%',
+        width: 400, border: '1px solid #1C2935', background: '#111A23',
+        maxWidth: '100%', boxShadow: '0 24px 70px rgba(0,0,0,0.28)',
       }}>
-        {/* Logo & 标题 */}
         <div style={{ textAlign: 'center', marginBottom: 24 }}>
-          <ThunderboltOutlined style={{ color: '#FF2A2A', fontSize: 32 }} />
-          <h2 style={{ color: '#EAEAEA', margin: '12px 0 4px', fontSize: 18 }}>电力负荷智能告警系统</h2>
-          <p style={{ color: '#666', fontSize: 12, margin: 0 }}>请登录以继续</p>
-          {/* 环境标识 */}
-          <div style={{ marginTop: 8 }}>
-            <Tag color="default" style={{ fontSize: 10 }}>
-              {import.meta.env.MODE === 'development' ? '开发演示环境' : import.meta.env.MODE}
-            </Tag>
-            <Tag color="default" style={{ fontSize: 10 }}>v1.0</Tag>
-          </div>
+          <ThunderboltOutlined style={{ color: '#7FA7C7', fontSize: 34 }} />
+          <h2 style={{ color: '#E7EDF3', margin: '14px 0 6px', fontSize: 20, fontWeight: 750 }}>电力负荷智能告警系统</h2>
+          <p style={{ color: '#7D8A97', fontSize: 12, margin: 0 }}>运行监控、预测分析与告警处置</p>
+          {import.meta.env.MODE === 'development' && (
+            <div style={{ marginTop: 10 }}>
+              <Tag color="default" style={{ fontSize: 11 }}>演示环境</Tag>
+            </div>
+          )}
         </div>
 
         {/* 后端不可用 */}
         {backendDown && (
           <div style={{
             padding: '8px 12px', marginBottom: 16,
-            border: '1px solid #FAAD14', background: 'rgba(250,173,20,0.08)',
+            border: '1px solid #D7A447', background: 'rgba(215,164,71,0.1)',
             display: 'flex', alignItems: 'center', gap: 8,
           }}>
-            <WarningOutlined style={{ color: '#FAAD14' }} />
-            <span style={{ color: '#FAAD14', fontSize: 12 }}>服务暂不可用，请稍后重试</span>
+            <WarningOutlined style={{ color: '#D7A447' }} />
+            <span style={{ color: '#D7A447', fontSize: 12 }}>服务暂不可用，请稍后重试</span>
           </div>
         )}
 
@@ -104,28 +101,28 @@ const Login = () => {
           style={{ marginBottom: 0 }}
         >
           <Form.Item
-            label={<span style={{ color: '#888', fontSize: 11 }}>用户名</span>}
+            label={<span style={{ color: '#9CAAB7', fontSize: 12 }}>用户名</span>}
             name="username"
             rules={[{ required: true, message: '请输入用户名' }]}
           >
             <Input
               autoComplete="username"
               placeholder="请输入用户名"
-              style={{ background: '#0a0a0a', borderColor: '#2A2A2A', color: '#EAEAEA', height: 36 }}
+              style={{ background: '#0E1620', borderColor: '#2A3949', color: '#E7EDF3', height: 38 }}
               onKeyDown={(e) => { setCapsLock(e.getModifierState('CapsLock')) }}
               disabled={loading}
             />
           </Form.Item>
 
           <Form.Item
-            label={<span style={{ color: '#888', fontSize: 11 }}>密码</span>}
+            label={<span style={{ color: '#9CAAB7', fontSize: 12 }}>密码</span>}
             name="password"
             rules={[{ required: true, message: '请输入密码' }]}
           >
             <Input.Password
               autoComplete="current-password"
               placeholder="请输入密码"
-              style={{ background: '#0a0a0a', borderColor: '#2A2A2A', color: '#EAEAEA', height: 36 }}
+              style={{ background: '#0E1620', borderColor: '#2A3949', color: '#E7EDF3', height: 38 }}
               onKeyDown={(e) => {
                 setCapsLock(e.getModifierState('CapsLock'))
                 if (e.key === 'Enter' && !loading) form.submit()
@@ -138,7 +135,7 @@ const Login = () => {
           {capsLock && (
             <div style={{
               padding: '4px 8px', marginBottom: 12, fontSize: 11,
-              color: '#FAAD14', display: 'flex', alignItems: 'center', gap: 6,
+              color: '#D7A447', display: 'flex', alignItems: 'center', gap: 6,
             }}>
               <WarningOutlined /> 大写锁定已开启
             </div>
@@ -146,7 +143,7 @@ const Login = () => {
 
           {/* 记住用户名 */}
           <Form.Item name="remember" valuePropName="checked" style={{ marginBottom: 16 }}>
-            <Checkbox style={{ color: '#888', fontSize: 12 }}>记住用户名</Checkbox>
+            <Checkbox style={{ color: '#9CAAB7', fontSize: 12 }}>记住用户名</Checkbox>
           </Form.Item>
 
           <Form.Item style={{ marginBottom: 0 }}>

@@ -1,7 +1,5 @@
 /**
- * 主布局 — Brutalist CRT Terminal 风格
- * 支持桌面端折叠侧栏 + 移动端 Drawer 菜单
- * 角色化导航项 + 顶栏连接状态
+ * 主布局：调度工作台导航框架。
  */
 import { useState, useEffect, useMemo } from 'react'
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
@@ -13,6 +11,7 @@ import {
   LogoutOutlined,
   UserOutlined,
   MenuOutlined,
+  BellOutlined,
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import useDashboardStore from '../stores/useDashboardStore'
@@ -38,7 +37,6 @@ const MainLayout = () => {
   const user = useAuthStore((s) => s.user)
   const role = user?.role as Role | undefined
   const logout = useAuthStore((s) => s.logout)
-  const wsConnected = useDashboardStore((s) => s.wsConnected)
   const unreadAlerts = useDashboardStore(
     (state) => state.alerts.filter((alert) => alert.isRead === 0).length,
   )
@@ -89,9 +87,16 @@ const MainLayout = () => {
     />
   )
 
+  const roleLabel = role === 'DISPATCHER'
+    ? '调度员'
+    : role === 'OPERATOR'
+      ? '运维'
+      : role === 'SYSTEM_ADMIN'
+        ? '管理员'
+        : '用户'
+
   return (
     <Layout className="main-layout">
-      {/* ====== 桌面侧栏 ====== */}
       {!isMobile && (
         <Sider
           width={SIDER_WIDTH}
@@ -103,15 +108,18 @@ const MainLayout = () => {
         >
           <div className={`main-layout__logo ${collapsed ? 'collapsed' : ''}`}>
             <ThunderboltOutlined className="main-layout__logo-icon" />
-            {!collapsed && <span className="main-layout__logo-text font-mono">电力负荷监控</span>}
+            {!collapsed && (
+              <span className="main-layout__logo-text">
+                负荷调度工作台
+                <small>Load Operations</small>
+              </span>
+            )}
           </div>
           {menuNode}
         </Sider>
       )}
 
-      {/* ====== 右侧 ====== */}
       <Layout>
-        {/* 顶栏 */}
         <Header className="main-layout__header">
           <div className="main-layout__header-left">
             {isMobile ? (
@@ -130,23 +138,14 @@ const MainLayout = () => {
               />
             )}
             {isMobile && (
-              <span className="main-layout__page-title">{currentPageLabel || '电力负荷监控'}</span>
+              <span className="main-layout__page-title">{currentPageLabel || '负荷调度工作台'}</span>
+            )}
+            {!isMobile && (
+              <span className="main-layout__page-title">{currentPageLabel || '运行监控'}</span>
             )}
           </div>
 
           <Space size="middle" className="main-layout__header-right">
-            {/* 连接状态指示 */}
-            <Tooltip title={wsConnected ? '实时连接正常' : '实时连接断开'}>
-              <span className="font-mono" style={{
-                color: wsConnected ? '#4AF626' : '#FF2A2A',
-                fontSize: 11,
-                letterSpacing: '0.05em',
-              }}>
-                {wsConnected ? '● 已连接' : '○ 断开'}
-              </span>
-            </Tooltip>
-
-            {/* 告警按钮 — 仅调度员 */}
             {showAlertBadge && (
               <Tooltip title="未读告警">
                 <Badge count={unreadAlerts} size="small">
@@ -154,9 +153,9 @@ const MainLayout = () => {
                     type="text"
                     className="main-layout__icon-btn"
                     onClick={() => navigate('/alerts')}
-                    style={{ color: unreadAlerts > 0 ? '#FF2A2A' : '#666666' }}
+                    icon={<BellOutlined />}
+                    style={{ color: unreadAlerts > 0 ? '#D85C5C' : '#9CAAB7' }}
                   >
-                    <span style={{ fontSize: 12 }}>🔔</span>
                   </Button>
                 </Badge>
               </Tooltip>
@@ -164,13 +163,14 @@ const MainLayout = () => {
 
             {user && (
               <>
-                <Tag icon={<UserOutlined />} color="default" style={{ fontSize: 11 }}>
+                <Tag icon={<UserOutlined />} color="default" className="main-layout__user-tag">
                   {user.displayName || user.username}
+                  <span className="main-layout__user-role">· {roleLabel}</span>
                 </Tag>
                 <Button type="text" icon={<LogoutOutlined />} size="small"
                   onClick={() => { logout(); navigate('/login') }}
                   className="main-layout__icon-btn"
-                  style={{ color: '#888' }}>退出</Button>
+                  style={{ color: '#9CAAB7' }}>退出</Button>
               </>
             )}
             {!isMobile && (
@@ -181,16 +181,13 @@ const MainLayout = () => {
           </Space>
         </Header>
 
-        {/* 全局状态条 */}
         <SystemStatusBar />
 
-        {/* 内容区 */}
         <Content className="main-layout__content">
           <Outlet />
         </Content>
       </Layout>
 
-      {/* ====== 移动端 Drawer ====== */}
       {isMobile && (
         <Drawer
           placement="left"
@@ -198,13 +195,13 @@ const MainLayout = () => {
           onClose={() => setMobileDrawerOpen(false)}
           width={SIDER_WIDTH}
           styles={{
-            body: { padding: 0, background: '#141414' },
-            header: { background: '#141414', borderBottom: '2px solid #2A2A2A' },
+            body: { padding: 0, background: '#0F1720' },
+            header: { background: '#0F1720', borderBottom: '1px solid #253341' },
           }}
           title={
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <ThunderboltOutlined style={{ color: '#FF2A2A', fontSize: 16 }} />
-              <span className="font-mono" style={{ color: '#EAEAEA', fontSize: 12 }}>电力负荷监控</span>
+              <ThunderboltOutlined style={{ color: '#7FA7C7', fontSize: 16 }} />
+              <span style={{ color: '#E7EDF3', fontSize: 13 }}>负荷调度工作台</span>
             </div>
           }
           closeIcon={null}
@@ -216,17 +213,19 @@ const MainLayout = () => {
       <style>{`
         .main-layout {
           min-height: 100vh;
+          background: #0b1117;
         }
         .main-layout__sider {
-          border-right: 2px solid #2A2A2A;
+          border-right: 1px solid #1c2935;
+          box-shadow: 10px 0 28px rgba(0, 0, 0, 0.16);
         }
         .main-layout__logo {
-          height: 52px;
+          height: 64px;
           display: flex;
           align-items: center;
-          justify-content: center;
-          border-bottom: 2px solid #2A2A2A;
-          gap: 6px;
+          justify-content: flex-start;
+          border-bottom: 1px solid #1c2935;
+          gap: 10px;
           padding: 0 16px;
         }
         .main-layout__logo.collapsed {
@@ -234,29 +233,38 @@ const MainLayout = () => {
           gap: 0;
         }
         .main-layout__logo-icon {
-          color: #FF2A2A;
-          font-size: 16px;
+          color: #7FA7C7;
+          font-size: 18px;
         }
         .collapsed .main-layout__logo-icon {
           font-size: 20px;
         }
         .main-layout__logo-text {
-          color: #EAEAEA;
-          font-size: 12px;
-          letter-spacing: 0.1em;
-          text-transform: uppercase;
+          color: #E7EDF3;
+          font-size: 14px;
+          font-weight: 700;
+          line-height: 1.15;
           white-space: nowrap;
+        }
+        .main-layout__logo-text small {
+          display: block;
+          margin-top: 4px;
+          color: #6F7D8A;
+          font-size: 10px;
+          font-weight: 500;
         }
         .main-layout__header {
           display: flex;
           align-items: center;
           justify-content: space-between;
-          padding: 0 16px;
-          border-bottom: 2px solid #2A2A2A;
-          height: 48px;
-          line-height: 48px;
+          padding: 0 18px;
+          border-bottom: 1px solid #1c2935;
+          height: 56px;
+          line-height: 56px;
           flex-wrap: wrap;
           min-width: 0;
+          background: rgba(16, 25, 35, 0.94);
+          backdrop-filter: blur(12px);
         }
         .main-layout__header-left {
           display: flex;
@@ -273,25 +281,34 @@ const MainLayout = () => {
           flex-shrink: 0;
         }
         .main-layout__icon-btn {
-          color: #888888;
+          color: #9CAAB7;
           font-size: 16px;
         }
         .main-layout__page-title {
-          color: #EAEAEA;
+          color: #E7EDF3;
           font-size: 14px;
-          font-weight: 700;
+          font-weight: 650;
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
         }
-        .main-layout__clock {
-          color: #AAAAAA;
+        .main-layout__user-tag {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
           font-size: 12px;
-          letter-spacing: 0.06em;
+        }
+        .main-layout__user-role {
+          color: #6F7D8A;
+          font-size: 11px;
+        }
+        .main-layout__clock {
+          color: #9CAAB7;
+          font-size: 12px;
           white-space: nowrap;
         }
         .main-layout__content {
-          padding: 16px;
+          padding: 18px;
           overflow: auto;
           min-width: 0;
         }

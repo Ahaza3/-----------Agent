@@ -1,9 +1,8 @@
 /**
- * 可视化大屏 — Brutalist CRT Terminal 风格
- * Phase 2: 数据来源可视化 / 断线标记 / 趋势卡 / 预测摘要 / 图表工具栏 / 告警标记
+ * 可视化大屏：调度员实时运行监控页。
  */
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
-import { DatePicker, Segmented, Tag, message, Button, Tooltip } from 'antd'
+import { DatePicker, Segmented, Tag, message, Button } from 'antd'
 import {
   ThunderboltOutlined, ZoomInOutlined, DownloadOutlined,
   AlertOutlined, RobotOutlined, FileTextOutlined,
@@ -28,9 +27,11 @@ import { buildLoadSeriesSegments } from './loadSeries'
 const { RangePicker } = DatePicker
 type QuickRange = '24h' | '7d' | '30d'
 
-const RED = '#FF2A2A'
-const YELLOW = '#FAAD14'
-const WHITE = '#EAEAEA'
+const RED = '#D85C5C'
+const YELLOW = '#D7A447'
+const WHITE = '#DDEAF5'
+const GREEN = '#5FA777'
+const BLUE = '#7FA7C7'
 
 const TREND_THRESHOLD = 0.02
 
@@ -68,9 +69,9 @@ function relativeTime(ts: number): string {
 }
 
 const SOURCE_LABELS: Record<string, string> = {
-  MOCK_HISTORY: '模拟历史',
-  RECOVERED_SIMULATION: '模拟恢复',
-  MOCK_REALTIME: '实时模拟',
+  MOCK_HISTORY: '历史负荷',
+  RECOVERED_SIMULATION: '恢复段',
+  MOCK_REALTIME: '实时负荷',
   METER: '电表采集',
 }
 
@@ -256,20 +257,20 @@ const Dashboard = () => {
     series.push({
       id: 'recovery', name: SOURCE_LABELS.RECOVERED_SIMULATION || '恢复模拟', type: 'line',
       data: showRecovery ? recoveryData : [],
-      smooth: true, symbol: 'none', lineStyle: { color: '#555', width: 1, type: 'dashed' },
+        smooth: true, symbol: 'none', lineStyle: { color: '#6F7D8A', width: 1, type: 'dashed' },
       connectNulls: false,
     })
     series.push({
       id: 'bridge', name: '', type: 'line', data: bridgeData,
       smooth: false, symbol: 'none', animation: false, silent: true,
-      lineStyle: { color: '#777', width: 1, type: 'dashed' },
+      lineStyle: { color: '#8B98A6', width: 1, type: 'dashed' },
       connectNulls: false,
     })
     series.push({
       id: 'realtime', name: SOURCE_LABELS.MOCK_REALTIME || '实时模拟', type: 'line',
       data: realtimeData.length > 0 ? realtimeData : [],
       smooth: false, sampling: 'lttb', symbol: 'none', animation: false,
-      lineStyle: { color: '#4AF626', width: 2 },
+      lineStyle: { color: GREEN, width: 2 },
       connectNulls: false,
     })
 
@@ -279,7 +280,7 @@ const Dashboard = () => {
       series[0].markArea = {
         silent: true,
         data: closed.map((g) => [
-          { xAxis: g.start, itemStyle: { color: 'rgba(255,42,42,0.08)' } },
+          { xAxis: g.start, itemStyle: { color: 'rgba(216, 92, 92, 0.1)' } },
           { xAxis: g.end },
         ]),
         label: { show: true, formatter: '连接中断', color: RED, fontSize: 10 },
@@ -307,8 +308,8 @@ const Dashboard = () => {
     series[0].markLine = showThresholds ? {
       silent: true, symbol: 'none', label: { position: 'insideEndTop', fontSize: 10 },
       data: [
-        { name: `黄 ${alertThresholds.yellow.toFixed(0)}`, yAxis: alertThresholds.yellow, lineStyle: { color: '#FADB14', type: 'dashed', width: 1 }, label: { color: '#FADB14' } },
-        { name: `橙 ${alertThresholds.orange.toFixed(0)}`, yAxis: alertThresholds.orange, lineStyle: { color: '#FA8C16', type: 'dashed', width: 1 }, label: { color: '#FA8C16' } },
+        { name: `黄 ${alertThresholds.yellow.toFixed(0)}`, yAxis: alertThresholds.yellow, lineStyle: { color: '#D7A447', type: 'dashed', width: 1 }, label: { color: '#D7A447' } },
+        { name: `橙 ${alertThresholds.orange.toFixed(0)}`, yAxis: alertThresholds.orange, lineStyle: { color: '#C9823D', type: 'dashed', width: 1 }, label: { color: '#C9823D' } },
         { name: `红 ${alertThresholds.red.toFixed(0)}`, yAxis: alertThresholds.red, lineStyle: { color: RED, type: 'dashed', width: 1 }, label: { color: RED } },
       ],
     } : { data: [] }
@@ -316,20 +317,20 @@ const Dashboard = () => {
     return {
       animation: false,
       grid: { top: 28, left: 56, right: 32, bottom: 80 },
-      xAxis: { type: 'time', axisLabel: { formatter: (v: number) => dayjs(v).format(quickRange === '24h' ? 'HH:mm' : 'MM-DD') } },
-      yAxis: { type: 'value', name: 'MW' },
+      xAxis: { type: 'time', axisLine: { lineStyle: { color: '#253341' } }, axisLabel: { color: '#7D8A97', formatter: (v: number) => dayjs(v).format(quickRange === '24h' ? 'HH:mm' : 'MM-DD') } },
+      yAxis: { type: 'value', name: 'MW', splitLine: { lineStyle: { color: '#1C2935' } }, axisLabel: { color: '#7D8A97' }, nameTextStyle: { color: '#7D8A97' } },
       tooltip: {
         trigger: 'axis',
         formatter: (params: any[]) => {
           if (!params?.length) return ''
           const p = params[0]
-          return `<div style="font-family:monospace">${dayjs(p.axisValue).format('MM-DD HH:mm:ss')}<br/>负荷: <strong>${p.value[1]?.toFixed(1) || '--'} MW</strong><br/>来源: ${p.seriesName || '--'}</div>`
+          return `<div style="font-family:monospace">${dayjs(p.axisValue).format('MM-DD HH:mm:ss')}<br/>负荷: <strong>${p.value[1]?.toFixed(1) || '--'} MW</strong><br/>类型: ${p.seriesName || '--'}</div>`
         },
       },
-      legend: { data: series.map((s) => s.name).filter(Boolean), textStyle: { color: '#888', fontSize: 10 }, type: 'scroll', bottom: 0 },
+      legend: { data: series.map((s) => s.name).filter(Boolean), textStyle: { color: '#7D8A97', fontSize: 11 }, type: 'scroll', bottom: 0 },
       dataZoom: [
         { type: 'inside', minSpan: 5 },
-        { type: 'slider', height: 18, bottom: 24, borderColor: '#2A2A2A', backgroundColor: '#0A0A0A', fillerColor: 'rgba(255,42,42,0.12)', handleStyle: { color: RED }, textStyle: { color: '#888' } },
+        { type: 'slider', height: 18, bottom: 24, borderColor: '#253341', backgroundColor: '#0E1620', fillerColor: 'rgba(79, 143, 186, 0.18)', handleStyle: { color: BLUE }, textStyle: { color: '#7D8A97' } },
       ],
       series,
     } as EChartsOption
@@ -346,10 +347,10 @@ const Dashboard = () => {
     return {
       animation: false,
       grid: { top: 28, left: 56, right: 32, bottom: 80 },
-      xAxis: { type: 'time', axisLabel: { formatter: (v: number) => dayjs(v).format('MM-DD HH:mm') } },
-      yAxis: { type: 'value', name: 'MW' },
-      legend: { data: ['实际', '预测'], textStyle: { color: '#888', fontSize: 10 }, bottom: 0 },
-      dataZoom: [{ type: 'inside', minSpan: 5 }, { type: 'slider', height: 18, bottom: 24, borderColor: '#2A2A2A', backgroundColor: '#0A0A0A', fillerColor: 'rgba(250,173,20,0.12)', handleStyle: { color: YELLOW }, textStyle: { color: '#888' } }],
+      xAxis: { type: 'time', axisLine: { lineStyle: { color: '#253341' } }, axisLabel: { color: '#7D8A97', formatter: (v: number) => dayjs(v).format('MM-DD HH:mm') } },
+      yAxis: { type: 'value', name: 'MW', splitLine: { lineStyle: { color: '#1C2935' } }, axisLabel: { color: '#7D8A97' }, nameTextStyle: { color: '#7D8A97' } },
+      legend: { data: ['实际', '预测'], textStyle: { color: '#7D8A97', fontSize: 11 }, bottom: 0 },
+      dataZoom: [{ type: 'inside', minSpan: 5 }, { type: 'slider', height: 18, bottom: 24, borderColor: '#253341', backgroundColor: '#0E1620', fillerColor: 'rgba(215, 164, 71, 0.16)', handleStyle: { color: YELLOW }, textStyle: { color: '#7D8A97' } }],
       series: [
         ...(recent.length > 0 ? [{ id: 'fc-actual', name: '实际', type: 'line' as const, data: recent.map((d) => [d.time, d.loadMw]), smooth: true, symbol: 'none' as const, lineStyle: { color: WHITE, width: 1 } }] : []),
         { id: 'fc-pred', name: '预测', type: 'line', data: forecastData, smooth: true, symbol: 'none', lineStyle: { color: YELLOW, width: 1.5, type: 'dashed' }, markLine: { silent: true, symbol: 'none', lineStyle: { color: YELLOW, type: 'dashed', width: 1 }, data: [{ xAxis: startTime.toISOString() }], label: { formatter: '预测起点', color: YELLOW, fontSize: 11 } } },
@@ -358,7 +359,7 @@ const Dashboard = () => {
   }, [hourlyLoadData, forecast, quickRange])
 
   // -- 趋势卡 --
-  const trendColor = (dir: string) => dir === '上升' ? YELLOW : dir === '下降' ? '#69b1ff' : '#888'
+  const trendColor = (dir: string) => dir === '上升' ? YELLOW : dir === '下降' ? BLUE : '#9CAAB7'
 
   // -- 导出 --
   const handleExportPng = useCallback(() => {
@@ -410,123 +411,117 @@ const Dashboard = () => {
 
   return (
     <div className="dashboard-root">
-      {/* 标题栏 */}
       <div className="dashboard-toolbar">
         <div>
-          <h1 style={{ margin: 0, fontSize: 16, fontWeight: 900 }}>
-            <ThunderboltOutlined style={{ color: RED, marginRight: 6 }} />
-            <span style={{ color: WHITE }}>可视化大屏</span>
-            <span style={{ color: '#666', margin: '0 6px', fontSize: 12 }}>//</span>
-            <span className="font-mono" style={{ color: '#888', fontSize: 11 }}>负荷监测 · 预测对比</span>
+          <h1>
+            <ThunderboltOutlined />
+            运行监控
           </h1>
+          <p>实时负荷、告警阈值与未来 24 小时预测</p>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div className="dashboard-toolbar__filters">
+          <Tag color="default">演示数据</Tag>
           <Segmented value={quickRange} onChange={(v) => { setQuickRange(v as QuickRange); setCustomRange(null) }}
             options={[{ label: '近24小时', value: '24h' }, { label: '近7天', value: '7d' }, { label: '近30天', value: '30d' }]} />
           <RangePicker value={customRange} onChange={(d) => { if (d?.[0] && d?.[1]) setCustomRange([d[0], d[1]]) }}
             showTime={quickRange === '24h' ? { format: 'HH:mm' } : undefined}
             format={quickRange === '24h' ? 'MM-DD HH:mm' : 'YYYY-MM-DD'}
             placeholder={['开始', '结束']} allowClear={!!customRange}
-            style={{ width: quickRange === '24h' ? 340 : 280 }} />
+            className="dashboard-range-picker" />
         </div>
       </div>
-      <hr className="brutalist" />
 
-      {/* 当前负荷趋势卡 */}
-      <div style={{ marginBottom: 8, padding: '10px 14px', border: '1px solid #2A2A2A', background: '#0c0c0c', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap' }}>
-          <span style={{ color: '#888', fontSize: 11 }}>当前负荷</span>
-          <span className="font-mono" style={{ fontSize: 24, fontWeight: 700, color: WHITE }}>{fmtMw(liveLoad?.loadMw)} <small style={{ fontSize: 12, color: '#888' }}>MW</small></span>
-          <span className="font-mono" style={{ color: '#888', fontSize: 11 }}>{liveLoad?.time ? dayjs(liveLoad.time).format('HH:mm:ss') : '--'}</span>
+      <section className="dashboard-summary">
+        <div className="dashboard-load-card">
+          <span>当前负荷</span>
+          <strong className="font-mono">{fmtMw(liveLoad?.loadMw)} <small>MW</small></strong>
+          <em>{liveLoad?.time ? dayjs(liveLoad.time).format('HH:mm:ss') : '等待实时数据'}</em>
         </div>
-        <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-          <Tooltip title="较5分钟前">
-            <div>
-              <span style={{ color: '#888', fontSize: 10 }}>5分钟</span>
-              <div className="font-mono" style={{ color: trendColor(trend5m.direction), fontSize: 13, fontWeight: 600 }}>
-                {trend5m.change != null ? `${trend5m.change >= 0 ? '+' : ''}${trend5m.change.toFixed(1)} MW (${(trend5m.pct! * 100).toFixed(2)}%)` : '--'}
-              </div>
-            </div>
-          </Tooltip>
-          <Tooltip title="较上一小时（取整点历史数据）">
-            <div>
-              <span style={{ color: '#888', fontSize: 10 }}>1小时</span>
-              <div className="font-mono" style={{ color: trendColor(trend1h.direction), fontSize: 13, fontWeight: 600 }}>
-                {trend1h.change != null ? `${trend1h.change >= 0 ? '+' : ''}${trend1h.change.toFixed(1)} MW (${(trend1h.pct! * 100).toFixed(2)}%)` : '--'}
-              </div>
-            </div>
-          </Tooltip>
-          <Tooltip title={`当前趋势: ${trend5m.direction}`}>
-            <Tag color={trend5m.direction === '上升' ? 'gold' : trend5m.direction === '下降' ? 'blue' : 'default'}>
-              {trend5m.direction}
-            </Tag>
-          </Tooltip>
-          <span className="font-mono" style={{ color: '#555', fontSize: 10 }}>更新: {lastRealtimeAt > 0 ? relativeTime(lastRealtimeAt) : '--'}</span>
-        </div>
-      </div>
-      <hr className="brutalist" />
 
-      {/* 调度员快捷操作 */}
+        <div className="dashboard-metric-card">
+          <span>5分钟变化</span>
+          <strong className="font-mono" style={{ color: trendColor(trend5m.direction) }}>
+            {trend5m.change != null ? `${trend5m.change >= 0 ? '+' : ''}${trend5m.change.toFixed(1)} MW` : '--'}
+          </strong>
+          <em>{trend5m.pct != null ? `${(trend5m.pct * 100).toFixed(2)}% · ${trend5m.direction}` : '样本不足'}</em>
+        </div>
+
+        <div className="dashboard-metric-card">
+          <span>1小时变化</span>
+          <strong className="font-mono" style={{ color: trendColor(trend1h.direction) }}>
+            {trend1h.change != null ? `${trend1h.change >= 0 ? '+' : ''}${trend1h.change.toFixed(1)} MW` : '--'}
+          </strong>
+          <em>{trend1h.pct != null ? `${(trend1h.pct * 100).toFixed(2)}% · ${trend1h.direction}` : '样本不足'}</em>
+        </div>
+
+        <div className="dashboard-metric-card">
+          <span>数据延迟</span>
+          <strong className="font-mono">{lastRealtimeAt > 0 ? relativeTime(lastRealtimeAt) : '--'}</strong>
+          <em>{wsConnected ? '实时链路正常' : '实时链路中断'}</em>
+        </div>
+      </section>
+
       {role === 'DISPATCHER' && (
-        <>
-          <div style={{ display: 'flex', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
-            <Button size="small" icon={<AlertOutlined />} onClick={() => window.location.href = '/alerts?level=RED'}>最高级别告警</Button>
-            <Button size="small" icon={<RobotOutlined />} onClick={() => window.location.href = '/agent'}>询问Agent当前风险</Button>
-            <Button size="small" icon={<FileTextOutlined />} onClick={() => window.location.href = '/alerts?status=RESOLVED'}>待关闭工单</Button>
-          </div>
-          <hr className="brutalist" />
-        </>
+        <section className="dashboard-action-row" aria-label="调度快捷操作">
+          <Button size="small" icon={<AlertOutlined />} onClick={() => window.location.href = '/alerts?level=RED'}>严重告警</Button>
+          <Button size="small" icon={<RobotOutlined />} onClick={() => window.location.href = '/agent'}>询问风险</Button>
+          <Button size="small" icon={<FileTextOutlined />} onClick={() => window.location.href = '/alerts?status=RESOLVED'}>待关闭工单</Button>
+        </section>
       )}
 
-      {/* 预测摘要 */}
       {predSummary && (
-        <div style={{ marginBottom: 8, padding: '10px 14px', border: '1px solid #2A2A2A', background: '#0c0c0c', display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
-          <span style={{ color: '#888', fontSize: 11 }}>24h预测</span>
-          <span style={{ color: WHITE, fontSize: 13, fontWeight: 600 }}>峰值: <span className="font-mono">{predSummary.peak.toFixed(0)} MW</span> <span style={{ color: '#666', fontSize: 10 }}>({predSummary.peakTime.format('MM-DD HH:mm')})</span></span>
-          <span style={{ color: '#888', fontSize: 13 }}>谷值: <span className="font-mono">{predSummary.valley.toFixed(0)} MW</span> <span style={{ color: '#666', fontSize: 10 }}>({predSummary.valleyTime.format('MM-DD HH:mm')})</span></span>
-          <span style={{ color: '#888', fontSize: 13 }}>均值: <span className="font-mono">{predSummary.avg.toFixed(0)} MW</span></span>
+        <section className="dashboard-forecast-summary">
+          <span>24小时预测</span>
+          <strong>峰值 <b className="font-mono">{predSummary.peak.toFixed(0)} MW</b> <em>{predSummary.peakTime.format('MM-DD HH:mm')}</em></strong>
+          <strong>谷值 <b className="font-mono">{predSummary.valley.toFixed(0)} MW</b> <em>{predSummary.valleyTime.format('MM-DD HH:mm')}</em></strong>
+          <strong>均值 <b className="font-mono">{predSummary.avg.toFixed(0)} MW</b></strong>
           {predSummary.riskLevel ? (
             <Tag color={ALERT_LEVEL_CONFIG[predSummary.riskLevel]?.color || 'red'}>
               预计{predSummary.peakTime.format('HH:mm')}进入{ALERT_LEVEL_CONFIG[predSummary.riskLevel]?.label}区间，峰值约{predSummary.peak.toFixed(0)} MW
             </Tag>
           ) : (
-            <Tag color="green">预计未越过告警阈值</Tag>
+            <Tag color="green">未越过告警阈值</Tag>
           )}
-          <span style={{ color: '#555', fontSize: 10 }}>模型: {predSummary.model || '--'}</span>
-        </div>
+        </section>
       )}
-      <hr className="brutalist" />
 
-      {/* 图表工具栏 */}
-      <div style={{ display: 'flex', gap: 6, marginBottom: 4, flexWrap: 'wrap', alignItems: 'center' }}>
-        <Button size="small" icon={<ZoomInOutlined />} onClick={handleResetZoom}>重置缩放</Button>
-        <Button size="small" onClick={() => handleQuickZoom(30)}>30分钟</Button>
-        <Button size="small" onClick={() => handleQuickZoom(120)}>2小时</Button>
-        <Button size="small" icon={<DownloadOutlined />} onClick={handleExportPng}>PNG</Button>
-        <Button size="small" icon={<DownloadOutlined />} onClick={handleExportCsv}>CSV</Button>
-        <Button size="small" type={showThresholds ? 'primary' : 'default'} onClick={() => setShowThresholds(!showThresholds)}>阈值线</Button>
-        <Button size="small" type={showRecovery ? 'primary' : 'default'} onClick={() => setShowRecovery(!showRecovery)}>恢复数据</Button>
-      </div>
+      <section className="dashboard-panel">
+        <div className="dashboard-panel__header">
+          <div>
+            <h2>实时负荷曲线</h2>
+            <p>历史整点、恢复段和实时秒级数据分段展示</p>
+          </div>
+          <div className="dashboard-chart-tools">
+            <Button size="small" icon={<ZoomInOutlined />} onClick={handleResetZoom}>重置</Button>
+            <Button size="small" onClick={() => handleQuickZoom(30)}>30分钟</Button>
+            <Button size="small" onClick={() => handleQuickZoom(120)}>2小时</Button>
+            <Button size="small" icon={<DownloadOutlined />} onClick={handleExportPng}>PNG</Button>
+            <Button size="small" icon={<DownloadOutlined />} onClick={handleExportCsv}>CSV</Button>
+            <Button size="small" type={showThresholds ? 'primary' : 'default'} onClick={() => setShowThresholds(!showThresholds)}>阈值线</Button>
+            <Button size="small" type={showRecovery ? 'primary' : 'default'} onClick={() => setShowRecovery(!showRecovery)}>恢复段</Button>
+          </div>
+        </div>
+        <div className="dashboard-chart">
+          <ReactECharts
+            ref={chartRef}
+            option={loadChartOption}
+            style={{ height: '100%' }}
+            notMerge={false}
+            lazyUpdate
+            onEvents={chartOnEvents}
+          />
+        </div>
+      </section>
 
-      {/* 实时负荷曲线 */}
-      <div style={{ height: 420 }}>
-        <ReactECharts
-          ref={chartRef}
-          option={loadChartOption}
-          style={{ height: '100%' }}
-          notMerge={false}
-          lazyUpdate
-          onEvents={chartOnEvents}
+      <section className="dashboard-panel dashboard-panel--forecast">
+        <LoadChart
+          title={predictionError ? '24h 预测曲线 · 加载失败' : '24h 预测曲线'}
+          option={predChartOption}
+          height={300}
+          loading={fetchingForecast}
+          emptyText={predictionError || '暂无预测数据'}
         />
-      </div>
-      <div style={{ height: 12 }} />
-      <LoadChart
-        title={predictionError ? '24h 预测曲线 — 加载失败' : '24h 预测曲线'}
-        option={predChartOption}
-        height={300}
-        loading={fetchingForecast}
-        emptyText={predictionError || '暂无预测数据'}
-      />
+      </section>
 
       {/* 告警详情 Drawer */}
       {selectedAlert && (
@@ -544,12 +539,183 @@ const Dashboard = () => {
       )}
 
       <style>{`
-        .dashboard-root { min-height: calc(100vh - 132px); display: flex; flex-direction: column; }
-        .dashboard-toolbar { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; flex-wrap: wrap; gap: 12px; }
-        @media (min-width: 1920px) { .dashboard-root { max-width: 1920px; margin: 0 auto; } }
-        @media (max-width: 1200px) { .dashboard-toolbar { flex-direction: column; } }
+        .dashboard-root {
+          min-height: calc(100vh - 92px);
+          display: flex;
+          flex-direction: column;
+          gap: 14px;
+        }
+        .dashboard-toolbar {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          flex-wrap: wrap;
+          gap: 14px;
+        }
+        .dashboard-toolbar h1 {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          margin: 0;
+          color: #E7EDF3;
+          font-size: 22px;
+          font-weight: 750;
+          letter-spacing: 0;
+        }
+        .dashboard-toolbar h1 .anticon {
+          color: #7FA7C7;
+        }
+        .dashboard-toolbar p {
+          margin: 6px 0 0;
+          color: #7D8A97;
+          font-size: 12px;
+        }
+        .dashboard-toolbar__filters {
+          display: flex;
+          align-items: center;
+          justify-content: flex-end;
+          gap: 10px;
+          flex-wrap: wrap;
+        }
+        .dashboard-range-picker {
+          width: 320px;
+          max-width: 100%;
+        }
+        .dashboard-summary {
+          display: grid;
+          grid-template-columns: minmax(220px, 1.4fr) repeat(3, minmax(160px, 1fr));
+          gap: 12px;
+        }
+        .dashboard-load-card,
+        .dashboard-metric-card,
+        .dashboard-panel,
+        .dashboard-forecast-summary {
+          border: 1px solid #1C2935;
+          background: linear-gradient(180deg, rgba(17, 26, 35, 0.96), rgba(14, 22, 31, 0.96));
+          box-shadow: 0 12px 28px rgba(0, 0, 0, 0.16);
+        }
+        .dashboard-load-card,
+        .dashboard-metric-card {
+          min-height: 96px;
+          padding: 16px;
+          border-radius: 8px;
+        }
+        .dashboard-load-card span,
+        .dashboard-metric-card span,
+        .dashboard-forecast-summary > span {
+          display: block;
+          color: #7D8A97;
+          font-size: 12px;
+        }
+        .dashboard-load-card strong {
+          display: block;
+          margin-top: 8px;
+          color: #E7EDF3;
+          font-size: 34px;
+          font-weight: 720;
+          line-height: 1;
+        }
+        .dashboard-load-card small {
+          color: #7D8A97;
+          font-size: 13px;
+        }
+        .dashboard-load-card em,
+        .dashboard-metric-card em,
+        .dashboard-forecast-summary em {
+          display: block;
+          margin-top: 8px;
+          color: #6F7D8A;
+          font-style: normal;
+          font-size: 12px;
+        }
+        .dashboard-metric-card strong {
+          display: block;
+          margin-top: 10px;
+          color: #E7EDF3;
+          font-size: 22px;
+          font-weight: 700;
+        }
+        .dashboard-action-row {
+          display: flex;
+          gap: 8px;
+          flex-wrap: wrap;
+        }
+        .dashboard-forecast-summary {
+          display: flex;
+          align-items: center;
+          gap: 16px;
+          flex-wrap: wrap;
+          padding: 12px 16px;
+          border-radius: 8px;
+        }
+        .dashboard-forecast-summary strong {
+          color: #C4CED8;
+          font-size: 13px;
+          font-weight: 600;
+        }
+        .dashboard-forecast-summary b {
+          color: #E7EDF3;
+          font-weight: 700;
+        }
+        .dashboard-forecast-summary em {
+          display: inline;
+          margin-left: 6px;
+        }
+        .dashboard-panel {
+          border-radius: 8px;
+          overflow: hidden;
+        }
+        .dashboard-panel__header {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          gap: 12px;
+          flex-wrap: wrap;
+          padding: 14px 16px 10px;
+          border-bottom: 1px solid #1C2935;
+        }
+        .dashboard-panel__header h2 {
+          margin: 0;
+          color: #E7EDF3;
+          font-size: 15px;
+          font-weight: 700;
+        }
+        .dashboard-panel__header p {
+          margin: 5px 0 0;
+          color: #6F7D8A;
+          font-size: 12px;
+        }
+        .dashboard-chart-tools {
+          display: flex;
+          align-items: center;
+          justify-content: flex-end;
+          gap: 6px;
+          flex-wrap: wrap;
+        }
+        .dashboard-chart {
+          height: 420px;
+          padding: 8px 8px 0;
+        }
+        .dashboard-panel--forecast {
+          padding: 0;
+        }
+        @media (min-width: 1920px) {
+          .dashboard-root { max-width: 1920px; margin: 0 auto; }
+        }
+        @media (max-width: 1280px) {
+          .dashboard-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        }
+        @media (max-width: 860px) {
+          .dashboard-summary { grid-template-columns: 1fr; }
+          .dashboard-toolbar__filters { justify-content: flex-start; width: 100%; }
+          .dashboard-range-picker { width: 100%; }
+        }
         @media (max-width: 768px) {
-          .dashboard-root { padding: 0; }
+          .dashboard-root { padding: 0; gap: 12px; }
+          .dashboard-toolbar h1 { font-size: 20px; }
+          .dashboard-load-card strong { font-size: 30px; }
+          .dashboard-panel__header { padding: 12px; }
+          .dashboard-chart { height: 360px; padding-inline: 0; }
         }
       `}</style>
     </div>

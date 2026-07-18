@@ -3,8 +3,10 @@ package com.powerload.controller;
 import com.powerload.common.R;
 import com.powerload.dto.response.ConversationMessageResponse;
 import com.powerload.dto.response.ConversationSummary;
+import com.powerload.security.SysUserPrincipal;
 import com.powerload.service.ConversationService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -24,19 +26,23 @@ public class AgentConversationController {
 
     @GetMapping
     public R<List<ConversationSummary>> list(
+            @AuthenticationPrincipal SysUserPrincipal user,
             @RequestParam(defaultValue = "50") int limit) {
-        return R.ok(conversationService.listConversations(limit));
+        return R.ok(conversationService.listConversations(user, limit));
     }
 
     @GetMapping("/{conversationId}")
     public R<List<ConversationMessageResponse>> detail(
-            @PathVariable String conversationId) {
-        return R.ok(conversationService.loadConversation(conversationId));
+            @PathVariable String conversationId,
+            @AuthenticationPrincipal SysUserPrincipal user) {
+        return R.ok(conversationService.loadConversation(conversationId, user));
     }
 
     @DeleteMapping("/{conversationId}")
-    public R<Void> delete(@PathVariable String conversationId) {
-        conversationService.deleteConversation(conversationId);
+    public R<Void> delete(
+            @PathVariable String conversationId,
+            @AuthenticationPrincipal SysUserPrincipal user) {
+        conversationService.deleteConversation(conversationId, user);
         return R.ok();
     }
 }
