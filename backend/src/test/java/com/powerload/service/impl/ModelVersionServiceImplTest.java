@@ -2,10 +2,13 @@ package com.powerload.service.impl;
 
 import com.powerload.entity.ModelVersion;
 import com.powerload.mapper.ModelVersionMapper;
+import com.powerload.ml.FlaskInferenceService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -14,16 +17,22 @@ import static org.mockito.Mockito.*;
 class ModelVersionServiceImplTest {
 
     private ModelVersionMapper mapper;
+    private FlaskInferenceService flaskInferenceService;
     private ModelVersionServiceImpl service;
 
     @BeforeEach
     void setUp() {
         mapper = mock(ModelVersionMapper.class);
-        service = new ModelVersionServiceImpl(mapper);
+        flaskInferenceService = mock(FlaskInferenceService.class);
+        when(flaskInferenceService.getHealth()).thenReturn(Map.of("healthy", true, "model_type", "torchscript"));
+        service = new ModelVersionServiceImpl(mapper, flaskInferenceService);
+        ReflectionTestUtils.setField(service, "modelDir", "not-existing-model-dir");
+        ReflectionTestUtils.setField(service, "mlWorkDir", "../ml");
     }
 
     @Test
     void shouldListVersionsWithActiveFirst() {
+        when(mapper.selectCount(any())).thenReturn(0L);
         when(mapper.selectList(any())).thenReturn(List.of(new ModelVersion()));
 
         assertEquals(1, service.listVersions().size());

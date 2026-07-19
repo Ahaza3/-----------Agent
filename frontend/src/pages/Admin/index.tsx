@@ -355,20 +355,30 @@ const ModelPanel = () => {
   const [loading, setLoading] = useState(true)
   const [triggering, setTriggering] = useState(false)
   const [activating, setActivating] = useState<number | null>(null)
+  const [syncing, setSyncing] = useState(false)
+  const [retraining, setRetraining] = useState<string | null>(null)
+  const [trainingStatus, setTrainingStatus] = useState<any>(null)
 
   const refresh = useCallback(async () => {
     setLoading(true)
-    const [forecastResp, versionsResp, healthResp] = await Promise.allSettled([
+    const [forecastResp, versionsResp, healthResp, retrainResp] = await Promise.allSettled([
       api.get('/predict/forecast'),
       api.get('/model/versions'),
       api.get('/system/health'),
+      api.get('/model/retrain/status'),
     ])
     if (forecastResp.status === 'fulfilled') setForecast(forecastResp.value)
     if (versionsResp.status === 'fulfilled') setVersions((versionsResp.value as unknown as any[]) || [])
     if (healthResp.status === 'fulfilled') setHealth(healthResp.value)
+    if (retrainResp.status === 'fulfilled') setTrainingStatus(retrainResp.value)
     setLoading(false)
   }, [])
   useEffect(() => { refresh() }, [refresh])
+  useEffect(() => {
+    if (trainingStatus?.status !== 'RUNNING') return undefined
+    const timer = window.setInterval(refresh, 5000)
+    return () => window.clearInterval(timer)
+  }, [refresh, trainingStatus?.status])
 
   if (loading) return <Skeleton active paragraph={{ rows: 4 }} />
   const activeVersion = versions.find((item) => item.isActive === 1)
@@ -392,12 +402,41 @@ const ModelPanel = () => {
       setActivating(null)
     }
   }
+
+  const syncVersions = async () => {
+    setSyncing(true)
+    try {
+      const data = await api.post('/model/versions/sync')
+      setVersions((data as unknown as any[]) || [])
+      message.success('本地模型已同步')
+    } catch (e: any) {
+      message.error(e?.response?.data?.message || e.message || '本地模型同步失败')
+    } finally {
+      setSyncing(false)
+    }
+  }
+
+  const startRetrain = async (modelName: 'LSTM' | 'PROPHET') => {
+    setRetraining(modelName)
+    try {
+      const data = await api.post('/model/retrain', { modelName })
+      setTrainingStatus(data)
+      message.success(`${modelName === 'PROPHET' ? 'Prophet' : 'LSTM'} 重训练已启动`)
+    } catch (e: any) {
+      message.error(e?.response?.data?.message || e.message || '重训练启动失败')
+    } finally {
+      setRetraining(null)
+    }
+  }
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
         <h3 style={{ color: '#ccc', margin: 0 }}>预测模型</h3>
         <Space>
           <Button icon={<HeartOutlined />} onClick={refresh}>刷新</Button>
+          <Button loading={syncing} onClick={syncVersions}>同步本地模型</Button>
+          <Button loading={retraining === 'LSTM'} disabled={trainingStatus?.status === 'RUNNING'} onClick={() => startRetrain('LSTM')}>重训练 LSTM</Button>
+          <Button loading={retraining === 'PROPHET'} disabled={trainingStatus?.status === 'RUNNING'} onClick={() => startRetrain('PROPHET')}>重训练 Prophet</Button>
           <Button type="primary" icon={<RobotOutlined />} loading={triggering} onClick={async () => {
             setTriggering(true)
             try { await api.get('/predict/forecast'); message.success('预测已触发'); refresh() }
@@ -414,6 +453,7 @@ const ModelPanel = () => {
           { label: '训练 RMSE', children: activeVersion?.rmse != null ? `${Number(activeVersion.rmse).toFixed(2)} MW` : 'N/A' },
           { label: '预测起点', children: forecast?.forecastStartTime ? dayjs(forecast.forecastStartTime).format('MM-DD HH:mm') : 'N/A' },
           { label: '预测点数', children: forecast?.predictions?.length || 0 },
+          { label: '训练任务', children: <Tag color={trainingStatus?.status === 'RUNNING' ? 'processing' : trainingStatus?.status === 'FAILED' ? 'red' : trainingStatus?.status === 'SUCCESS' ? 'green' : 'default'}>{trainingStatus?.message || '暂无训练任务'}</Tag> },
         ]}
         labelStyle={{ color: '#888', background: '#0c0c0c' }} contentStyle={{ color: '#ccc', background: '#0e0e0e' }}
       />
