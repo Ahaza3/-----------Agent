@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  Button, Progress, Space, Tag, Tabs, Table, message, Modal, Input, Select, Form, Empty, Skeleton, Descriptions,
+  Alert, Button, Progress, Space, Tag, Tabs, Table, message, Modal, Input, Select, Form, Empty, Skeleton, Descriptions,
 } from 'antd'
 import {
   CheckCircleOutlined, DashboardOutlined, RiseOutlined, RollbackOutlined,
@@ -10,6 +10,7 @@ import {
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import api from '../../services/api'
+import { Popconfirm } from 'antd'
 import { fetchAlertRules } from '../../services/alertApi'
 import useAuthStore from '../../stores/useAuthStore'
 import { getAdminTabs } from '../../config/roles'
@@ -349,24 +350,117 @@ const RulesPanel = () => {
  * ══════════════════════════════════════════════ */
 const ModelPanel = () => {
   const [forecast, setForecast] = useState<any>(null)
+  const [versions, setVersions] = useState<any[]>([])
+  const [health, setHealth] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [triggering, setTriggering] = useState(false)
+  const [activating, setActivating] = useState<number | null>(null)
+  const [syncing, setSyncing] = useState(false)
+  const [retraining, setRetraining] = useState<string | null>(null)
+  const [trainingStatus, setTrainingStatus] = useState<any>(null)
+  const [activationNotice, setActivationNotice] = useState<string | null>(null)
 
-  const refresh = useCallback(async () => {
-    setLoading(true)
-    try { setForecast(await api.get('/predict/forecast')); }
-    catch { /* Flask 可能未启动 */ }
-    finally { setLoading(false) }
+  const refresh = useCallback(async (showLoading = true) => {
+    if (showLoading) setLoading(true)
+    const [forecastResp, versionsResp, healthResp, retrainResp] = await Promise.allSettled([
+      api.get('/predict/forecast'),
+      api.get('/model/versions'),
+      api.get('/system/health'),
+      api.get('/model/retrain/status'),
+    ])
+    if (forecastResp.status === 'fulfilled') setForecast(forecastResp.value)
+    if (versionsResp.status === 'fulfilled') setVersions((versionsResp.value as unknown as any[]) || [])
+    if (healthResp.status === 'fulfilled') setHealth(healthResp.value)
+    if (retrainResp.status === 'fulfilled') setTrainingStatus(retrainResp.value)
+    if (showLoading) setLoading(false)
   }, [])
   useEffect(() => { refresh() }, [refresh])
+  useEffect(() => {
+    if (trainingStatus?.status !== 'RUNNING') return undefined
+    const timer = window.setInterval(async () => {
+      try {
+        const nextStatus = await api.get('/model/retrain/status') as any
+        setTrainingStatus(nextStatus)
+        if (nextStatus?.status !== 'RUNNING') await refresh(false)
+      } catch {
+        // 保持当前任务状态，下一轮继续检查，避免训练期间整页闪烁。
+      }
+    }, 5000)
+    return () => window.clearInterval(timer)
+  }, [refresh, trainingStatus?.status])
 
   if (loading) return <Skeleton active paragraph={{ rows: 4 }} />
+  const activeVersion = versions.find((item) => item.isActive === 1)
+  const runtimeModel = health?.flaskModel === 'torchscript'
+    ? 'LSTM (TorchScript)'
+    : health?.flaskModel === 'prophet'
+      ? 'Prophet'
+      : health?.flaskModel && health.flaskModel !== 'UNKNOWN'
+        ? health.flaskModel
+        : forecast?.model || ''
+  const runtimeModelType = health?.flaskModel === 'torchscript'
+    ? 'LSTM'
+    : health?.flaskModel === 'prophet'
+      ? 'Prophet'
+      : ''
+  const runtimeTypeMismatch = Boolean(activeVersion && runtimeModelType && String(activeVersion.modelName).toUpperCase() !== runtimeModelType.toUpperCase())
+
+  const activateVersion = async (id: number) => {
+    setActivating(id)
+    try {
+      const activated = await api.put(`/model/versions/${id}/activate`) as any
+      const activatedLabel = activated?.version
+        ? `${activated.modelName} ${activated.version}`
+        : '目标模型版本'
+      setActivationNotice(`数据库已切换为 ${activatedLabel}，Flask 尚未重载`)
+      message.success('数据库模型版本已切换')
+      Modal.warning({
+        title: '模型版本已切换，需要重启 Flask',
+        content: '当前切换已写入模型版本表，但 Flask 不会自动热加载模型文件。重启 Flask 前，实际推理仍使用进程启动时加载的模型。',
+        okText: '知道了',
+      })
+      await refresh()
+    } catch (e: any) {
+      message.error(e?.response?.data?.message || e.message || '模型版本切换失败')
+    } finally {
+      setActivating(null)
+    }
+  }
+
+  const syncVersions = async () => {
+    setSyncing(true)
+    try {
+      const data = await api.post('/model/versions/sync')
+      setVersions((data as unknown as any[]) || [])
+      message.success('本地模型已同步')
+    } catch (e: any) {
+      message.error(e?.response?.data?.message || e.message || '本地模型同步失败')
+    } finally {
+      setSyncing(false)
+    }
+  }
+
+  const startRetrain = async (modelName: 'LSTM' | 'PROPHET') => {
+    setRetraining(modelName)
+    try {
+      const data = await api.post('/model/retrain', { modelName })
+      setTrainingStatus(data)
+      message.success(`${modelName === 'PROPHET' ? 'Prophet' : 'LSTM'} 重训练已启动`)
+    } catch (e: any) {
+      message.error(e?.response?.data?.message || e.message || '重训练启动失败')
+    } finally {
+      setRetraining(null)
+    }
+  }
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
         <h3 style={{ color: '#ccc', margin: 0 }}>预测模型</h3>
         <Space>
-          <Button icon={<HeartOutlined />} onClick={refresh}>刷新</Button>
+          <Button icon={<HeartOutlined />} onClick={() => refresh()}>刷新</Button>
+          <Button loading={syncing} onClick={syncVersions}>同步本地模型</Button>
+          <Button loading={retraining === 'LSTM'} disabled={trainingStatus?.status === 'RUNNING'} onClick={() => startRetrain('LSTM')}>重训练 LSTM</Button>
+          <Button loading={retraining === 'PROPHET'} disabled={trainingStatus?.status === 'RUNNING'} onClick={() => startRetrain('PROPHET')}>重训练 Prophet</Button>
           <Button type="primary" icon={<RobotOutlined />} loading={triggering} onClick={async () => {
             setTriggering(true)
             try { await api.get('/predict/forecast'); message.success('预测已触发'); refresh() }
@@ -375,17 +469,59 @@ const ModelPanel = () => {
           }}>触发预测</Button>
         </Space>
       </div>
-      {forecast ? (
-        <Descriptions bordered size="small" column={2}
-          items={[
-            { label: '模型名称', children: forecast.model || 'N/A' },
-            { label: '预测起点', children: forecast.forecastStartTime ? dayjs(forecast.forecastStartTime).format('MM-DD HH:mm') : 'N/A' },
-            { label: '预测点数', children: forecast.predictions?.length || 0 },
-            { label: '预测范围', children: forecast.predictions ? `${Math.min(...forecast.predictions).toFixed(0)} - ${Math.max(...forecast.predictions).toFixed(0)} MW` : 'N/A' },
-          ]}
-          labelStyle={{ color: '#888', background: '#0c0c0c' }} contentStyle={{ color: '#ccc', background: '#0e0e0e' }}
+      {(activationNotice || runtimeTypeMismatch) && (
+        <Alert
+          type="warning"
+          showIcon
+          message={<span style={{ color: '#f6d365', fontWeight: 600 }}>{activationNotice || '数据库发布版本与 Flask 实际模型类型不一致'}</span>}
+          description={<span style={{ color: '#d9c99a' }}>表格中的“当前使用”表示数据库发布版本；上方“Flask 实际推理模型”表示当前进程内存中的模型。发布或回滚不会自动重载 Flask，完成切换后请重启 Flask 服务。</span>}
+          style={{ marginBottom: 12, background: '#2b2617', borderColor: '#75602b' }}
         />
-      ) : <Empty description="暂无预测数据，请确认 Flask 推理服务已启动" />}
+      )}
+      <Descriptions bordered size="small" column={2}
+        items={[
+          { label: '数据库发布版本', children: activeVersion ? `${activeVersion.modelName} ${activeVersion.version}` : '未发布' },
+          { label: 'Flask 实际推理模型', children: runtimeModel || '未获取' },
+          { label: '推理服务', children: <Tag color={health?.flask === 'UP' ? 'green' : 'red'}>{health?.flask === 'UP' ? '正常' : '异常'}</Tag> },
+          { label: '训练 MAPE', children: activeVersion?.mape != null ? `${Number(activeVersion.mape).toFixed(2)}%` : 'N/A' },
+          { label: '训练 RMSE', children: activeVersion?.rmse != null ? `${Number(activeVersion.rmse).toFixed(2)} MW` : 'N/A' },
+          { label: '预测起点', children: forecast?.forecastStartTime ? dayjs(forecast.forecastStartTime).format('MM-DD HH:mm') : 'N/A' },
+          { label: '预测点数', children: forecast?.predictions?.length || 0 },
+          { label: '训练任务', children: <Tag color={trainingStatus?.status === 'RUNNING' ? 'processing' : trainingStatus?.status === 'FAILED' ? 'red' : trainingStatus?.status === 'SUCCESS' ? 'green' : 'default'}>{trainingStatus?.message || '暂无训练任务'}</Tag> },
+        ]}
+        labelStyle={{ color: '#888', background: '#0c0c0c' }} contentStyle={{ color: '#ccc', background: '#0e0e0e' }}
+      />
+      <Table
+        style={{ marginTop: 16 }}
+        dataSource={versions}
+        rowKey="id"
+        size="small"
+        pagination={false}
+        locale={{ emptyText: <Empty description="暂无模型版本记录" /> }}
+        columns={[
+          { title: '模型', dataIndex: 'modelName', key: 'modelName' },
+          { title: '版本', dataIndex: 'version', key: 'version' },
+          { title: '状态', dataIndex: 'isActive', key: 'isActive', render: (v: number) => <Tag color={v === 1 ? 'green' : 'default'}>{v === 1 ? '当前使用' : '历史版本'}</Tag> },
+          { title: 'MAPE', dataIndex: 'mape', key: 'mape', render: (v: number | null) => v == null ? 'N/A' : `${Number(v).toFixed(2)}%` },
+          { title: 'RMSE', dataIndex: 'rmse', key: 'rmse', render: (v: number | null) => v == null ? 'N/A' : `${Number(v).toFixed(2)} MW` },
+          { title: '训练时间', dataIndex: 'trainedAt', key: 'trainedAt', render: (v: string) => v ? dayjs(v).format('YYYY-MM-DD HH:mm') : 'N/A' },
+          {
+            title: '操作',
+            key: 'actions',
+            render: (_: any, row: any) => row.isActive === 1 ? <Tag color="green">已激活</Tag> : (
+              <Popconfirm
+                title="确认切换模型版本？"
+                description="该操作只切换数据库发布版本，不会自动重载 Flask；确认后需要重启 Flask 服务。"
+                onConfirm={() => activateVersion(row.id)}
+                okText="确认"
+                cancelText="取消"
+              >
+                <Button size="small" icon={<RollbackOutlined />} loading={activating === row.id}>发布/回滚</Button>
+              </Popconfirm>
+            ),
+          },
+        ]}
+      />
     </div>
   )
 }

@@ -72,16 +72,30 @@ public class FlaskInferenceService {
      * 健康检查
      */
     public boolean isHealthy() {
+        return Boolean.TRUE.equals(getHealth().get("healthy"));
+    }
+
+    /**
+     * 获取推理服务健康状态及当前实际加载的模型。
+     */
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> getHealth() {
         try {
             Request request = new Request.Builder()
                     .url(baseUrl + "/health")
                     .get()
                     .build();
             try (Response response = client.newCall(request).execute()) {
-                return response.isSuccessful();
+                if (!response.isSuccessful()) {
+                    return Map.of("healthy", false);
+                }
+                String responseBody = response.body() != null ? response.body().string() : "{}";
+                Map<String, Object> result = objectMapper.readValue(responseBody, Map.class);
+                result.put("healthy", true);
+                return result;
             }
         } catch (Exception e) {
-            return false;
+            return Map.of("healthy", false);
         }
     }
 }
