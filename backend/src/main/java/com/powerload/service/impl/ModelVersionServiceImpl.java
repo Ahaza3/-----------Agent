@@ -115,6 +115,22 @@ public class ModelVersionServiceImpl implements ModelVersionService {
             return hasActive;
         }
         LocalDateTime trainedAt = lastModified(artifact);
+        List<ModelVersion> sameArtifactVersions = modelVersionMapper.selectList(
+                new LambdaQueryWrapper<ModelVersion>()
+                        .eq(ModelVersion::getModelName, modelName)
+                        .eq(ModelVersion::getFilePath, artifact.toString()));
+        LocalDateTime latestManualRetrain = sameArtifactVersions.stream()
+                .filter(versionRow -> versionRow.getVersion() != null && versionRow.getVersion().startsWith("train-"))
+                .map(ModelVersion::getTrainedAt)
+                .filter(java.util.Objects::nonNull)
+                .max(LocalDateTime::compareTo)
+                .orElse(null);
+        if (latestManualRetrain != null && !latestManualRetrain.isBefore(trainedAt)) {
+            sameArtifactVersions.stream()
+                    .filter(versionRow -> versionRow.getVersion() != null && versionRow.getVersion().startsWith("art-"))
+                    .forEach(versionRow -> modelVersionMapper.deleteById(versionRow.getId()));
+            return hasActive;
+        }
         String version = "art-" + VERSION_TIME.format(trainedAt);
         Long existing = modelVersionMapper.selectCount(new LambdaQueryWrapper<ModelVersion>()
                 .eq(ModelVersion::getModelName, modelName)

@@ -360,8 +360,8 @@ const ModelPanel = () => {
   const [trainingStatus, setTrainingStatus] = useState<any>(null)
   const [activationNotice, setActivationNotice] = useState<string | null>(null)
 
-  const refresh = useCallback(async () => {
-    setLoading(true)
+  const refresh = useCallback(async (showLoading = true) => {
+    if (showLoading) setLoading(true)
     const [forecastResp, versionsResp, healthResp, retrainResp] = await Promise.allSettled([
       api.get('/predict/forecast'),
       api.get('/model/versions'),
@@ -372,12 +372,20 @@ const ModelPanel = () => {
     if (versionsResp.status === 'fulfilled') setVersions((versionsResp.value as unknown as any[]) || [])
     if (healthResp.status === 'fulfilled') setHealth(healthResp.value)
     if (retrainResp.status === 'fulfilled') setTrainingStatus(retrainResp.value)
-    setLoading(false)
+    if (showLoading) setLoading(false)
   }, [])
   useEffect(() => { refresh() }, [refresh])
   useEffect(() => {
     if (trainingStatus?.status !== 'RUNNING') return undefined
-    const timer = window.setInterval(refresh, 5000)
+    const timer = window.setInterval(async () => {
+      try {
+        const nextStatus = await api.get('/model/retrain/status') as any
+        setTrainingStatus(nextStatus)
+        if (nextStatus?.status !== 'RUNNING') await refresh(false)
+      } catch {
+        // 保持当前任务状态，下一轮继续检查，避免训练期间整页闪烁。
+      }
+    }, 5000)
     return () => window.clearInterval(timer)
   }, [refresh, trainingStatus?.status])
 
@@ -395,7 +403,7 @@ const ModelPanel = () => {
     : health?.flaskModel === 'prophet'
       ? 'Prophet'
       : ''
-  const runtimeTypeMismatch = Boolean(activeVersion && runtimeModelType && activeVersion.modelName.toUpperCase() !== runtimeModelType.toUpperCase())
+  const runtimeTypeMismatch = Boolean(activeVersion && runtimeModelType && String(activeVersion.modelName).toUpperCase() !== runtimeModelType.toUpperCase())
 
   const activateVersion = async (id: number) => {
     setActivating(id)
@@ -449,7 +457,7 @@ const ModelPanel = () => {
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
         <h3 style={{ color: '#ccc', margin: 0 }}>预测模型</h3>
         <Space>
-          <Button icon={<HeartOutlined />} onClick={refresh}>刷新</Button>
+          <Button icon={<HeartOutlined />} onClick={() => refresh()}>刷新</Button>
           <Button loading={syncing} onClick={syncVersions}>同步本地模型</Button>
           <Button loading={retraining === 'LSTM'} disabled={trainingStatus?.status === 'RUNNING'} onClick={() => startRetrain('LSTM')}>重训练 LSTM</Button>
           <Button loading={retraining === 'PROPHET'} disabled={trainingStatus?.status === 'RUNNING'} onClick={() => startRetrain('PROPHET')}>重训练 Prophet</Button>
@@ -465,9 +473,9 @@ const ModelPanel = () => {
         <Alert
           type="warning"
           showIcon
-          message={activationNotice || '数据库发布版本与 Flask 实际模型类型不一致'}
-          description="表格中的“当前使用”表示数据库发布版本；上方“Flask 实际推理模型”表示当前进程内存中的模型。发布或回滚不会自动重载 Flask，完成切换后请重启 Flask 服务。"
-          style={{ marginBottom: 12 }}
+          message={<span style={{ color: '#f6d365', fontWeight: 600 }}>{activationNotice || '数据库发布版本与 Flask 实际模型类型不一致'}</span>}
+          description={<span style={{ color: '#d9c99a' }}>表格中的“当前使用”表示数据库发布版本；上方“Flask 实际推理模型”表示当前进程内存中的模型。发布或回滚不会自动重载 Flask，完成切换后请重启 Flask 服务。</span>}
+          style={{ marginBottom: 12, background: '#2b2617', borderColor: '#75602b' }}
         />
       )}
       <Descriptions bordered size="small" column={2}
