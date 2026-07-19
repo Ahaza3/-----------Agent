@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  Button, Progress, Space, Tag, Tabs, Table, message, Modal, Input, Select, Form, Empty, Skeleton, Descriptions,
+  Alert, Button, Progress, Space, Tag, Tabs, Table, message, Modal, Input, Select, Form, Empty, Skeleton, Descriptions,
 } from 'antd'
 import {
   CheckCircleOutlined, DashboardOutlined, RiseOutlined, RollbackOutlined,
@@ -358,6 +358,7 @@ const ModelPanel = () => {
   const [syncing, setSyncing] = useState(false)
   const [retraining, setRetraining] = useState<string | null>(null)
   const [trainingStatus, setTrainingStatus] = useState<any>(null)
+  const [activationNotice, setActivationNotice] = useState<string | null>(null)
 
   const refresh = useCallback(async () => {
     setLoading(true)
@@ -389,12 +390,27 @@ const ModelPanel = () => {
       : health?.flaskModel && health.flaskModel !== 'UNKNOWN'
         ? health.flaskModel
         : forecast?.model || ''
+  const runtimeModelType = health?.flaskModel === 'torchscript'
+    ? 'LSTM'
+    : health?.flaskModel === 'prophet'
+      ? 'Prophet'
+      : ''
+  const runtimeTypeMismatch = Boolean(activeVersion && runtimeModelType && activeVersion.modelName.toUpperCase() !== runtimeModelType.toUpperCase())
 
   const activateVersion = async (id: number) => {
     setActivating(id)
     try {
-      await api.put(`/model/versions/${id}/activate`)
-      message.success('模型版本已切换')
+      const activated = await api.put(`/model/versions/${id}/activate`) as any
+      const activatedLabel = activated?.version
+        ? `${activated.modelName} ${activated.version}`
+        : '目标模型版本'
+      setActivationNotice(`数据库已切换为 ${activatedLabel}，Flask 尚未重载`)
+      message.success('数据库模型版本已切换')
+      Modal.warning({
+        title: '模型版本已切换，需要重启 Flask',
+        content: '当前切换已写入模型版本表，但 Flask 不会自动热加载模型文件。重启 Flask 前，实际推理仍使用进程启动时加载的模型。',
+        okText: '知道了',
+      })
       await refresh()
     } catch (e: any) {
       message.error(e?.response?.data?.message || e.message || '模型版本切换失败')
@@ -445,9 +461,19 @@ const ModelPanel = () => {
           }}>触发预测</Button>
         </Space>
       </div>
+      {(activationNotice || runtimeTypeMismatch) && (
+        <Alert
+          type="warning"
+          showIcon
+          message={activationNotice || '数据库发布版本与 Flask 实际模型类型不一致'}
+          description="表格中的“当前使用”表示数据库发布版本；上方“Flask 实际推理模型”表示当前进程内存中的模型。发布或回滚不会自动重载 Flask，完成切换后请重启 Flask 服务。"
+          style={{ marginBottom: 12 }}
+        />
+      )}
       <Descriptions bordered size="small" column={2}
         items={[
-          { label: '当前推理模型', children: runtimeModel || '未获取' },
+          { label: '数据库发布版本', children: activeVersion ? `${activeVersion.modelName} ${activeVersion.version}` : '未发布' },
+          { label: 'Flask 实际推理模型', children: runtimeModel || '未获取' },
           { label: '推理服务', children: <Tag color={health?.flask === 'UP' ? 'green' : 'red'}>{health?.flask === 'UP' ? '正常' : '异常'}</Tag> },
           { label: '训练 MAPE', children: activeVersion?.mape != null ? `${Number(activeVersion.mape).toFixed(2)}%` : 'N/A' },
           { label: '训练 RMSE', children: activeVersion?.rmse != null ? `${Number(activeVersion.rmse).toFixed(2)} MW` : 'N/A' },
@@ -477,7 +503,7 @@ const ModelPanel = () => {
             render: (_: any, row: any) => row.isActive === 1 ? <Tag color="green">已激活</Tag> : (
               <Popconfirm
                 title="确认切换模型版本？"
-                description="切换后该版本将标记为当前使用版本。"
+                description="该操作只切换数据库发布版本，不会自动重载 Flask；确认后需要重启 Flask 服务。"
                 onConfirm={() => activateVersion(row.id)}
                 okText="确认"
                 cancelText="取消"
