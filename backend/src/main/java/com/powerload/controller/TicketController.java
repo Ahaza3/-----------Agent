@@ -11,6 +11,7 @@ import com.powerload.entity.AlertTicket;
 import com.powerload.entity.AlertTicketAction;
 import com.powerload.security.SysUserPrincipal;
 import com.powerload.service.TicketService;
+import com.powerload.ticket.TicketReportService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -26,6 +27,7 @@ import java.util.Map;
 public class TicketController {
 
     private final TicketService ticketService;
+    private final TicketReportService ticketReportService;
 
     /* ─── Query ─── */
 
@@ -126,5 +128,14 @@ public class TicketController {
                                   @AuthenticationPrincipal SysUserPrincipal user) {
         String reason = body != null ? body.get("reason") : null;
         return R.ok(ticketService.cancel(id, reason, user));
+    }
+
+    /* ─── 工单处理报告 ─── */
+
+    @PostMapping("/tickets/{id}/report")
+    public R<Map<String, Object>> generateReport(@PathVariable Long id,
+                                                  @RequestBody(required = false) Map<String, String> body) {
+        String operatorNote = body != null ? body.get("operatorNote") : null;
+        return R.ok(ticketReportService.generateReport(id, operatorNote));
     }
 }

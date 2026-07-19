@@ -3,7 +3,8 @@
  * 展示：告警信息、阈值、AI 分析、工单状态、时间线、操作栏
  */
 import { useState, useEffect, useCallback } from 'react'
-import { Drawer, Descriptions, Tag, Spin, message, Empty } from 'antd'
+import { Drawer, Descriptions, Tag, Spin, message, Empty, Button, Modal, Input } from 'antd'
+import { FileTextOutlined, CopyOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { ALERT_LEVEL_CONFIG } from '../../../types/alert'
 import type { AlertLevel } from '../../../types/alert'
@@ -38,6 +39,69 @@ interface AlertInfo {
   triggerTime: string
   aiAnalysis?: string
   suggestion?: string
+}
+
+/** 工单报告生成器 */
+const ReportGenerator = ({ ticketId, currentResolution }: { ticketId: number; currentResolution?: string }) => {
+  const [open, setOpen] = useState(false)
+  const [note, setNote] = useState('')
+  const [report, setReport] = useState('')
+  const [loading, setLoading] = useState(false)
+
+  const handleGenerate = async () => {
+    setLoading(true)
+    try {
+      const r: any = await ticketApi.generateTicketReport(ticketId, note)
+      setReport(r.report || '')
+      message.success('报告已生成')
+    } catch { message.error('报告生成失败') }
+    finally { setLoading(false) }
+  }
+
+  return (
+    <>
+      <Button size="small" icon={<FileTextOutlined />} onClick={() => setOpen(true)} style={{ marginTop: 8 }}>
+        AI 生成处理报告
+      </Button>
+      <Modal
+        title="AI 生成处理报告"
+        open={open}
+        onCancel={() => setOpen(false)}
+        footer={null}
+        width={640}
+      >
+        <div style={{ marginBottom: 12 }}>
+          <Input.TextArea
+            rows={4}
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            placeholder="请输入实际处理过程（可选，留空将显示'待补充'）"
+          />
+        </div>
+        <Button type="primary" loading={loading} onClick={handleGenerate} style={{ marginBottom: 12 }}>
+          生成报告
+        </Button>
+        {report && (
+          <>
+            <pre style={{
+              background: '#0a0a0a', border: '1px solid #2A2A2A', padding: 16,
+              color: '#ccc', fontSize: 11, whiteSpace: 'pre-wrap', maxHeight: 400, overflow: 'auto',
+            }}>{report}</pre>
+            <div style={{ marginTop: 8, display: 'flex', gap: 8 }}>
+              <Button size="small" icon={<CopyOutlined />} onClick={() => { navigator.clipboard.writeText(report); message.success('已复制') }}>
+                复制报告
+              </Button>
+              {currentResolution === undefined && (
+                <Button size="small" onClick={() => { setNote(report); message.info('已将报告填入处理结果框'); setOpen(false) }}>
+                  填入处理结果
+                </Button>
+              )}
+            </div>
+          </>
+        )}
+      </Modal>
+    </>
+  )
 }
 
 interface Props {
@@ -83,12 +147,29 @@ const AlertTicketDetail = ({
 
   // 加载 AI 建议
   useEffect(() => {
-    if (!alert?.id || !open) {
-      setAdvices([])
-      return
-    }
+    if (!alert?.id || !open) { setAdvices([]); return }
     (api.get(`/alert/events/${alert.id}/advice`) as Promise<any[]>).then(setAdvices).catch(() => setAdvices([]))
   }, [alert?.id, open])
+
+  // 加载智能研判
+  const [judgement, setJudgement] = useState<any>(null)
+  const [judgementLoading, setJudgementLoading] = useState(false)
+  useEffect(() => {
+    if (!alert?.id || !open) { setJudgement(null); return }
+    setJudgementLoading(true)
+    ticketApi.fetchJudgement(alert.id)
+      .then(setJudgement)
+      .catch(() => setJudgement(null))
+      .finally(() => setJudgementLoading(false))
+  }, [alert?.id, open])
+
+  const handleRejudge = async () => {
+    if (!alert?.id) return
+    setJudgementLoading(true)
+    try { setJudgement(await ticketApi.rejudge(alert.id)); message.success('研判已更新') }
+    catch { message.error('重新研判失败') }
+    finally { setJudgementLoading(false) }
+  }
 
   const st = ticket ? STATUS[ticket.status] || { label: ticket.status, color: 'default' } : null
   const pr = ticket ? PRIORITY[ticket.priority] || { label: ticket.priority, color: 'default' } : null
@@ -188,11 +269,11 @@ const AlertTicketDetail = ({
           ]}
         />
 
-        {/* AI 建议 */}
-        {advices.length > 0 && (
+        {/* AI 建议 — 过滤掉 JUDGEMENT 类型（由研判区域单独展示） */}
+        {advices.filter((a: any) => a.audienceRole !== 'JUDGEMENT').length > 0 && (
           <div style={{ marginBottom: 12 }}>
             <h4 style={{ color: '#aaa', fontSize: 12, marginBottom: 8 }}>AI 建议</h4>
-            {advices.map((a: any) => (
+            {advices.filter((a: any) => a.audienceRole !== 'JUDGEMENT').map((a: any) => (
               <div key={a.id} style={{ border: '1px solid #2A2A2A', padding: 8, marginBottom: 4, background: '#0c0c0c' }}>
                 <Tag color={a.status === 'SUCCESS' ? 'green' : 'gold'} style={{ fontSize: 10, marginBottom: 4 }}>
                   {a.audienceRole === 'DISPATCHER' ? '调度员建议' : '运维建议'}
@@ -201,6 +282,62 @@ const AlertTicketDetail = ({
                 {a.suggestion && <div style={{ color: '#aaa', fontSize: 11, marginTop: 4 }}>{a.suggestion}</div>}
               </div>
             ))}
+          </div>
+        )}
+
+        {/* 智能研判 */}
+        {judgement && (
+          <div style={{ marginBottom: 12, border: '1px solid #177ddc', padding: 12, background: '#0c0c0c' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <h4 style={{ color: '#177ddc', fontSize: 12, margin: 0 }}>AI 智能研判</h4>
+              <Button size="small" loading={judgementLoading} onClick={handleRejudge}>重新研判</Button>
+            </div>
+            <Descriptions size="small" column={1} labelStyle={{ color: '#888', background: '#0c0c0c', width: 100 }} contentStyle={{ color: '#ccc', background: '#0e0e0e' }}>
+              <Descriptions.Item label="建单建议">
+                {judgement.autoCreateTicket
+                  ? <Tag color="blue">已自动创建工单</Tag>
+                  : judgement.shouldCreateTicket
+                    ? <Tag color="green">建议创建工单</Tag>
+                    : <Tag color="default">暂不建议建单</Tag>
+                }
+              </Descriptions.Item>
+              <Descriptions.Item label="推荐优先级">
+                <Tag color={judgement.recommendedPriority === 'URGENT' ? 'red' : judgement.recommendedPriority === 'HIGH' ? 'orange' : 'default'}>
+                  {judgement.recommendedPriority === 'URGENT' ? '紧急' : judgement.recommendedPriority === 'HIGH' ? '高' : '普通'}
+                </Tag>
+              </Descriptions.Item>
+              <Descriptions.Item label="趋势方向">
+                {judgement.trendDirection === 'RISING' ? '↑ 上升' : judgement.trendDirection === 'FALLING' ? '↓ 下降' : judgement.trendDirection === 'STABLE' ? '→ 平稳' : '未知'}
+              </Descriptions.Item>
+              {judgement.forecastPeakLoad != null && judgement.forecastPeakLoad > 0 && (
+                <Descriptions.Item label="预测峰值">
+                  <span style={{ color: judgement.currentLoad && judgement.forecastPeakLoad < judgement.currentLoad * 0.9 ? '#FAAD14' : '#ccc' }}>
+                    {`${judgement.forecastPeakLoad.toFixed(0)} MW`}
+                    {judgement.currentLoad && judgement.forecastPeakLoad < judgement.currentLoad * 0.9 ? '（预测数据可能过期）' : ''}
+                  </span>
+                </Descriptions.Item>
+              )}
+            </Descriptions>
+            <div style={{ marginTop: 8, padding: 8, background: '#0a0a0a', borderLeft: '2px solid #177ddc' }}>
+              <div style={{ color: '#aaa', fontSize: 10, marginBottom: 4 }}>研判原因</div>
+              <div style={{ color: '#ccc', fontSize: 11, lineHeight: 1.6 }}>{judgement.decisionReason}</div>
+            </div>
+            <div style={{ marginTop: 8, padding: 8, background: '#0a0a0a', borderLeft: '2px solid #FAAD14' }}>
+              <div style={{ color: '#FAAD14', fontSize: 10, marginBottom: 4 }}>调度员建议</div>
+              <div style={{ color: '#ccc', fontSize: 11, lineHeight: 1.6 }}>{judgement.dispatcherAdvice}</div>
+            </div>
+            <div style={{ marginTop: 4, padding: 8, background: '#0a0a0a', borderLeft: '2px solid #888' }}>
+              <div style={{ color: '#888', fontSize: 10, marginBottom: 4 }}>运维建议</div>
+              <div style={{ color: '#ccc', fontSize: 11, lineHeight: 1.6 }}>{judgement.operatorAdvice}</div>
+            </div>
+            <div style={{ marginTop: 6 }}>
+              <Tag color="default" style={{ fontSize: 9 }}>来源：规则型智能 Agent</Tag>
+            </div>
+          </div>
+        )}
+        {!judgement && !judgementLoading && (
+          <div style={{ marginBottom: 12, border: '1px solid #2A2A2A', padding: 12, background: '#0c0c0c', textAlign: 'center' }}>
+            <Button size="small" loading={judgementLoading} onClick={handleRejudge}>生成研判</Button>
           </div>
         )}
 
@@ -237,6 +374,11 @@ const AlertTicketDetail = ({
               onClose={handleClose}
               onCancel={handleCancel}
             />
+
+            {/* AI 生成处理报告 */}
+            {(role === 'OPERATOR' || role === 'SYSTEM_ADMIN') && (
+              <ReportGenerator ticketId={ticket.id} currentResolution={ticket.resolution} />
+            )}
           </>
         )}
 

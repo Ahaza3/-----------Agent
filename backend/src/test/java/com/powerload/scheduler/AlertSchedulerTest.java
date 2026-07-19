@@ -1,5 +1,6 @@
 package com.powerload.scheduler;
 
+import com.powerload.alert.AlertJudgementService;
 import com.powerload.alert.AlertTemplate;
 import com.powerload.alert.ThresholdDetector;
 import com.powerload.dto.response.RealtimeLoadPoint;
@@ -8,6 +9,7 @@ import com.powerload.entity.AlertRule;
 import com.powerload.service.AlertEventService;
 import com.powerload.service.AlertRuleService;
 import com.powerload.service.RealtimeLoadService;
+import com.powerload.service.TicketService;
 import com.powerload.websocket.PushService;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.context.ApplicationEventPublisher;
@@ -42,6 +44,8 @@ class AlertSchedulerTest {
         when(alertEventService.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
         ApplicationEventPublisher eventPublisher = mock(ApplicationEventPublisher.class);
+        AlertJudgementService judgementService = mock(AlertJudgementService.class);
+        TicketService ticketService = mock(TicketService.class);
         scheduler = new AlertScheduler(
                 realtimeLoadService,
                 alertRuleService,
@@ -49,6 +53,8 @@ class AlertSchedulerTest {
                 new ThresholdDetector(),
                 new AlertTemplate(),
                 pushService,
+                judgementService,
+                ticketService,
                 eventPublisher);
     }
 

@@ -130,3 +130,39 @@ export function closeTicket(id: number): Promise<Ticket> {
 export function cancelTicket(id: number, reason?: string): Promise<Ticket> {
   return api.put(`/tickets/${id}/cancel`, { reason })
 }
+
+/* ─── 生成处理报告 ─── */
+export function generateTicketReport(id: number, operatorNote?: string): Promise<{
+  ticketId: number; ticketNo: string; report: string; source: string; generatedAt: string
+}> {
+  return api.post(`/tickets/${id}/report`, { operatorNote })
+}
+
+/* ─── 查询智能研判 ─── */
+export interface JudgementResult {
+  alertId: number
+  level: string
+  currentLoad: number
+  thresholdValue: number
+  trendDirection: string
+  forecastPeakLoad: number | null
+  forecastPeakTime: string | null
+  hasExistingTicket: boolean
+  hasOpenSimilarTicket: boolean
+  shouldCreateTicket: boolean
+  autoCreateTicket: boolean
+  recommendedPriority: string
+  dispatcherAdvice: string
+  operatorAdvice: string
+  decisionReason: string
+  source: string
+  createdAt: string
+}
+
+export function fetchJudgement(alertId: number): Promise<JudgementResult> {
+  return api.get(`/alert/events/${alertId}/judgement`)
+}
+
+export function rejudge(alertId: number): Promise<JudgementResult> {
+  return api.post(`/alert/events/${alertId}/judgement`)
+}
