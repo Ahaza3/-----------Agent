@@ -266,8 +266,8 @@ const Dashboard = () => {
       connectNulls: false,
     })
     series.push({
-      id: 'bridge', name: '', type: 'line', data: bridgeData,
-      smooth: false, symbol: 'none', animation: false, silent: true,
+      id: 'bridge', name: '', type: 'line', data: showRecovery || recoveryData.length === 0 ? bridgeData : [],
+      smooth: true, symbol: 'none', animation: false, silent: true,
       lineStyle: { color: '#8B98A6', width: 1, type: 'dashed' },
       connectNulls: false,
     })
