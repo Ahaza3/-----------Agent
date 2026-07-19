@@ -25,6 +25,8 @@ export interface ConversationMessage {
   id: number
   role: 'user' | 'assistant'
   content: string
+  chart?: EChartsOption
+  chartOption?: string | null
   createdAt: string
 }
 

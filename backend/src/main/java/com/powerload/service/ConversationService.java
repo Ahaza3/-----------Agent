@@ -18,6 +18,11 @@ public interface ConversationService {
     void saveMessage(String conversationId, SysUserPrincipal user, String role, String content, String toolName);
 
     /**
+     * Save one message with an optional chart option serialized by the implementation.
+     */
+    void saveMessage(String conversationId, SysUserPrincipal user, String role, String content, String toolName, Object chartOption);
+
+    /**
      * 批量保存（按 AgentMessage 列表，role 取自 AgentMessage.role）
      */
     void saveMessages(String conversationId, SysUserPrincipal user, List<AgentMessage> messages);

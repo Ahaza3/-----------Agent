@@ -131,13 +131,18 @@ const AlertTicketDetail = ({
   // 同步外部 ticket 变化
   useEffect(() => {
     setTicket(initialTicket)
+    setActions([])
   }, [initialTicket])
 
   // 加载工单操作时间线
   useEffect(() => {
-    if (!ticketId || !open) return
+    if (!ticketId || !open) {
+      setActions([])
+      return
+    }
     const load = async () => {
       try {
+        setActions([])
         const acts = await ticketApi.fetchTicketActions(ticketId)
         setActions(acts as TimelineEntry[])
       } catch { setActions([]) }

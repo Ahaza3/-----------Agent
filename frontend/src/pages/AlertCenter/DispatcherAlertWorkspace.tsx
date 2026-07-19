@@ -5,11 +5,11 @@
  */
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { Table, Tag, Button, Segmented, Space, message, Badge, Modal, Select, Input, Empty, Skeleton } from 'antd'
-import { BellOutlined, FileTextOutlined } from '@ant-design/icons'
+import { BellOutlined, ExclamationCircleOutlined, FileTextOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { fetchAlertEvents, markAlertRead } from '../../services/alertApi'
-import { fetchTicketByAlert, createTicket, assignTicket, fetchAssignees } from '../../services/ticketApi'
-import type { AssigneeInfo, Ticket } from '../../services/ticketApi'
+import { fetchTicketByAlert, createTicket, assignTicket, fetchAssignees, fetchJudgement } from '../../services/ticketApi'
+import type { AssigneeInfo, JudgementResult, Ticket } from '../../services/ticketApi'
 import { ALERT_LEVEL_CONFIG } from '../../types/alert'
 import type { AlertEvent, AlertLevel } from '../../types/alert'
 import type { ColumnsType } from 'antd/es/table'
@@ -18,6 +18,7 @@ import useAuthStore from '../../stores/useAuthStore'
 import AlertTicketDetail from './shared/AlertTicketDetail'
 
 type LevelFilter = AlertLevel | 'ALL'
+type CreateMode = 'manual' | 'red-draft'
 
 const DispatcherAlertWorkspace = () => {
   const [events, setEvents] = useState<AlertEvent[]>([])
@@ -32,6 +33,8 @@ const DispatcherAlertWorkspace = () => {
   const [createOpen, setCreateOpen] = useState(false)
   const [creatingId, setCreatingId] = useState<number | null>(null)
   const [summary, setSummary] = useState('')
+  const [createMode, setCreateMode] = useState<CreateMode>('manual')
+  const [createSubmitting, setCreateSubmitting] = useState(false)
   const [assignOpen, setAssignOpen] = useState(false)
   const [assignees, setAssignees] = useState<AssigneeInfo[]>([])
   const [assignUserId, setAssignUserId] = useState<number | undefined>()
@@ -42,6 +45,8 @@ const DispatcherAlertWorkspace = () => {
   const wsAlerts = useDashboardStore((s) => s.alerts)
   const acknowledgeStoreAlert = useDashboardStore((s) => s.acknowledgeAlert)
   const seenIds = useRef(new Set<number>())
+  const promptedRedAlertIds = useRef(new Set<number>())
+  const draftAlertIdRef = useRef<number | null>(null)
 
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth < 960)
@@ -109,18 +114,76 @@ const DispatcherAlertWorkspace = () => {
     } catch { message.error('加载运维人员失败') }
   }
 
+  const buildTicketSummary = (alert: AlertEvent, judgement?: JudgementResult) => {
+    const levelLabel = ALERT_LEVEL_CONFIG[alert.level]?.label || alert.level
+    const lines = [
+      `【${levelLabel}告警】${dayjs(alert.triggerTime).format('MM-DD HH:mm:ss')} 负荷 ${alert.currentValue?.toFixed(1)} MW，阈值 ${alert.thresholdValue?.toFixed(0)} MW。`,
+    ]
+    const analysis = judgement?.decisionReason || alert.aiAnalysis
+    const advice = judgement?.dispatcherAdvice || alert.suggestion
+    if (analysis) lines.push(`AI研判：${analysis}`)
+    if (advice) lines.push(`调度建议：${advice}`)
+    return lines.join('\n')
+  }
+
+  const resetCreateModal = () => {
+    setCreateOpen(false)
+    setCreatingId(null)
+    setSummary('')
+    setAssignUserId(undefined)
+    setCreateMode('manual')
+    draftAlertIdRef.current = null
+  }
+
+  const openTicketDraft = async (alert: AlertEvent, mode: CreateMode) => {
+    const alertId = alert.id
+    draftAlertIdRef.current = alertId
+    setCreatingId(alertId)
+    setCreateMode(mode)
+    setSummary(buildTicketSummary(alert))
+    loadAssignees()
+    setCreateOpen(true)
+
+    if (mode === 'red-draft') {
+      try {
+        const judgement = await fetchJudgement(alertId)
+        if (draftAlertIdRef.current === alertId) {
+          setSummary(buildTicketSummary(alert, judgement))
+        }
+      } catch {
+        // 保留基于告警事件的草稿，LLM 研判失败不阻塞调度员确认建单。
+      }
+    }
+  }
+
+  useEffect(() => {
+    if (createOpen || assignOpen) return
+    const alert = events.find((item) =>
+      item.level === 'RED'
+      && item.isRead === 0
+      && ticketMap[item.id] === null
+      && !promptedRedAlertIds.current.has(item.id),
+    )
+    if (!alert) return
+    promptedRedAlertIds.current.add(alert.id)
+    openTicketDraft(alert, 'red-draft')
+  }, [events, ticketMap, createOpen, assignOpen])
+
   const handleCreateTicket = async () => {
     if (!creatingId) return
+    if (!summary.trim()) {
+      message.warning('请填写工单概要')
+      return
+    }
+    setCreateSubmitting(true)
     try {
-      const t = await createTicket(creatingId, summary)
+      const t = await createTicket(creatingId, summary.trim())
       if (assignUserId) await assignTicket(t.id, assignUserId)
-      message.success('工单已创建' + (assignUserId ? '并指派' : ''))
+      message.success('工单已提交' + (assignUserId ? '并指派' : ''))
       setTicketMap((prev) => ({ ...prev, [creatingId]: t }))
-      setCreateOpen(false)
-      setCreatingId(null)
-      setSummary('')
-      setAssignUserId(undefined)
+      resetCreateModal()
     } catch (e: any) { message.error(e?.response?.data?.message || e.message) }
+    finally { setCreateSubmitting(false) }
   }
 
   const handleTicketUpdate = (t: Ticket) => {
@@ -138,8 +201,8 @@ const DispatcherAlertWorkspace = () => {
     setDetailOpen(true)
   }
 
-  const statusTag = (alertId: number, ticket: Ticket | null | undefined) => {
-    if (!ticket) return <Button size="small" type="default" icon={<FileTextOutlined />} onClick={(e) => { e.stopPropagation(); setCreatingId(alertId); setSummary(''); loadAssignees(); setCreateOpen(true) }}>发起处置</Button>
+  const statusTag = (alert: AlertEvent, ticket: Ticket | null | undefined) => {
+    if (!ticket) return <Button size="small" type={alert.level === 'RED' ? 'primary' : 'default'} danger={alert.level === 'RED'} icon={<FileTextOutlined />} onClick={(e) => { e.stopPropagation(); openTicketDraft(alert, alert.level === 'RED' ? 'red-draft' : 'manual') }}>{alert.level === 'RED' ? '确认建单' : '发起处置'}</Button>
     const st: Record<string, any> = { PENDING: { label: '待处理', color: 'default' }, ASSIGNED: { label: '已指派', color: 'blue' }, IN_PROGRESS: { label: '处理中', color: 'processing' }, RESOLVED: { label: '已解决', color: 'green' }, CLOSED: { label: '已关闭', color: 'default' }, CANCELLED: { label: '已取消', color: 'default' } }
     const s = st[ticket.status] || { label: ticket.status, color: 'default' }
     return <Tag color={s.color}>{s.label}</Tag>
@@ -150,7 +213,7 @@ const DispatcherAlertWorkspace = () => {
     { title: '当前负荷', dataIndex: 'currentValue', width: 90, render: (v: number) => `${v?.toFixed(1)} MW` },
     { title: '阈值', dataIndex: 'thresholdValue', width: 80, render: (v: number) => `${v?.toFixed(0)} MW` },
     { title: '时间', dataIndex: 'triggerTime', width: 130, render: (v: string) => v ? dayjs(v).format('MM-DD HH:mm:ss') : '-' },
-    { title: '工单', dataIndex: 'id', width: 100, render: (id: number) => statusTag(id, ticketMap[id]) },
+    { title: '工单', dataIndex: 'id', width: 100, render: (_: number, record: AlertEvent) => statusTag(record, ticketMap[record.id]) },
     { title: '已读', dataIndex: 'isRead', width: 50, render: (v: number) => v === 0 ? <Badge status="error" /> : <Badge status="default" /> },
     {
       title: '', key: 'actions', width: 80, render: (_: any, r: AlertEvent) => (
@@ -224,7 +287,20 @@ const DispatcherAlertWorkspace = () => {
       )}
 
       {/* 创建工单 Modal */}
-      <Modal title="发起处置工单" open={createOpen} onCancel={() => { setCreateOpen(false); setAssignUserId(undefined) }} onOk={handleCreateTicket} okText="创建">
+      <Modal
+        title={createMode === 'red-draft' ? '红色告警工单草稿待确认' : '发起处置工单'}
+        open={createOpen}
+        onCancel={resetCreateModal}
+        onOk={handleCreateTicket}
+        okText={createMode === 'red-draft' ? '提交工单' : '创建'}
+        confirmLoading={createSubmitting}
+      >
+        {createMode === 'red-draft' && (
+          <div style={{ marginBottom: 12, padding: 12, border: '1px solid #FF4D4F', background: 'rgba(255,77,79,0.08)', color: '#F2C0C0', fontSize: 12, lineHeight: 1.6 }}>
+            <ExclamationCircleOutlined style={{ color: '#FF4D4F', marginRight: 6 }} />
+            红色告警已触发，系统已生成待确认工单草稿。请核对内容后提交，提交后才会正式创建工单。
+          </div>
+        )}
         <Input.TextArea rows={3} value={summary} onChange={(e) => setSummary(e.target.value)} placeholder="工单概要" style={{ marginBottom: 12 }} />
         <Select
           style={{ width: '100%' }}

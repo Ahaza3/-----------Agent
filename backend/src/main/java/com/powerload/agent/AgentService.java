@@ -66,15 +66,10 @@ public class AgentService {
                     // 保存错误作为 assistant 消息
                     conversationService.saveMessage(convId, user, "assistant", response.getContent(), null);
                 } else {
-                    // 发送文本（按段落拆分）
+                    // Send the complete Markdown payload once so formatting-sensitive newlines stay intact.
                     String text = response.getContent();
                     if (text != null && !text.isBlank()) {
-                        String[] parts = text.split("(?<=\\n)");
-                        for (String part : parts) {
-                            if (!part.isBlank()) {
-                                sendEvent(emitter, "text", Map.of("content", part.trim()));
-                            }
-                        }
+                        sendEvent(emitter, "text", Map.of("content", text));
                     }
 
                     // 发送图表
@@ -83,7 +78,7 @@ public class AgentService {
                     }
 
                     // 保存 assistant 最终回答
-                    conversationService.saveMessage(convId, user, "assistant", text, null);
+                    conversationService.saveMessage(convId, user, "assistant", text, null, response.getChart());
                 }
 
                 // 发送 done

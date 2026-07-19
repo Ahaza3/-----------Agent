@@ -111,17 +111,7 @@ public class AlertScheduler {
 
                 // 智能研判
                 try {
-                    AlertJudgementResult judgement = alertJudgementService.judge(event);
-                    // 红色告警自动建单
-                    if (Boolean.TRUE.equals(judgement.getAutoCreateTicket())) {
-                        SysUserPrincipal systemUser = new SysUserPrincipal(0L, "system", "SYSTEM_ADMIN");
-                        String summary = String.format(
-                            "【自动建单】%s告警 | 当前负荷 %.1f MW | 阈值 %.0f MW | %s",
-                            level, currentLoad, threshold, judgement.getDecisionReason()
-                        );
-                        ticketService.create(event.getId(), summary, systemUser);
-                        log.info("智能研判自动创建工单: alertId={}, level={}", event.getId(), level);
-                    }
+                    alertJudgementService.judgeRuleBased(event);
                 } catch (Exception e) {
                     log.warn("智能研判或自动建单失败: alertId={}", event.getId(), e);
                 }

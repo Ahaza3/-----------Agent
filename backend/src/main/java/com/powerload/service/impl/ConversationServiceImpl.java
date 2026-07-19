@@ -1,5 +1,6 @@
 package com.powerload.service.impl;
 
+import cn.hutool.json.JSONUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.powerload.agent.AgentMessage;
 import com.powerload.entity.Conversation;
@@ -32,12 +33,20 @@ public class ConversationServiceImpl implements ConversationService {
 
     @Override
     public void saveMessage(String conversationId, SysUserPrincipal user, String role, String content, String toolName) {
+        saveMessage(conversationId, user, role, content, toolName, null);
+    }
+
+    @Override
+    public void saveMessage(String conversationId, SysUserPrincipal user, String role, String content, String toolName, Object chartOption) {
         Conversation c = new Conversation();
         c.setConversationId(conversationId);
         applyOwner(c, user);
         c.setRole(role);
         c.setContent(content);
         c.setToolName(toolName);
+        if (chartOption != null) {
+            c.setChartOption(JSONUtil.toJsonStr(chartOption));
+        }
         c.setCreatedAt(LocalDateTime.now());
         conversationMapper.insert(c);
     }
@@ -127,6 +136,7 @@ public class ConversationServiceImpl implements ConversationService {
             response.setId(record.getId());
             response.setRole(record.getRole());
             response.setContent(record.getContent());
+            response.setChartOption(record.getChartOption());
             response.setCreatedAt(record.getCreatedAt());
             return response;
         }).toList();

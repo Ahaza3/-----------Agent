@@ -1,7 +1,7 @@
-# ⚡ 电力负荷预测与智能告警 Agent
+﻿# ⚡ 电力负荷预测与智能告警 Agent
 
-> **暑期实训项目** · 16 天完整开发流程（Sprint × 3 + 答辩日）  
-> **技术栈**：Spring Boot 3 + React + MyBatis-Plus + MySQL + ECharts + LLM Agent  
+> **暑期实训项目** · 16 天完整开发流程（Sprint × 3 + 答辩日）
+> **技术栈**：Spring Boot 3 + React + MyBatis-Plus + MySQL + ECharts + LLM Agent
 > **团队规模**：4 人（PO + SM + Developer + QA）
 
 ---
@@ -149,4 +149,14 @@ docker-compose up -d
 
 ---
 
-> **当前进度**：🟢 Day 1 完成 ✅ ｜ Day 2 进行中 →
+> **当前进度**：已完成 Sprint 2/3 核心功能联调与缺陷修复，当前分支：`codex/fix-agent-dashboard-ticket-fixes`。
+
+## 当前实现同步（2026-07-19）
+
+项目已经进入前后端联调和缺陷修复阶段，当前实现与最初设计相比有以下关键补充：
+
+- **Agent 聊天**：`POST /api/v1/agent/chat` 使用 SSE，事件顺序为 `thinking → text → chart → done`。后端一次性发送完整 Markdown 文本，避免按行拆分导致前端刷新前无法正确渲染；助手消息的 ECharts 配置会持久化到 `conversation.chart_option`，历史会话刷新后可恢复图表。
+- **大屏曲线**：历史负荷、恢复段、实时负荷拆分为独立 ECharts series。恢复段到实时段之间只生成前端视觉 bridge 曲线，使用 15 分钟插值和平滑连接；该 bridge 不写回数据库，不影响未来数据按真实整点归档。
+- **告警研判**：实时告警文案仍由 `AlertTemplate` 固定模板生成，保证告警触发链路低延迟；工单详情里的“AI 智能研判”会调用 LLM 生成调度/运维建议，失败时降级为规则研判。
+- **红色告警建单**：红色告警不再自动提交正式工单。调度员侧会弹出“待确认工单草稿”，预填告警、AI 研判和调度建议；只有调度员点击“提交工单”后才正式创建工单。
+- **工单时间线**：未创建工单的告警不会展示处置时间线，切换告警/工单时会清空旧 actions 状态，避免复用上一个工单的时间线。

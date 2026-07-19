@@ -1,6 +1,10 @@
 package com.powerload.alert;
 
+import cn.hutool.json.JSONObject;
+import cn.hutool.json.JSONUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.powerload.agent.AgentMessage;
+import com.powerload.agent.LlmClient;
 import com.powerload.dto.response.AlertJudgementResult;
 import com.powerload.dto.response.ForecastResponse;
 import com.powerload.dto.response.RealtimeLoadPoint;
@@ -33,8 +37,11 @@ public class AlertJudgementService {
     private final AlertTicketMapper alertTicketMapper;
     private final RealtimeLoadService realtimeLoadService;
     private final PredictService predictService;
+    private final LlmClient llmClient;
 
-    private static final String SOURCE = "RULE_BASED_AGENT";
+    private static final String SOURCE_RULE = "RULE_BASED_AGENT";
+    private static final String SOURCE_LLM = "LLM_AGENT";
+    private static final String SOURCE_FALLBACK = "RULE_BASED_FALLBACK";
 
     /** 计算趋势方向：取最近 {@code minutes} 分钟内的实时点 */
     public String detectTrend(int minutes) {
@@ -100,6 +107,14 @@ public class AlertJudgementService {
      * 核心研判逻辑 — 输入 AlertEvent，输出 AlertJudgementResult
      */
     public AlertJudgementResult judge(AlertEvent alert) {
+        return judge(alert, true);
+    }
+
+    public AlertJudgementResult judgeRuleBased(AlertEvent alert) {
+        return judge(alert, false);
+    }
+
+    private AlertJudgementResult judge(AlertEvent alert, boolean useLlm) {
         Float currentLoad = alert.getCurrentValue();
         Float threshold = alert.getThresholdValue();
         String level = alert.getLevel();
@@ -130,7 +145,7 @@ public class AlertJudgementService {
         if ("RED".equals(level)) {
             if (!hasTicket && !hasSimilar) {
                 shouldCreate = true;
-                autoCreate = true;
+                autoCreate = false;
                 priority = "URGENT";
                 reason.append("红色告警，负荷 ").append(String.format("%.1f", currentLoad))
                       .append(" MW 超过阈值 ").append(String.format("%.0f", threshold))
@@ -193,9 +208,13 @@ public class AlertJudgementService {
                 .dispatcherAdvice(dispAdvice)
                 .operatorAdvice(operAdvice)
                 .decisionReason(reason.toString())
-                .source(SOURCE)
+                .source(SOURCE_RULE)
                 .createdAt(LocalDateTime.now())
                 .build();
+
+        if (useLlm) {
+            result = enrichWithLlm(result);
+        }
 
         // 5. 存入 alert_advice（幂等：同一 alertId 已有成功记录则跳过）
         persistJudgement(alertId, result);
@@ -232,7 +251,7 @@ public class AlertJudgementService {
             adv.setStatus("SUCCESS");
             adv.setAnalysis(serializeJudgement(result));
             adv.setEvidence("{}");
-            adv.setModelName(SOURCE);
+            adv.setModelName(result.getSource());
             adv.setGeneratedAt(LocalDateTime.now());
             adv.setCreatedAt(LocalDateTime.now());
 
@@ -262,6 +281,76 @@ public class AlertJudgementService {
         } catch (Exception e) {
             return null;
         }
+    }
+
+    private AlertJudgementResult enrichWithLlm(AlertJudgementResult base) {
+        try {
+            String content = callJudgementLlm(base);
+            JSONObject json = JSONUtil.parseObj(cleanJson(content));
+            String decisionReason = firstNonBlank(json.getStr("decisionReason"), json.getStr("reason"));
+            String dispatcherAdvice = firstNonBlank(json.getStr("dispatcherAdvice"), json.getStr("dispatcher"));
+            String operatorAdvice = firstNonBlank(json.getStr("operatorAdvice"), json.getStr("operator"));
+
+            if (decisionReason != null) base.setDecisionReason(truncate(decisionReason, 800));
+            if (dispatcherAdvice != null) base.setDispatcherAdvice(truncate(dispatcherAdvice, 800));
+            if (operatorAdvice != null) base.setOperatorAdvice(truncate(operatorAdvice, 800));
+            base.setSource(SOURCE_LLM);
+        } catch (Exception e) {
+            log.warn("LLM alert judgement failed, using rule fallback: alertId={}, reason={}",
+                    base.getAlertId(), e.getMessage());
+            base.setSource(SOURCE_FALLBACK);
+        }
+        return base;
+    }
+
+    private String callJudgementLlm(AlertJudgementResult base) throws Exception {
+        AgentMessage response = llmClient.chat(List.of(
+                AgentMessage.system("你是电力调度告警研判专家。只输出严格 JSON，不要输出 Markdown。"),
+                AgentMessage.user(buildJudgementPrompt(base))
+        ), null);
+        String content = response == null ? null : response.getContent();
+        if (content == null || content.isBlank()) {
+            throw new IllegalStateException("LLM returned empty judgement");
+        }
+        return content;
+    }
+
+    private String buildJudgementPrompt(AlertJudgementResult base) {
+        return """
+                请基于以下规则研判结果，生成面向用户的 AI 智能研判文案。
+                必须遵守：
+                - 不要改变 shouldCreateTicket、autoCreateTicket、recommendedPriority 等系统决策字段。
+                - 红色告警只能建议调度员立即确认并建单，不要声称系统已经自动建单。
+                - 不要编造未提供的设备故障、线路跳闸、人工处置结果。
+                - 返回 JSON：{\"decisionReason\":\"...\",\"dispatcherAdvice\":\"...\",\"operatorAdvice\":\"...\"}
+
+                规则研判结果：
+                %s
+                """.formatted(JSONUtil.toJsonStr(base));
+    }
+
+    private String cleanJson(String raw) {
+        String cleaned = raw.trim();
+        if (cleaned.startsWith("```")) {
+            cleaned = cleaned.replaceAll("```[a-zA-Z]*\\n?", "").replaceAll("```$", "").trim();
+        }
+        int start = cleaned.indexOf('{');
+        int end = cleaned.lastIndexOf('}');
+        if (start >= 0 && end > start) {
+            return cleaned.substring(start, end + 1);
+        }
+        return cleaned;
+    }
+
+    private String firstNonBlank(String first, String second) {
+        if (first != null && !first.isBlank()) return first;
+        if (second != null && !second.isBlank()) return second;
+        return null;
+    }
+
+    private String truncate(String value, int maxLength) {
+        if (value == null || value.length() <= maxLength) return value;
+        return value.substring(0, maxLength);
     }
 
     /* ─── 建议文案模板 ─── */

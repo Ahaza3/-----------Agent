@@ -41,10 +41,8 @@ describe('buildLoadSeriesSegments', () => {
     ], true)
 
     expect(result.recoveryData.map(([time]) => time)).not.toContain('2026-07-17T23:00:00+08:00')
-    expect(result.bridgeData).toEqual([
-      ['2026-07-17T22:00:00+08:00', 810],
-      [new Date('2026-07-17T22:46:00+08:00').toISOString(), 809],
-    ])
+    expect(result.bridgeData[0]).toEqual(['2026-07-17T22:00:00+08:00', 810])
+    expect(result.bridgeData.at(-1)).toEqual([new Date('2026-07-17T22:46:00+08:00').toISOString(), 809])
     expect(result.realtimeData[0][1]).toBe(809)
   })
 
@@ -74,6 +72,18 @@ describe('buildLoadSeriesSegments', () => {
     expect(result.bridgeData).toEqual([])
   })
 
+  it('bridges recovered hourly data to realtime even across a stale interval', () => {
+    const result = buildLoadSeriesSegments([
+      history('2026-07-17T20:00:00+08:00', 880, 'RECOVERED_SIMULATION'),
+    ], [
+      realtime('2026-07-17T23:00:00+08:00', 740, 1),
+    ], true)
+
+    expect(result.bridgeData[0]).toEqual(['2026-07-17T20:00:00+08:00', 880])
+    expect(result.bridgeData.at(-1)).toEqual([new Date('2026-07-17T23:00:00+08:00').toISOString(), 740])
+    expect(result.bridgeData.length).toBeGreaterThan(2)
+  })
+
   it('shares a real boundary when realtime begins within two minutes', () => {
     const result = buildLoadSeriesSegments([
       history('2026-07-17T23:00:00+08:00', 724, 'RECOVERED_SIMULATION'),
@@ -83,6 +93,23 @@ describe('buildLoadSeriesSegments', () => {
 
     expect(result.bridgeData).toEqual([])
     expect(result.realtimeData[0]).toEqual(['2026-07-17T23:00:00+08:00', 724])
+  })
+
+  it('adds smooth bridge points instead of a chart-only realtime hour anchor', () => {
+    const result = buildLoadSeriesSegments([
+      history('2026-07-17T08:00:00+08:00', 880, 'RECOVERED_SIMULATION'),
+    ], [
+      realtime('2026-07-17T09:46:00+08:00', 740, 1),
+    ], true)
+
+    expect(result.realtimeData[0]).toEqual([
+      new Date('2026-07-17T09:46:00+08:00').toISOString(),
+      740,
+    ])
+    expect(result.bridgeData[0]).toEqual(['2026-07-17T08:00:00+08:00', 880])
+    expect(result.bridgeData.at(-1)).toEqual(result.realtimeData[0])
+    expect(result.bridgeData.length).toBeGreaterThan(2)
+    expect(result.bridgeData.some(([time]) => time === new Date('2026-07-17T09:00:00+08:00').toISOString())).toBe(true)
   })
 
   it('separates historical and recovered sources with a shared boundary', () => {
