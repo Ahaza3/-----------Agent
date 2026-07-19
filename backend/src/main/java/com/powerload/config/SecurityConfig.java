@@ -65,6 +65,7 @@ public class SecurityConfig {
                 .requestMatchers("/api/v1/alerts/*/ticket/**").authenticated()
                 // 管理操作
                 .requestMatchers("/api/v1/alert/rules/**").hasAnyRole("OPERATOR", "SYSTEM_ADMIN")
+                .requestMatchers("/api/v1/model/**").hasAnyRole("OPERATOR", "SYSTEM_ADMIN")
                 .requestMatchers(HttpMethod.GET, "/api/v1/system/health").authenticated()
                 .requestMatchers("/api/v1/system/**").hasRole("SYSTEM_ADMIN")
                 .requestMatchers("/api/v1/demo/**").hasAnyRole("DISPATCHER", "OPERATOR", "SYSTEM_ADMIN")

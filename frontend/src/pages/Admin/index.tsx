@@ -10,6 +10,7 @@ import {
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import api from '../../services/api'
+import { Popconfirm } from 'antd'
 import { fetchAlertRules } from '../../services/alertApi'
 import useAuthStore from '../../stores/useAuthStore'
 import { getAdminTabs } from '../../config/roles'
@@ -349,18 +350,41 @@ const RulesPanel = () => {
  * ══════════════════════════════════════════════ */
 const ModelPanel = () => {
   const [forecast, setForecast] = useState<any>(null)
+  const [versions, setVersions] = useState<any[]>([])
+  const [health, setHealth] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [triggering, setTriggering] = useState(false)
+  const [activating, setActivating] = useState<number | null>(null)
 
   const refresh = useCallback(async () => {
     setLoading(true)
-    try { setForecast(await api.get('/predict/forecast')); }
-    catch { /* Flask 可能未启动 */ }
-    finally { setLoading(false) }
+    const [forecastResp, versionsResp, healthResp] = await Promise.allSettled([
+      api.get('/predict/forecast'),
+      api.get('/model/versions'),
+      api.get('/system/health'),
+    ])
+    if (forecastResp.status === 'fulfilled') setForecast(forecastResp.value)
+    if (versionsResp.status === 'fulfilled') setVersions((versionsResp.value as unknown as any[]) || [])
+    if (healthResp.status === 'fulfilled') setHealth(healthResp.value)
+    setLoading(false)
   }, [])
   useEffect(() => { refresh() }, [refresh])
 
   if (loading) return <Skeleton active paragraph={{ rows: 4 }} />
+  const activeVersion = versions.find((item) => item.isActive === 1)
+
+  const activateVersion = async (id: number) => {
+    setActivating(id)
+    try {
+      await api.put(`/model/versions/${id}/activate`)
+      message.success('模型版本已切换')
+      await refresh()
+    } catch (e: any) {
+      message.error(e?.response?.data?.message || e.message || '模型版本切换失败')
+    } finally {
+      setActivating(null)
+    }
+  }
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
@@ -375,17 +399,48 @@ const ModelPanel = () => {
           }}>触发预测</Button>
         </Space>
       </div>
-      {forecast ? (
-        <Descriptions bordered size="small" column={2}
-          items={[
-            { label: '模型名称', children: forecast.model || 'N/A' },
-            { label: '预测起点', children: forecast.forecastStartTime ? dayjs(forecast.forecastStartTime).format('MM-DD HH:mm') : 'N/A' },
-            { label: '预测点数', children: forecast.predictions?.length || 0 },
-            { label: '预测范围', children: forecast.predictions ? `${Math.min(...forecast.predictions).toFixed(0)} - ${Math.max(...forecast.predictions).toFixed(0)} MW` : 'N/A' },
-          ]}
-          labelStyle={{ color: '#888', background: '#0c0c0c' }} contentStyle={{ color: '#ccc', background: '#0e0e0e' }}
-        />
-      ) : <Empty description="暂无预测数据，请确认 Flask 推理服务已启动" />}
+      <Descriptions bordered size="small" column={2}
+        items={[
+          { label: '当前版本', children: activeVersion ? `${activeVersion.modelName} ${activeVersion.version}` : '未登记' },
+          { label: '推理服务', children: <Tag color={health?.flask === 'UP' ? 'green' : 'red'}>{health?.flask === 'UP' ? '正常' : '异常'}</Tag> },
+          { label: '训练 MAPE', children: activeVersion?.mape != null ? `${Number(activeVersion.mape).toFixed(2)}%` : 'N/A' },
+          { label: '训练 RMSE', children: activeVersion?.rmse != null ? `${Number(activeVersion.rmse).toFixed(2)} MW` : 'N/A' },
+          { label: '预测起点', children: forecast?.forecastStartTime ? dayjs(forecast.forecastStartTime).format('MM-DD HH:mm') : 'N/A' },
+          { label: '预测点数', children: forecast?.predictions?.length || 0 },
+        ]}
+        labelStyle={{ color: '#888', background: '#0c0c0c' }} contentStyle={{ color: '#ccc', background: '#0e0e0e' }}
+      />
+      <Table
+        style={{ marginTop: 16 }}
+        dataSource={versions}
+        rowKey="id"
+        size="small"
+        pagination={false}
+        locale={{ emptyText: <Empty description="暂无模型版本记录" /> }}
+        columns={[
+          { title: '模型', dataIndex: 'modelName', key: 'modelName' },
+          { title: '版本', dataIndex: 'version', key: 'version' },
+          { title: '状态', dataIndex: 'isActive', key: 'isActive', render: (v: number) => <Tag color={v === 1 ? 'green' : 'default'}>{v === 1 ? '当前使用' : '历史版本'}</Tag> },
+          { title: 'MAPE', dataIndex: 'mape', key: 'mape', render: (v: number | null) => v == null ? 'N/A' : `${Number(v).toFixed(2)}%` },
+          { title: 'RMSE', dataIndex: 'rmse', key: 'rmse', render: (v: number | null) => v == null ? 'N/A' : `${Number(v).toFixed(2)} MW` },
+          { title: '训练时间', dataIndex: 'trainedAt', key: 'trainedAt', render: (v: string) => v ? dayjs(v).format('YYYY-MM-DD HH:mm') : 'N/A' },
+          {
+            title: '操作',
+            key: 'actions',
+            render: (_: any, row: any) => row.isActive === 1 ? <Tag color="green">已激活</Tag> : (
+              <Popconfirm
+                title="确认切换模型版本？"
+                description="切换后该版本将标记为当前使用版本。"
+                onConfirm={() => activateVersion(row.id)}
+                okText="确认"
+                cancelText="取消"
+              >
+                <Button size="small" icon={<RollbackOutlined />} loading={activating === row.id}>发布/回滚</Button>
+              </Popconfirm>
+            ),
+          },
+        ]}
+      />
     </div>
   )
 }
