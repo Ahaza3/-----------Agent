@@ -11,5 +11,6 @@ public class ConversationMessageResponse {
     private Long id;
     private String role;
     private String content;
+    private String chartOption;
     private LocalDateTime createdAt;
 }

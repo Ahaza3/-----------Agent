@@ -40,6 +40,9 @@ public class Conversation {
     /** 工具名称 (仅 role=tool 时) */
     private String toolName;
 
+    /** Assistant chart option JSON, used to restore charts in conversation history. */
+    private String chartOption;
+
     /** 创建时间 */
     private LocalDateTime createdAt;
 }

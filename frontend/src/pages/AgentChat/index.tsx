@@ -77,6 +77,16 @@ function createMessageId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 }
 
+function parseHistoryChart(item: { chart?: EChartsOption; chartOption?: string | null }): EChartsOption | undefined {
+  if (item.chart) return item.chart
+  if (!item.chartOption) return undefined
+  try {
+    return JSON.parse(item.chartOption) as EChartsOption
+  } catch {
+    return undefined
+  }
+}
+
 const AgentChat = () => {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState('')
@@ -168,6 +178,7 @@ const AgentChat = () => {
         id: `history-${item.id}`,
         role: item.role,
         content: item.content,
+        chart: parseHistoryChart(item),
         createdAt: item.createdAt,
       })))
       setThinking('')
