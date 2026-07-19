@@ -78,6 +78,7 @@ public class ModelVersionServiceImpl implements ModelVersionService {
 
         hasActive = registerArtifact(models.resolve("lstm_scripted.pt"), "LSTM", runtimeModel, hasActive);
         registerArtifact(models.resolve("prophet_model.pkl"), "Prophet", runtimeModel, hasActive);
+        removeMetriclessInactiveVersions();
         return listStoredVersions();
     }
 
@@ -108,6 +109,16 @@ public class ModelVersionServiceImpl implements ModelVersionService {
                         .orderByDesc(ModelVersion::getIsActive)
                         .orderByDesc(ModelVersion::getTrainedAt)
                         .orderByDesc(ModelVersion::getCreatedAt));
+    }
+
+    private void removeMetriclessInactiveVersions() {
+        modelVersionMapper.delete(
+                new LambdaQueryWrapper<ModelVersion>()
+                        .eq(ModelVersion::getIsActive, 0)
+                        .and(wrapper -> wrapper
+                                .isNull(ModelVersion::getMape)
+                                .or()
+                                .isNull(ModelVersion::getRmse)));
     }
 
     private boolean registerArtifact(Path artifact, String modelName, String runtimeModel, boolean hasActive) {

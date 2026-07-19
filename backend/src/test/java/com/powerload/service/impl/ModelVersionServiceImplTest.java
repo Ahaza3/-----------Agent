@@ -36,7 +36,18 @@ class ModelVersionServiceImplTest {
         when(mapper.selectList(any())).thenReturn(List.of(new ModelVersion()));
 
         assertEquals(1, service.listVersions().size());
+        verify(mapper).delete(any());
         verify(mapper).selectList(any());
+    }
+
+    @Test
+    void shouldCleanInactiveMetriclessVersionsWhenListing() {
+        when(mapper.selectCount(any())).thenReturn(1L);
+        when(mapper.selectList(any())).thenReturn(List.of());
+
+        service.listVersions();
+
+        verify(mapper).delete(any());
     }
 
     @Test
