@@ -372,6 +372,13 @@ const ModelPanel = () => {
 
   if (loading) return <Skeleton active paragraph={{ rows: 4 }} />
   const activeVersion = versions.find((item) => item.isActive === 1)
+  const runtimeModel = health?.flaskModel === 'torchscript'
+    ? 'LSTM (TorchScript)'
+    : health?.flaskModel === 'prophet'
+      ? 'Prophet'
+      : health?.flaskModel && health.flaskModel !== 'UNKNOWN'
+        ? health.flaskModel
+        : forecast?.model || ''
 
   const activateVersion = async (id: number) => {
     setActivating(id)
@@ -401,7 +408,7 @@ const ModelPanel = () => {
       </div>
       <Descriptions bordered size="small" column={2}
         items={[
-          { label: '当前版本', children: activeVersion ? `${activeVersion.modelName} ${activeVersion.version}` : '未登记' },
+          { label: '当前推理模型', children: runtimeModel || '未获取' },
           { label: '推理服务', children: <Tag color={health?.flask === 'UP' ? 'green' : 'red'}>{health?.flask === 'UP' ? '正常' : '异常'}</Tag> },
           { label: '训练 MAPE', children: activeVersion?.mape != null ? `${Number(activeVersion.mape).toFixed(2)}%` : 'N/A' },
           { label: '训练 RMSE', children: activeVersion?.rmse != null ? `${Number(activeVersion.rmse).toFixed(2)} MW` : 'N/A' },

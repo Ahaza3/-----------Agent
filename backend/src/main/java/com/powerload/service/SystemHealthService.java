@@ -50,8 +50,10 @@ public class SystemHealthService {
         // Redis (当前profile禁用时显示DISABLED)
         health.put("redis", redisHost.isBlank() ? "DISABLED" : "UNKNOWN");
 
-        // Flask/LSTM
-        health.put("flask", flaskService.isHealthy() ? "UP" : "DOWN");
+        // Flask 及当前实际加载的推理模型
+        Map<String, Object> flaskHealth = flaskService.getHealth();
+        health.put("flask", Boolean.TRUE.equals(flaskHealth.get("healthy")) ? "UP" : "DOWN");
+        health.put("flaskModel", flaskHealth.getOrDefault("model_type", "UNKNOWN"));
 
         // LLM
         health.put("llm", Map.of(
