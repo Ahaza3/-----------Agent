@@ -2,14 +2,18 @@ package com.powerload.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.powerload.alert.AlertJudgementService;
 import com.powerload.common.R;
+import com.powerload.dto.response.AlertJudgementResult;
 import com.powerload.entity.AlertAdvice;
 import com.powerload.entity.AlertEvent;
 import com.powerload.mapper.AlertAdviceMapper;
+import com.powerload.mapper.AlertEventMapper;
 import com.powerload.service.AlertEventService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
@@ -27,6 +31,8 @@ public class AlertEventController {
 
     private final AlertEventService alertEventService;
     private final AlertAdviceMapper alertAdviceMapper;
+    private final AlertEventMapper alertEventMapper;
+    private final AlertJudgementService alertJudgementService;
 
     /**
      * 查询某条告警的 AI 角色化建议
@@ -73,5 +79,24 @@ public class AlertEventController {
     public R<Void> markRead(@PathVariable Long id) {
         alertEventService.markRead(id);
         return R.ok();
+    }
+
+    /** 查询告警智能研判（GET — 已有则返回，无则生成一次） */
+    @GetMapping("/events/{id}/judgement")
+    public R<AlertJudgementResult> getJudgement(@PathVariable Long id) {
+        AlertJudgementResult existing = alertJudgementService.getExistingJudgement(id);
+        if (existing != null) return R.ok(existing);
+        AlertEvent event = alertEventMapper.selectById(id);
+        if (event == null) throw new IllegalArgumentException("告警不存在: " + id);
+        return R.ok(alertJudgementService.judge(event));
+    }
+
+    /** 手动重新研判（POST — 幂等，不重复建单） */
+    @PostMapping("/events/{id}/judgement")
+    @PreAuthorize("hasAnyRole('DISPATCHER','SYSTEM_ADMIN')")
+    public R<AlertJudgementResult> rejudge(@PathVariable Long id) {
+        AlertEvent event = alertEventMapper.selectById(id);
+        if (event == null) throw new IllegalArgumentException("告警不存在: " + id);
+        return R.ok(alertJudgementService.judge(event));
     }
 }

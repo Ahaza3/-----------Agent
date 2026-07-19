@@ -1,14 +1,18 @@
 package com.powerload.scheduler;
 
 import com.powerload.alert.AlertCreatedEvent;
+import com.powerload.alert.AlertJudgementService;
 import com.powerload.alert.AlertTemplate;
 import com.powerload.alert.ThresholdDetector;
+import com.powerload.dto.response.AlertJudgementResult;
 import com.powerload.dto.response.RealtimeLoadPoint;
 import com.powerload.entity.AlertEvent;
 import com.powerload.entity.AlertRule;
+import com.powerload.security.SysUserPrincipal;
 import com.powerload.service.AlertEventService;
 import com.powerload.service.AlertRuleService;
 import com.powerload.service.RealtimeLoadService;
+import com.powerload.service.TicketService;
 import com.powerload.websocket.PushService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -47,6 +51,8 @@ public class AlertScheduler {
     private final ThresholdDetector thresholdDetector;
     private final AlertTemplate alertTemplate;
     private final PushService pushService;
+    private final AlertJudgementService alertJudgementService;
+    private final TicketService ticketService;
     private final org.springframework.context.ApplicationEventPublisher eventPublisher;
 
     /** 当前仍处于告警状态的最高级别，恢复安全后清除。 */
@@ -102,6 +108,24 @@ public class AlertScheduler {
 
                 alertEventService.save(event);
                 pushService.pushAlert(event);
+
+                // 智能研判
+                try {
+                    AlertJudgementResult judgement = alertJudgementService.judge(event);
+                    // 红色告警自动建单
+                    if (Boolean.TRUE.equals(judgement.getAutoCreateTicket())) {
+                        SysUserPrincipal systemUser = new SysUserPrincipal(0L, "system", "SYSTEM_ADMIN");
+                        String summary = String.format(
+                            "【自动建单】%s告警 | 当前负荷 %.1f MW | 阈值 %.0f MW | %s",
+                            level, currentLoad, threshold, judgement.getDecisionReason()
+                        );
+                        ticketService.create(event.getId(), summary, systemUser);
+                        log.info("智能研判自动创建工单: alertId={}, level={}", event.getId(), level);
+                    }
+                } catch (Exception e) {
+                    log.warn("智能研判或自动建单失败: alertId={}", event.getId(), e);
+                }
+
                 eventPublisher.publishEvent(new AlertCreatedEvent(this, event));
                 activeLevels.put(rule.getId(), level);
                 lastTriggeredAt.put(coolingKey, now);
