@@ -1,6 +1,8 @@
 package com.powerload.alert;
 
 import com.powerload.dto.response.AlertJudgementResult;
+import com.powerload.agent.AgentMessage;
+import com.powerload.agent.LlmClient;
 import com.powerload.dto.response.ForecastResponse;
 import com.powerload.dto.response.RealtimeLoadPoint;
 import com.powerload.entity.AlertEvent;
@@ -28,6 +30,7 @@ class AlertJudgementServiceTest {
     @Mock private AlertTicketMapper alertTicketMapper;
     @Mock private RealtimeLoadService realtimeLoadService;
     @Mock private PredictService predictService;
+    @Mock private LlmClient llmClient;
     @InjectMocks private AlertJudgementService service;
 
     private AlertEvent makeAlert(String level, float load, float threshold) {
@@ -40,7 +43,7 @@ class AlertJudgementServiceTest {
     }
 
     @BeforeEach
-    void setUp() {
+    void setUp() throws Exception {
         lenient().when(realtimeLoadService.getRecent(anyInt())).thenReturn(List.of(
             makePoint(1000, 1000f), makePoint(2000, 1010f)
         ));
@@ -52,6 +55,11 @@ class AlertJudgementServiceTest {
         lenient().when(alertAdviceMapper.selectList(any())).thenReturn(List.of());
         lenient().when(alertAdviceMapper.selectOne(any())).thenReturn(null);
         lenient().doReturn(1).when(alertAdviceMapper).insert(any(com.powerload.entity.AlertAdvice.class));
+        lenient().when(llmClient.chat(anyList(), isNull())).thenReturn(AgentMessage.assistant("""
+                {"decisionReason":"LLM研判：红色告警已超过阈值，需要调度员确认后建单处置。",
+                "dispatcherAdvice":"请立即核实负荷趋势，确认后创建紧急工单并安排处置。",
+                "operatorAdvice":"请核查数据采集链路、阈值配置和实时推送状态。"}
+                """));
     }
 
     private RealtimeLoadPoint makePoint(long ts, float load) {
@@ -61,11 +69,12 @@ class AlertJudgementServiceTest {
     }
 
     @Test
-    void redAlertWithoutExistingTicketShouldAutoCreate() {
+    void redAlertWithoutExistingTicketShouldSuggestManualTicket() {
         AlertJudgementResult r = service.judge(makeAlert("RED", 1200f, 1100f));
         assertTrue(r.getShouldCreateTicket());
-        assertTrue(r.getAutoCreateTicket());
+        assertFalse(r.getAutoCreateTicket());
         assertEquals("URGENT", r.getRecommendedPriority());
+        assertEquals("LLM_AGENT", r.getSource());
     }
 
     @Test

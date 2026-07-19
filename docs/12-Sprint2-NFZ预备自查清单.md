@@ -1,4 +1,4 @@
-# 🚫 Sprint 2 禁飞区（NFZ）预备自查清单
+﻿# 🚫 Sprint 2 禁飞区（NFZ）预备自查清单
 
 > **目标读者**：技术经理（Dev）  
 > **用途**：Sprint 2 评审前逐模块熟悉 NFZ-1/2/3 代码边界，确保答辩时能逐行讲解  
@@ -312,3 +312,29 @@ NFZ-3 手写范围（必须能逐行讲解）
 > | 版本 | 日期 | 变更 |
 > |:-----|:-----|:-----|
 > | v1.0 | 2026-07-17 | 初版：NFZ-1/2/3 代码边界 + 逐层讲解提纲 + 常见追问 + 自查清单 |
+
+---
+
+## 八、实现同步补充（2026-07-19）
+
+### 8.1 固定模板与 LLM 研判的边界
+
+当前实现仍保持 NFZ-3 的核心结论：**告警触发文案不用 LLM**。`ThresholdDetector` 和 `AlertTemplate` 负责低延迟告警事件生成，满足 `< 5s` 告警链路目标。
+
+补充变化是：工单详情里的“AI 智能研判”属于告警后的辅助决策层，不参与告警触发延迟指标。该功能由 `AlertJudgementService` 调用 `LlmClient` 生成，如果 LLM 失败则使用规则降级。因此答辩时需要区分：
+
+- `alert_event.ai_analysis` / `suggestion`：固定模板，NFZ-3。
+- `AlertJudgementService.judge(...)`：详情页 LLM 研判，非 NFZ-3 核心。
+- `AlertJudgementService.judgeRuleBased(...)`：调度器中的快速规则研判，用于避免告警触发链路依赖 LLM。
+
+### 8.2 红色告警建单口径
+
+红色告警当前策略是“自动生成待确认工单草稿，不自动提交正式工单”：
+
+- `shouldCreateTicket = true`：系统建议调度员建单。
+- `autoCreateTicket = false`：系统不绕过调度员直接创建正式工单。
+- 前端弹窗预填工单摘要，调度员确认后才调用 `POST /api/v1/alerts/{alertId}/ticket`。
+
+### 8.3 Agent 图表恢复
+
+Agent 工具返回的第一个非空 `chart` 会随 assistant 消息保存到 `conversation.chart_option`。SSE 实时返回时发送 `chart` 事件；历史会话打开时通过 `chartOption` 解析恢复图表。

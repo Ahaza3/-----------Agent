@@ -15,19 +15,19 @@ describe('JudgementResult 数据结构', () => {
     hasExistingTicket: false,
     hasOpenSimilarTicket: false,
     shouldCreateTicket: true,
-    autoCreateTicket: true,
+    autoCreateTicket: false,
     recommendedPriority: 'URGENT',
     dispatcherAdvice: '建议立即创建工单处置',
-    operatorAdvice: '红色紧急告警已自动创建工单',
+    operatorAdvice: '红色紧急告警需要人工确认后建单',
     decisionReason: '红色告警，负荷 1200 MW 超过阈值 1100 MW',
-    source: 'RULE_BASED_AGENT',
+    source: 'LLM_AGENT',
     createdAt: '2026-07-18T14:30:00',
   }
 
-  it('RED 告警无已有工单时 shouldCreateTicket=true, autoCreateTicket=true', () => {
+  it('RED 告警无已有工单时 shouldCreateTicket=true, autoCreateTicket=false', () => {
     expect(sampleJudgement.level).toBe('RED')
     expect(sampleJudgement.shouldCreateTicket).toBe(true)
-    expect(sampleJudgement.autoCreateTicket).toBe(true)
+    expect(sampleJudgement.autoCreateTicket).toBe(false)
     expect(sampleJudgement.recommendedPriority).toBe('URGENT')
   })
 
@@ -36,8 +36,8 @@ describe('JudgementResult 数据结构', () => {
     expect(sampleJudgement.operatorAdvice).toBeTruthy()
   })
 
-  it('source 应为 RULE_BASED_AGENT', () => {
-    expect(sampleJudgement.source).toBe('RULE_BASED_AGENT')
+  it('source 应为 LLM_AGENT', () => {
+    expect(sampleJudgement.source).toBe('LLM_AGENT')
   })
 })
 

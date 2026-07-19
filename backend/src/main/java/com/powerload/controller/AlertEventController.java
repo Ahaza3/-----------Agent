@@ -85,7 +85,7 @@ public class AlertEventController {
     @GetMapping("/events/{id}/judgement")
     public R<AlertJudgementResult> getJudgement(@PathVariable Long id) {
         AlertJudgementResult existing = alertJudgementService.getExistingJudgement(id);
-        if (existing != null) return R.ok(existing);
+        if (existing != null && "LLM_AGENT".equals(existing.getSource())) return R.ok(existing);
         AlertEvent event = alertEventMapper.selectById(id);
         if (event == null) throw new IllegalArgumentException("告警不存在: " + id);
         return R.ok(alertJudgementService.judge(event));
