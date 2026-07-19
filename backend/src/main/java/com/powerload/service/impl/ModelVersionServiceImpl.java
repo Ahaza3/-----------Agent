@@ -152,6 +152,8 @@ public class ModelVersionServiceImpl implements ModelVersionService {
             ProcessBuilder pb = new ProcessBuilder(pythonCommand, script);
             pb.directory(workDir.toFile());
             pb.redirectErrorStream(true);
+            pb.environment().put("PYTHONIOENCODING", "utf-8");
+            pb.environment().put("PYTHONUTF8", "1");
             Process process = pb.start();
             try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
                 String line;
