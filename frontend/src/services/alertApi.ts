@@ -21,6 +21,10 @@ export function markAlertRead(id: number): Promise<void> {
   return api.put(`/alert/events/${id}/read`)
 }
 
+export function acknowledgeAlert(id: number): Promise<void> {
+  return api.put(`/alert/events/${id}/acknowledge`)
+}
+
 export function fetchLatestAlerts(): Promise<AlertEvent[]> {
   return fetchAlertEvents({ page: 1, size: 5, unreadOnly: true }).then((r) => r.records)
 }

@@ -42,7 +42,7 @@ public class FlaskInferenceService {
      * @return 24 个预测值 (MW)
      */
     @SuppressWarnings("unchecked")
-    public List<Double> forecast(List<Map<String, Object>> rawData) {
+    public ForecastResult forecast(List<Map<String, Object>> rawData) {
         try {
             Map<String, Object> body = Map.of("data", rawData);
             String json = objectMapper.writeValueAsString(body);
@@ -60,12 +60,18 @@ public class FlaskInferenceService {
                 }
 
                 Map<String, Object> result = objectMapper.readValue(responseBody, Map.class);
-                return (List<Double>) result.get("predictions");
+                List<Double> predictions = (List<Double>) result.get("predictions");
+                Object modelValue = result.get("model");
+                String model = modelValue == null ? "" : modelValue.toString();
+                return new ForecastResult(predictions, model);
             }
         } catch (IOException e) {
             log.error("调用 Flask 推理服务异常", e);
             throw new RuntimeException("Flask 推理服务不可用: " + e.getMessage(), e);
         }
+    }
+
+    public record ForecastResult(List<Double> predictions, String model) {
     }
 
     /**

@@ -1,8 +1,10 @@
 package com.powerload.service.impl;
 
 import com.powerload.entity.LoadData;
+import com.powerload.entity.ModelVersion;
 import com.powerload.entity.PredictionResult;
 import com.powerload.mapper.LoadDataMapper;
+import com.powerload.mapper.ModelVersionMapper;
 import com.powerload.mapper.PredictionResultMapper;
 import com.powerload.ml.FlaskInferenceService;
 import org.junit.jupiter.api.BeforeEach;
@@ -19,6 +21,7 @@ class PredictServiceImplTest {
 
     private LoadDataMapper loadDataMapper;
     private PredictionResultMapper predictionResultMapper;
+    private ModelVersionMapper modelVersionMapper;
     private FlaskInferenceService flaskInferenceService;
     private PredictServiceImpl predictService;
 
@@ -26,8 +29,10 @@ class PredictServiceImplTest {
     void setUp() {
         loadDataMapper = mock(LoadDataMapper.class);
         predictionResultMapper = mock(PredictionResultMapper.class);
+        modelVersionMapper = mock(ModelVersionMapper.class);
         flaskInferenceService = mock(FlaskInferenceService.class);
-        predictService = new PredictServiceImpl(loadDataMapper, predictionResultMapper, flaskInferenceService);
+        when(modelVersionMapper.selectList(any())).thenReturn(List.of());
+        predictService = new PredictServiceImpl(loadDataMapper, predictionResultMapper, flaskInferenceService, modelVersionMapper);
     }
 
     @Test
@@ -54,13 +59,14 @@ class PredictServiceImplTest {
         when(loadDataMapper.selectList(any())).thenReturn(mixed.subList(0, 170));
 
         var predictions = genPredictions();
-        when(flaskInferenceService.forecast(any())).thenReturn(predictions);
+        when(flaskInferenceService.forecast(any()))
+                .thenReturn(new FlaskInferenceService.ForecastResult(predictions, "torchscript"));
         when(predictionResultMapper.insert(any(PredictionResult.class))).thenReturn(1);
 
         var result = predictService.forecast();
         assertNotNull(result);
         assertEquals(24, result.getPredictions().size());
-        assertEquals("LSTM", result.getModel());
+        assertEquals("torchscript", result.getModel());
         assertNotNull(result.getForecastStartTime());
         verify(predictionResultMapper, times(24)).insert(any(PredictionResult.class));
     }
@@ -72,7 +78,13 @@ class PredictServiceImplTest {
             raw.add(hourlyRecord(LocalDateTime.of(2026, 7, 8, 0, 0).plusHours(i), 800f + (i % 24)));
         }
         when(loadDataMapper.selectList(any())).thenReturn(raw);
-        when(flaskInferenceService.forecast(any())).thenReturn(genPredictions());
+        when(flaskInferenceService.forecast(any()))
+                .thenReturn(new FlaskInferenceService.ForecastResult(genPredictions(), "torchscript"));
+        ModelVersion runtimeVersion = new ModelVersion();
+        runtimeVersion.setId(7L);
+        runtimeVersion.setModelName("LSTM");
+        runtimeVersion.setIsActive(1);
+        when(modelVersionMapper.selectList(any())).thenReturn(List.of(runtimeVersion));
 
         var captured = new ArrayList<PredictionResult>();
         doAnswer(inv -> {
@@ -83,6 +95,7 @@ class PredictServiceImplTest {
         predictService.forecast();
 
         assertEquals(24, captured.size());
+        assertEquals(7L, captured.get(0).getModelVersionId());
         LocalDateTime firstCreatedAt = captured.get(0).getCreatedAt();
         for (PredictionResult pr : captured) {
             assertEquals(firstCreatedAt, pr.getCreatedAt());

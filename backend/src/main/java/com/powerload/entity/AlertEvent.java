@@ -52,5 +52,13 @@ public class AlertEvent {
     private LocalDateTime resolvedAt;
 
     /** 创建时间 */
+    private String status;
+
+    private LocalDateTime acknowledgedAt;
+
+    private Long acknowledgedBy;
+
+    private String acknowledgedByName;
+
     private LocalDateTime createdAt;
 }

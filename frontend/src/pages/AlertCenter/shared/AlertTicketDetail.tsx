@@ -15,6 +15,7 @@ import TicketTimeline from './TicketTimeline'
 import TicketActionBar from './TicketActionBar'
 import type { TimelineEntry } from './TicketTimeline'
 import api from '../../../services/api'
+import { acknowledgeAlert } from '../../../services/alertApi'
 
 const STATUS: Record<string, { label: string; color: string }> = {
   PENDING: { label: '待处理', color: 'default' },
@@ -37,6 +38,9 @@ interface AlertInfo {
   currentValue: number
   thresholdValue: number
   triggerTime: string
+  status?: 'ACTIVE' | 'ACKNOWLEDGED' | 'RECOVERED'
+  acknowledgedAt?: string | null
+  acknowledgedByName?: string | null
   aiAnalysis?: string
   suggestion?: string
 }
@@ -112,6 +116,7 @@ interface Props {
   alert: AlertInfo
   ticket: Ticket | null
   onTicketUpdated: (ticket: Ticket) => void
+  onAlertAcknowledged?: (alert: { id: number; status: 'ACKNOWLEDGED'; acknowledgedAt: string; acknowledgedByName?: string | null }) => void
   onAssign: () => void
   onResolve: () => void
   /** 是否全屏（移动端） */
@@ -121,6 +126,7 @@ interface Props {
 const AlertTicketDetail = ({
   open, onClose, role, userId, alert, ticket: initialTicket,
   onTicketUpdated, onAssign, onResolve, fullscreen,
+  onAlertAcknowledged,
 }: Props) => {
   const [ticket, setTicket] = useState<Ticket | null>(initialTicket)
   const [actions, setActions] = useState<TimelineEntry[]>([])
@@ -174,6 +180,26 @@ const AlertTicketDetail = ({
     try { setJudgement(await ticketApi.rejudge(alert.id)); message.success('研判已更新') }
     catch { message.error('重新研判失败') }
     finally { setJudgementLoading(false) }
+  }
+
+  const handleAcknowledge = async () => {
+    if (!alert.id) return
+    setLoading(true)
+    try {
+      await acknowledgeAlert(alert.id)
+      const updated = {
+        id: alert.id,
+        status: 'ACKNOWLEDGED' as const,
+        acknowledgedAt: new Date().toISOString(),
+        acknowledgedByName: null,
+      }
+      onAlertAcknowledged?.(updated)
+      message.success('告警已确认')
+    } catch (e: any) {
+      message.error(e?.response?.data?.message || e.message || '告警确认失败')
+    } finally {
+      setLoading(false)
+    }
   }
 
   const st = ticket ? STATUS[ticket.status] || { label: ticket.status, color: 'default' } : null
@@ -271,8 +297,15 @@ const AlertTicketDetail = ({
             { label: ticket?.sourceType === 'PREWARNING' ? '预测负荷' : '当前负荷', children: `${alert.currentValue?.toFixed(1)} MW` },
             { label: '阈值', children: `${alert.thresholdValue?.toFixed(0)} MW` },
             { label: ticket?.sourceType === 'PREWARNING' ? '预测时间' : '触发时间', children: alert.triggerTime ? dayjs(alert.triggerTime).format('MM-DD HH:mm:ss') : '-' },
+            { label: '告警状态', children: alert.status === 'RECOVERED' ? <Tag>已恢复</Tag> : alert.status === 'ACKNOWLEDGED' ? <Tag color="blue">已确认</Tag> : <Tag color="red">待确认</Tag> },
+            ...(alert.acknowledgedAt ? [{ label: '确认信息', children: `${alert.acknowledgedByName || '调度员'} · ${dayjs(alert.acknowledgedAt).format('MM-DD HH:mm:ss')}` }] : []),
           ]}
         />
+        {role === 'DISPATCHER' && alert.status !== 'ACKNOWLEDGED' && alert.status !== 'RECOVERED' && (
+          <Button type="primary" size="small" loading={loading} onClick={handleAcknowledge} style={{ marginBottom: 12 }}>
+            确认告警
+          </Button>
+        )}
 
         {/* AI 建议 — 过滤掉 JUDGEMENT 类型（由研判区域单独展示） */}
         {advices.filter((a: any) => a.audienceRole !== 'JUDGEMENT').length > 0 && (
