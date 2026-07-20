@@ -171,7 +171,7 @@ const DispatcherAlertWorkspace = () => {
       try {
         const judgement = await fetchJudgement(alertId)
         if (draftAlertIdRef.current === alertId) {
-          setSummary(buildTicketSummary(alert, judgement))
+          setSummary(buildTicketSummary(alert, judgement ?? undefined))
         }
       } catch {
         // 保留基于告警事件的草稿，LLM 研判失败不阻塞调度员确认建单。

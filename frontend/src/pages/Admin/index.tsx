@@ -9,6 +9,8 @@ import {
   PlusOutlined, KeyOutlined, EditOutlined, AlertOutlined, RobotOutlined, FileTextOutlined,
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
+import type { EChartsOption } from 'echarts'
+import ReactECharts from 'echarts-for-react'
 import api from '../../services/api'
 import { Popconfirm } from 'antd'
 import { fetchAlertRules } from '../../services/alertApi'
@@ -239,7 +241,7 @@ const HealthPanel = () => {
     { label: '启动时长', children: `${Math.floor(health.uptimeSeconds / 3600)}h ${Math.floor(health.uptimeSeconds % 3600 / 60)}m` },
     { label: 'MySQL', children: <Tag color={health.mysql === 'UP' ? 'green' : 'red'}>{health.mysql}</Tag> },
     { label: 'Redis', children: <Tag>{health.redis || 'N/A'}</Tag> },
-    { label: 'Flask/LSTM', children: <Tag color={health.flask === 'UP' ? 'green' : 'red'}>{health.flask}</Tag> },
+    { label: 'Flask 推理服务', children: <Tag color={health.flask === 'UP' ? 'green' : 'red'}>{health.flask}</Tag> },
     { label: 'LLM', children: health.llm ? <Tag color={health.llm.configured ? 'green' : 'default'}>{health.llm.configured ? '已配置' : '未配置'}</Tag> : 'N/A' },
     { label: 'LLM 模型', children: health.llm?.model || 'N/A' },
     { label: '最近预测', children: health.lastPrediction && health.lastPrediction !== 'NONE' ? dayjs(health.lastPrediction).format('MM-DD HH:mm:ss') : 'N/A' },
@@ -394,21 +396,27 @@ const ModelPanel = () => {
   const [trainingStatus, setTrainingStatus] = useState<any>(null)
   const [trainingHistory, setTrainingHistory] = useState<any[]>([])
   const [activationNotice, setActivationNotice] = useState<string | null>(null)
+  const [quality, setQuality] = useState<any>(null)
+  const [review, setReview] = useState<any>(null)
 
   const refresh = useCallback(async (showLoading = true) => {
     if (showLoading) setLoading(true)
-    const [forecastResp, versionsResp, healthResp, retrainResp, historyResp] = await Promise.allSettled([
+    const [forecastResp, versionsResp, healthResp, retrainResp, historyResp, qualityResp, reviewResp] = await Promise.allSettled([
       api.get('/predict/forecast'),
       api.get('/model/versions'),
       api.get('/system/health'),
       api.get('/model/retrain/status'),
       api.get('/model/retrain/history'),
+      api.get('/predict/quality'),
+      api.get('/predict/review'),
     ])
     if (forecastResp.status === 'fulfilled') setForecast(forecastResp.value)
     if (versionsResp.status === 'fulfilled') setVersions((versionsResp.value as unknown as any[]) || [])
     if (healthResp.status === 'fulfilled') setHealth(healthResp.value)
     if (retrainResp.status === 'fulfilled') setTrainingStatus(retrainResp.value)
     if (historyResp.status === 'fulfilled') setTrainingHistory((historyResp.value as unknown as any[]) || [])
+    if (qualityResp.status === 'fulfilled') setQuality(qualityResp.value)
+    if (reviewResp.status === 'fulfilled') setReview(reviewResp.value)
     if (showLoading) setLoading(false)
   }, [])
   useEffect(() => { refresh() }, [refresh])
@@ -426,7 +434,6 @@ const ModelPanel = () => {
     return () => window.clearInterval(timer)
   }, [refresh, trainingStatus?.status])
 
-  if (loading) return <Skeleton active paragraph={{ rows: 4 }} />
   const activeVersion = versions.find((item) => item.isActive === 1)
   const runtimeModel = health?.flaskModel === 'torchscript'
     ? 'LSTM (TorchScript)'
@@ -441,6 +448,33 @@ const ModelPanel = () => {
       ? 'Prophet'
       : ''
   const runtimeTypeMismatch = Boolean(activeVersion && runtimeModelType && String(activeVersion.modelName).toUpperCase() !== runtimeModelType.toUpperCase())
+  const runtimeEffectStatus = !activeVersion
+    ? { color: 'default', label: '未发布' }
+    : health?.flask !== 'UP'
+      ? { color: 'red', label: '推理服务异常' }
+      : (activationNotice || runtimeTypeMismatch)
+        ? { color: 'gold', label: '待重启' }
+        : { color: 'green', label: '已生效' }
+  const reviewChartOption = useMemo<EChartsOption>(() => {
+    const points = Array.isArray(review?.series) ? review.series : []
+    const times = points.map((point: any) => dayjs(point.time).format('MM-DD HH:mm'))
+    return {
+      animation: false,
+      grid: { top: 20, left: 52, right: 20, bottom: 42 },
+      tooltip: { trigger: 'axis' },
+      legend: { data: ['实际', '预测', '参考下界', '参考上界'], textStyle: { color: '#7D8A97', fontSize: 11 }, bottom: 0 },
+      xAxis: { type: 'category', data: times, axisLabel: { color: '#7D8A97', hideOverlap: true } },
+      yAxis: { type: 'value', name: 'MW', axisLabel: { color: '#7D8A97' }, splitLine: { lineStyle: { color: '#1C2935' } } },
+      series: [
+        { name: '实际', type: 'line', data: points.map((point: any) => point.actual), smooth: true, symbol: 'none', lineStyle: { color: WHITE, width: 1.5 } },
+        { name: '预测', type: 'line', data: points.map((point: any) => point.predicted), smooth: true, symbol: 'none', lineStyle: { color: '#D7A447', width: 1.5 } },
+        { name: '参考下界', type: 'line', data: points.map((point: any) => point.lowerBound), smooth: true, symbol: 'none', lineStyle: { color: '#8B98A6', width: 1, type: 'dotted' } },
+        { name: '参考上界', type: 'line', data: points.map((point: any) => point.upperBound), smooth: true, symbol: 'none', lineStyle: { color: '#8B98A6', width: 1, type: 'dotted' } },
+      ],
+    }
+  }, [review])
+
+  if (loading) return <Skeleton active paragraph={{ rows: 4 }} />
 
   const activateVersion = async (id: number) => {
     setActivating(id)
@@ -519,15 +553,40 @@ const ModelPanel = () => {
         items={[
           { label: '数据库发布版本', children: activeVersion ? `${activeVersion.modelName} ${activeVersion.version}` : '未发布' },
           { label: 'Flask 实际推理模型', children: runtimeModel || '未获取' },
+          { label: '模型生效状态', children: <Tag color={runtimeEffectStatus.color}>{runtimeEffectStatus.label}</Tag> },
           { label: '推理服务', children: <Tag color={health?.flask === 'UP' ? 'green' : 'red'}>{health?.flask === 'UP' ? '正常' : '异常'}</Tag> },
           { label: '训练 MAPE', children: activeVersion?.mape != null ? `${Number(activeVersion.mape).toFixed(2)}%` : 'N/A' },
           { label: '训练 RMSE', children: activeVersion?.rmse != null ? `${Number(activeVersion.rmse).toFixed(2)} MW` : 'N/A' },
           { label: '预测起点', children: forecast?.forecastStartTime ? dayjs(forecast.forecastStartTime).format('MM-DD HH:mm') : 'N/A' },
           { label: '预测点数', children: forecast?.predictions?.length || 0 },
+          { label: '未来天气', children: forecast?.futureWeatherApplied ? (forecast.futureWeatherFallback ? '模型已使用（部分回退）' : `模型已使用（${forecast.weatherSource || '未知来源'}）`) : forecast?.futureWeatherAvailable ? '已缓存，但当前模型未实际使用' : '暂无缓存' },
           { label: '训练任务', children: <Tag color={trainingStatus?.status === 'RUNNING' ? 'processing' : trainingStatus?.status === 'FAILED' ? 'red' : trainingStatus?.status === 'SUCCESS' ? 'green' : 'default'}>{trainingStatus?.message || '暂无训练任务'}</Tag> },
         ]}
         labelStyle={{ color: '#888', background: '#0c0c0c' }} contentStyle={{ color: '#ccc', background: '#0e0e0e' }}
       />
+      <Descriptions bordered size="small" column={3} style={{ marginTop: 16 }}
+        items={[
+          { label: '数据质量', children: <Tag color={quality?.status === 'NORMAL' ? 'green' : quality?.status === 'DELAYED' ? 'red' : 'gold'}>{quality?.status || 'N/A'}</Tag> },
+          { label: '最新数据', children: quality?.latestDataTime ? dayjs(quality.latestDataTime).format('MM-DD HH:mm') : 'N/A' },
+          { label: '数据延迟', children: quality?.dataDelayMinutes != null ? `${quality.dataDelayMinutes} 分钟` : 'N/A' },
+          { label: '连续性', children: quality?.continuityRate != null ? `${quality.continuityRate}%` : 'N/A' },
+          { label: '缺失点', children: quality?.missingPoints ?? 'N/A' },
+          { label: '天气缺失', children: quality?.weatherMissingPoints ?? 'N/A' },
+          { label: '天气特征', children: forecast?.futureWeatherApplied ? '历史天气 + 未来预报' : '历史天气辅助' },
+          { label: '线上 MAPE', children: review?.mape != null ? `${review.mape.toFixed(2)}%` : 'N/A' },
+          { label: '线上 RMSE', children: review?.rmse != null ? `${review.rmse.toFixed(2)} MW` : 'N/A' },
+          { label: '峰值误差', children: review?.peakErrorMw != null ? `${review.peakErrorMw.toFixed(2)} MW` : 'N/A' },
+        ]}
+        labelStyle={{ color: '#888', background: '#0c0c0c' }}
+        contentStyle={{ color: '#ccc', background: '#0e0e0e' }}
+      />
+      <div style={{ color: '#888', fontSize: 11, marginTop: 8 }}>
+        线上复盘覆盖 {review?.evaluatedPoints ?? 0} 个已回填实际值的预测点；
+        预测区间来源：{forecast?.intervalSource === 'VALIDATION_RMSE_REFERENCE' ? '验证集 RMSE 参考区间' : '暂无区间数据'}。
+      </div>
+      {review?.series?.length > 0 && (
+        <ReactECharts option={reviewChartOption} notMerge style={{ height: 250, marginTop: 8 }} />
+      )}
       <Table
         style={{ marginTop: 16 }}
         dataSource={versions}

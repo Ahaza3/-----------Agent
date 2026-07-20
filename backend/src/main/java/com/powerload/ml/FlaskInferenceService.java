@@ -7,6 +7,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -43,8 +44,19 @@ public class FlaskInferenceService {
      */
     @SuppressWarnings("unchecked")
     public ForecastResult forecast(List<Map<String, Object>> rawData) {
+        return forecast(rawData, List.of());
+    }
+
+    @SuppressWarnings("unchecked")
+    public ForecastResult forecast(
+            List<Map<String, Object>> rawData,
+            List<Map<String, Object>> futureWeather) {
         try {
-            Map<String, Object> body = Map.of("data", rawData);
+            Map<String, Object> body = new LinkedHashMap<>();
+            body.put("data", rawData);
+            if (futureWeather != null && !futureWeather.isEmpty()) {
+                body.put("future_weather", futureWeather);
+            }
             String json = objectMapper.writeValueAsString(body);
 
             Request request = new Request.Builder()
@@ -63,7 +75,9 @@ public class FlaskInferenceService {
                 List<Double> predictions = (List<Double>) result.get("predictions");
                 Object modelValue = result.get("model");
                 String model = modelValue == null ? "" : modelValue.toString();
-                return new ForecastResult(predictions, model);
+                boolean futureWeatherApplied = Boolean.TRUE.equals(result.get("future_weather_applied"));
+                boolean futureWeatherFallback = Boolean.TRUE.equals(result.get("future_weather_fallback"));
+                return new ForecastResult(predictions, model, futureWeatherApplied, futureWeatherFallback);
             }
         } catch (IOException e) {
             log.error("调用 Flask 推理服务异常", e);
@@ -71,7 +85,14 @@ public class FlaskInferenceService {
         }
     }
 
-    public record ForecastResult(List<Double> predictions, String model) {
+    public record ForecastResult(
+            List<Double> predictions,
+            String model,
+            boolean futureWeatherApplied,
+            boolean futureWeatherFallback) {
+        public ForecastResult(List<Double> predictions, String model) {
+            this(predictions, model, false, false);
+        }
     }
 
     /**

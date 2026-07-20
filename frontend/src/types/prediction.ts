@@ -9,6 +9,14 @@ export interface ForecastResponse {
   model: string
   /** 预测基准时间 — 第一个预测值对应的时间（ISO 8601，Asia/Shanghai） */
   forecastStartTime: string | null
+  lowerBounds?: number[] | null
+  upperBounds?: number[] | null
+  intervalSource?: string | null
+  modelVersionId?: number | null
+  futureWeatherAvailable?: boolean
+  weatherSource?: string | null
+  futureWeatherApplied?: boolean
+  futureWeatherFallback?: boolean
 }
 
 /**

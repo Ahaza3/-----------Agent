@@ -321,7 +321,7 @@ public class AlertJudgementService {
                 请基于以下规则研判结果，生成面向用户的 AI 智能研判文案。
                 必须遵守：
                 - 不要改变 shouldCreateTicket、autoCreateTicket、recommendedPriority 等系统决策字段。
-                - 红色告警只能建议调度员立即确认并建单，不要声称系统已经自动建单。
+                - 红色告警只能建议调度员立即确认待确认工单草稿，不要声称系统已经提交正式工单。
                 - 不要编造未提供的设备故障、线路跳闸、人工处置结果。
                 - 返回 JSON：{\"decisionReason\":\"...\",\"dispatcherAdvice\":\"...\",\"operatorAdvice\":\"...\"}
 
@@ -364,7 +364,7 @@ public class AlertJudgementService {
         if ("RISING".equals(trend)) sb.append("当前负荷处于上升趋势，需密切关注。");
         if ("FALLING".equals(trend)) sb.append("当前负荷正在回落，但仍需监控。");
         if (peak > 0) sb.append("预测峰值约").append(String.format("%.0f", peak)).append(" MW。");
-        if (auto) sb.append("系统已自动创建紧急工单，请立即指派运维人员处置。");
+        if (auto) sb.append("系统已生成待确认工单草稿，请调度员核对后提交正式工单。");
         else if (should) sb.append("建议创建工单跟踪处理。");
         else sb.append("暂不建议建单，建议持续观察负荷变化。");
         sb.append("（规则型 Agent 自动研判，仅供人工决策参考）");
@@ -375,7 +375,7 @@ public class AlertJudgementService {
                                         boolean should, boolean auto, String trend) {
         StringBuilder sb = new StringBuilder();
         if (auto) {
-            sb.append("红色紧急告警已自动创建工单，请立即核查数据源和告警规则配置。");
+            sb.append("红色紧急告警已生成待确认工单草稿，请立即核查数据源和告警规则配置。");
         } else if (should) {
             sb.append("橙色/黄色告警，建议关注负荷趋势，");
             if ("RISING".equals(trend)) sb.append("如持续上升需准备升级响应。");

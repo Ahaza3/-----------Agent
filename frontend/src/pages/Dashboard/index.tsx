@@ -5,7 +5,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { DatePicker, Segmented, Tag, message, Button, Modal, Input } from 'antd'
 import {
   ThunderboltOutlined, ZoomInOutlined, DownloadOutlined,
-  AlertOutlined, RobotOutlined, FileTextOutlined,
+  AlertOutlined, RobotOutlined, FileTextOutlined, BellOutlined,
 } from '@ant-design/icons'
 import dayjs, { type Dayjs } from 'dayjs'
 import type { EChartsOption } from 'echarts'
@@ -24,6 +24,11 @@ import type { AlertEvent } from '../../types/alert'
 import AlertTicketDetail from '../AlertCenter/shared/AlertTicketDetail'
 import type { Ticket } from '../../services/ticketApi'
 import { buildLoadSeriesSegments } from './loadSeries'
+import {
+  enableBrowserNotifications,
+  getBrowserNotificationState,
+  type BrowserNotificationState,
+} from '../../utils/browserNotification'
 
 const { RangePicker } = DatePicker
 type QuickRange = '24h' | '7d' | '30d'
@@ -92,6 +97,7 @@ const Dashboard = () => {
   const [prewarningOpen, setPrewarningOpen] = useState(false)
   const [prewarningSummary, setPrewarningSummary] = useState('')
   const [creatingPrewarning, setCreatingPrewarning] = useState(false)
+  const [notificationState, setNotificationState] = useState<BrowserNotificationState>(getBrowserNotificationState)
   const chartRef = useRef<ReactECharts>(null)
   const connectedRef = useRef(true)
 
@@ -106,6 +112,13 @@ const Dashboard = () => {
   const rangeEnd = customRange ? customRange[1] : quickToRange(quickRange)[1]
   const isLive = isRangeCoveringNow(rangeEnd)
   const hourlyLoadData = useMemo(() => loadData.filter((p) => isHourlyHistoryPoint(p.time)), [loadData])
+  const handleEnableNotifications = useCallback(async () => {
+    const state = await enableBrowserNotifications()
+    setNotificationState(state)
+    if (state === 'granted') message.success('浏览器告警通知已开启')
+    else if (state === 'denied') message.warning('浏览器通知权限被拒绝，请在浏览器设置中重新允许')
+    else if (state === 'unsupported') message.warning('当前浏览器不支持通知')
+  }, [])
 
   // -- 实时快照 --
   useEffect(() => {
@@ -349,14 +362,32 @@ const Dashboard = () => {
     const recent = hourlyLoadData.length > ctxLen ? hourlyLoadData.slice(-ctxLen) : hourlyLoadData
     const startTime = forecast.forecastStartTime ? dayjs(forecast.forecastStartTime) : dayjs().startOf('hour')
     const forecastData: [string, number][] = forecast.predictions.map((v, i) => [startTime.add(i, 'hour').toISOString(), v])
+    const intervalSeries = forecast.lowerBounds?.length === forecast.predictions.length
+      && forecast.upperBounds?.length === forecast.predictions.length
+      ? [
+        {
+          id: 'fc-lower', name: '参考下界', type: 'line' as const,
+          data: forecast.lowerBounds.map((v, i) => [startTime.add(i, 'hour').toISOString(), v]),
+          smooth: true, symbol: 'none' as const,
+          lineStyle: { color: '#8B98A6', width: 1, type: 'dotted' as const },
+        },
+        {
+          id: 'fc-upper', name: '参考上界', type: 'line' as const,
+          data: forecast.upperBounds.map((v, i) => [startTime.add(i, 'hour').toISOString(), v]),
+          smooth: true, symbol: 'none' as const,
+          lineStyle: { color: '#8B98A6', width: 1, type: 'dotted' as const },
+        },
+      ]
+      : []
     return {
       animation: false,
       grid: { top: 28, left: 56, right: 32, bottom: 80 },
       xAxis: { type: 'time', axisLine: { lineStyle: { color: '#253341' } }, axisLabel: { color: '#7D8A97', formatter: (v: number) => dayjs(v).format('MM-DD HH:mm') } },
       yAxis: { type: 'value', name: 'MW', splitLine: { lineStyle: { color: '#1C2935' } }, axisLabel: { color: '#7D8A97' }, nameTextStyle: { color: '#7D8A97' } },
-      legend: { data: ['实际', '预测'], textStyle: { color: '#7D8A97', fontSize: 11 }, bottom: 0 },
+      legend: { data: ['实际', '预测', '参考下界', '参考上界'], textStyle: { color: '#7D8A97', fontSize: 11 }, bottom: 0 },
       dataZoom: [{ type: 'inside', minSpan: 5 }, { type: 'slider', height: 18, bottom: 24, borderColor: '#253341', backgroundColor: '#0E1620', fillerColor: 'rgba(215, 164, 71, 0.16)', handleStyle: { color: YELLOW }, textStyle: { color: '#7D8A97' } }],
       series: [
+        ...intervalSeries,
         ...(recent.length > 0 ? [{ id: 'fc-actual', name: '实际', type: 'line' as const, data: recent.map((d) => [d.time, d.loadMw]), smooth: true, symbol: 'none' as const, lineStyle: { color: WHITE, width: 1 } }] : []),
         { id: 'fc-pred', name: '预测', type: 'line', data: forecastData, smooth: true, symbol: 'none', lineStyle: { color: YELLOW, width: 1.5, type: 'dashed' }, markLine: { silent: true, symbol: 'none', lineStyle: { color: YELLOW, type: 'dashed', width: 1 }, data: [{ xAxis: startTime.toISOString() }], label: { formatter: '预测起点', color: YELLOW, fontSize: 11 } } },
       ],
@@ -459,6 +490,14 @@ const Dashboard = () => {
           <p>实时负荷、告警阈值与未来 24 小时预测</p>
         </div>
         <div className="dashboard-toolbar__filters">
+          <Button
+            size="small"
+            icon={<BellOutlined />}
+            disabled={notificationState === 'unsupported'}
+            onClick={handleEnableNotifications}
+          >
+            {notificationState === 'granted' ? '浏览器通知已开启' : '开启浏览器通知'}
+          </Button>
           <Tag color="default">演示数据</Tag>
           <Segmented value={quickRange} onChange={(v) => { setQuickRange(v as QuickRange); setCustomRange(null) }}
             options={[{ label: '近24小时', value: '24h' }, { label: '近7天', value: '7d' }, { label: '近30天', value: '30d' }]} />

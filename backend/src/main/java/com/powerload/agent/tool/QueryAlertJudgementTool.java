@@ -31,7 +31,7 @@ public class QueryAlertJudgementTool implements Tool {
     @Override
     public String description() {
         return "查询最近一条告警的智能研判结果，或按 alertId 查询指定告警的研判。" +
-               "返回：是否建议建单、是否已自动建单、推荐优先级、调度员建议、运维建议、研判原因。" +
+               "返回：是否建议提交待确认工单草稿、推荐优先级、调度员建议、运维建议、研判原因。" +
                "调度员询问'这个告警要不要建单/怎么处理/是否需要升级'时必须调用此工具。";
     }
 
@@ -78,7 +78,7 @@ public class QueryAlertJudgementTool implements Tool {
                 sb.append("预测峰值：").append(String.format("%.0f MW", j.getForecastPeakLoad())).append("\n");
             }
             sb.append("是否建议建单：").append(Boolean.TRUE.equals(j.getShouldCreateTicket()) ? "是" : "否").append("\n");
-            sb.append("是否已自动建单：").append(Boolean.TRUE.equals(j.getAutoCreateTicket()) ? "是（系统已自动创建）" : "否").append("\n");
+            sb.append("待确认工单草稿：").append(Boolean.TRUE.equals(j.getShouldCreateTicket()) ? "建议提交" : "暂不建议提交").append("\n");
             sb.append("推荐优先级：").append(j.getRecommendedPriority()).append("\n\n");
             sb.append("研判原因：").append(j.getDecisionReason()).append("\n\n");
             sb.append("调度员建议：").append(j.getDispatcherAdvice()).append("\n");

@@ -78,6 +78,14 @@ export interface WsPredictionPayload {
     predictions: number[]
     model: string
     forecastStartTime: string | null
+    lowerBounds?: number[] | null
+    upperBounds?: number[] | null
+    intervalSource?: string | null
+    modelVersionId?: number | null
+    futureWeatherAvailable?: boolean
+    weatherSource?: string | null
+    futureWeatherApplied?: boolean
+    futureWeatherFallback?: boolean
   }
 }
 

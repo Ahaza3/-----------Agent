@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 电力负荷预测与智能告警 Agent — a 16-day summer training project building an AI Agent system integrating **load forecasting, anomaly detection, and intelligent alerting**. Power dispatchers can monitor grid load via a visualization dashboard, view AI-predicted trends, receive smart alerts, and query data through natural language.
 
 - **Team**: 4 people (Java-oriented)
-- **Timeline**: 16 days; currently Day 2 (design phase), no code written yet
+- **Timeline**: 16 days; currently in Sprint 2/3 integration, defect fixing, and documentation synchronization
 - **Key metric**: 24h load forecast MAPE < 5%, alert delay < 5s, anomaly detection accuracy > 90%
 
 ## Architecture
@@ -42,7 +42,7 @@ ML scripts live independently in `ml/` at project root:
 ml/
 ├── app.py               # Flask inference microservice (~60 lines)
 ├── train_lstm.py         # LSTM training (P1)
-├── train_prophet.py      # Prophet baseline (P0)
+├── train_prophet.py      # Prophet historical compatibility script
 ├── generate_mock_data.py # Mock data generator
 └── requirements.txt
 ```
@@ -82,7 +82,7 @@ Key tables: `load_data`, `prediction_result`, `alert_event`, `alert_rule`, `mode
 | Deploy | Docker Compose (Day 13 only) | — |
 | CI | GitHub Actions (build + test) | — |
 
-## Common Commands (planned — no code yet)
+## Common Commands
 
 ```bash
 # Backend (single module)
@@ -103,7 +103,7 @@ npx vitest                                                    # Run tests
 cd ml
 python app.py                                                 # Start Flask inference (:5000)
 python generate_mock_data.py                                  # Generate mock data
-python train_prophet.py                                       # Train Prophet baseline
+python train_prophet.py                                       # Historical compatibility only; not the current retraining entry
 python train_lstm.py                                          # Train LSTM (P1)
 
 # Database (Docker)
@@ -155,7 +155,14 @@ docker-compose logs -f backend                                # Tail backend log
 
 ## Current Status
 
-All design docs complete. Ready for Day 3-4 scaffolding: project initialization, database setup, CI/CD skeleton. See `docs/00-项目开发计划.md` for the full 16-day plan with daily task breakdowns.
+The project has completed the Sprint 1 core chain, Sprint 2 alert and Agent functions, and Sprint 2/3 prediction operations enhancements. Current work is integration defect fixing and documentation synchronization. The current implementation baseline is maintained in `docs/14-当前实现同步说明.md`.
+
+- Agent chat supports SSE Markdown and chart persistence.
+- Alert judgement GET is cache-only; explicit POST triggers re-judgement.
+- Red alerts create a pending ticket draft only; formal ticket creation requires dispatcher confirmation.
+- Model version listing is read-only; `/model/versions/sync` performs explicit artifact synchronization.
+- Prophet is planned for removal from the retraining page. The current backend still accepts it for historical compatibility until that cleanup is completed.
+- Model page distinguishes database-published version from the Flask runtime model and shows `已生效` / `待重启` / `推理服务异常`.
 
 Behavioral guidelines to reduce common LLM coding mistakes. Merge with project-specific instructions as needed.
 

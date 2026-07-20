@@ -162,7 +162,7 @@ export interface JudgementResult {
   createdAt: string
 }
 
-export function fetchJudgement(alertId: number): Promise<JudgementResult> {
+export function fetchJudgement(alertId: number): Promise<JudgementResult | null> {
   return api.get(`/alert/events/${alertId}/judgement`)
 }
 

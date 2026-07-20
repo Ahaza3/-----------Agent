@@ -134,7 +134,7 @@ public class AlertScheduler {
                 try {
                     alertJudgementService.judgeRuleBased(event);
                 } catch (Exception e) {
-                    log.warn("智能研判或自动建单失败: alertId={}", event.getId(), e);
+                    log.warn("智能研判或待确认工单草稿处理失败: alertId={}", event.getId(), e);
                 }
 
                 eventPublisher.publishEvent(new AlertCreatedEvent(this, event));

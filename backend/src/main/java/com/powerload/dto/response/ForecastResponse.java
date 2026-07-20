@@ -21,4 +21,20 @@ public class ForecastResponse {
 
     /** 预测基准时间 — 第一个预测值对应的时间（Asia/Shanghai） */
     private LocalDateTime forecastStartTime;
+
+    private List<Double> lowerBounds;
+
+    private List<Double> upperBounds;
+
+    private String intervalSource;
+
+    private Long modelVersionId;
+
+    private boolean futureWeatherAvailable;
+
+    private String weatherSource;
+
+    private boolean futureWeatherApplied;
+
+    private boolean futureWeatherFallback;
 }

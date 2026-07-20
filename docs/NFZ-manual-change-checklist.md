@@ -44,3 +44,5 @@
 | `agent/AgentService.java` | chat() 新增 SysUserPrincipal 参数 |
 | `controller/AgentController.java` | 提取 @AuthenticationPrincipal 传递 |
 | `test/agent/AgentCoreTest.java` | 所有 run() 调用适配新签名 |
+
+> **当前状态说明（2026-07-20）**：NFZ-1、NFZ-2、NFZ-3 已完成手写并持续接受回归检查；当前业务边界和验证基准见 [当前实现同步说明](./14-当前实现同步说明.md)。
