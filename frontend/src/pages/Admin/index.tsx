@@ -9,6 +9,8 @@ import {
   PlusOutlined, KeyOutlined, EditOutlined, AlertOutlined, RobotOutlined, FileTextOutlined,
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
+import type { EChartsOption } from 'echarts'
+import ReactECharts from 'echarts-for-react'
 import api from '../../services/api'
 import { Popconfirm } from 'antd'
 import { fetchAlertRules } from '../../services/alertApi'
@@ -394,21 +396,27 @@ const ModelPanel = () => {
   const [trainingStatus, setTrainingStatus] = useState<any>(null)
   const [trainingHistory, setTrainingHistory] = useState<any[]>([])
   const [activationNotice, setActivationNotice] = useState<string | null>(null)
+  const [quality, setQuality] = useState<any>(null)
+  const [review, setReview] = useState<any>(null)
 
   const refresh = useCallback(async (showLoading = true) => {
     if (showLoading) setLoading(true)
-    const [forecastResp, versionsResp, healthResp, retrainResp, historyResp] = await Promise.allSettled([
+    const [forecastResp, versionsResp, healthResp, retrainResp, historyResp, qualityResp, reviewResp] = await Promise.allSettled([
       api.get('/predict/forecast'),
       api.get('/model/versions'),
       api.get('/system/health'),
       api.get('/model/retrain/status'),
       api.get('/model/retrain/history'),
+      api.get('/predict/quality'),
+      api.get('/predict/review'),
     ])
     if (forecastResp.status === 'fulfilled') setForecast(forecastResp.value)
     if (versionsResp.status === 'fulfilled') setVersions((versionsResp.value as unknown as any[]) || [])
     if (healthResp.status === 'fulfilled') setHealth(healthResp.value)
     if (retrainResp.status === 'fulfilled') setTrainingStatus(retrainResp.value)
     if (historyResp.status === 'fulfilled') setTrainingHistory((historyResp.value as unknown as any[]) || [])
+    if (qualityResp.status === 'fulfilled') setQuality(qualityResp.value)
+    if (reviewResp.status === 'fulfilled') setReview(reviewResp.value)
     if (showLoading) setLoading(false)
   }, [])
   useEffect(() => { refresh() }, [refresh])
@@ -426,7 +434,6 @@ const ModelPanel = () => {
     return () => window.clearInterval(timer)
   }, [refresh, trainingStatus?.status])
 
-  if (loading) return <Skeleton active paragraph={{ rows: 4 }} />
   const activeVersion = versions.find((item) => item.isActive === 1)
   const runtimeModel = health?.flaskModel === 'torchscript'
     ? 'LSTM (TorchScript)'
@@ -441,6 +448,26 @@ const ModelPanel = () => {
       ? 'Prophet'
       : ''
   const runtimeTypeMismatch = Boolean(activeVersion && runtimeModelType && String(activeVersion.modelName).toUpperCase() !== runtimeModelType.toUpperCase())
+  const reviewChartOption = useMemo<EChartsOption>(() => {
+    const points = Array.isArray(review?.series) ? review.series : []
+    const times = points.map((point: any) => dayjs(point.time).format('MM-DD HH:mm'))
+    return {
+      animation: false,
+      grid: { top: 20, left: 52, right: 20, bottom: 42 },
+      tooltip: { trigger: 'axis' },
+      legend: { data: ['实际', '预测', '参考下界', '参考上界'], textStyle: { color: '#7D8A97', fontSize: 11 }, bottom: 0 },
+      xAxis: { type: 'category', data: times, axisLabel: { color: '#7D8A97', hideOverlap: true } },
+      yAxis: { type: 'value', name: 'MW', axisLabel: { color: '#7D8A97' }, splitLine: { lineStyle: { color: '#1C2935' } } },
+      series: [
+        { name: '实际', type: 'line', data: points.map((point: any) => point.actual), smooth: true, symbol: 'none', lineStyle: { color: WHITE, width: 1.5 } },
+        { name: '预测', type: 'line', data: points.map((point: any) => point.predicted), smooth: true, symbol: 'none', lineStyle: { color: '#D7A447', width: 1.5 } },
+        { name: '参考下界', type: 'line', data: points.map((point: any) => point.lowerBound), smooth: true, symbol: 'none', lineStyle: { color: '#8B98A6', width: 1, type: 'dotted' } },
+        { name: '参考上界', type: 'line', data: points.map((point: any) => point.upperBound), smooth: true, symbol: 'none', lineStyle: { color: '#8B98A6', width: 1, type: 'dotted' } },
+      ],
+    }
+  }, [review])
+
+  if (loading) return <Skeleton active paragraph={{ rows: 4 }} />
 
   const activateVersion = async (id: number) => {
     setActivating(id)
@@ -528,6 +555,29 @@ const ModelPanel = () => {
         ]}
         labelStyle={{ color: '#888', background: '#0c0c0c' }} contentStyle={{ color: '#ccc', background: '#0e0e0e' }}
       />
+      <Descriptions bordered size="small" column={3} style={{ marginTop: 16 }}
+        items={[
+          { label: '数据质量', children: <Tag color={quality?.status === 'NORMAL' ? 'green' : quality?.status === 'DELAYED' ? 'red' : 'gold'}>{quality?.status || 'N/A'}</Tag> },
+          { label: '最新数据', children: quality?.latestDataTime ? dayjs(quality.latestDataTime).format('MM-DD HH:mm') : 'N/A' },
+          { label: '数据延迟', children: quality?.dataDelayMinutes != null ? `${quality.dataDelayMinutes} 分钟` : 'N/A' },
+          { label: '连续性', children: quality?.continuityRate != null ? `${quality.continuityRate}%` : 'N/A' },
+          { label: '缺失点', children: quality?.missingPoints ?? 'N/A' },
+          { label: '天气缺失', children: quality?.weatherMissingPoints ?? 'N/A' },
+          { label: '天气特征', children: '历史天气辅助，未接入未来预报' },
+          { label: '线上 MAPE', children: review?.mape != null ? `${review.mape.toFixed(2)}%` : 'N/A' },
+          { label: '线上 RMSE', children: review?.rmse != null ? `${review.rmse.toFixed(2)} MW` : 'N/A' },
+          { label: '峰值误差', children: review?.peakErrorMw != null ? `${review.peakErrorMw.toFixed(2)} MW` : 'N/A' },
+        ]}
+        labelStyle={{ color: '#888', background: '#0c0c0c' }}
+        contentStyle={{ color: '#ccc', background: '#0e0e0e' }}
+      />
+      <div style={{ color: '#888', fontSize: 11, marginTop: 8 }}>
+        线上复盘覆盖 {review?.evaluatedPoints ?? 0} 个已回填实际值的预测点；
+        预测区间来源：{forecast?.intervalSource === 'VALIDATION_RMSE_REFERENCE' ? '验证集 RMSE 参考区间' : '暂无区间数据'}。
+      </div>
+      {review?.series?.length > 0 && (
+        <ReactECharts option={reviewChartOption} notMerge style={{ height: 250, marginTop: 8 }} />
+      )}
       <Table
         style={{ marginTop: 16 }}
         dataSource={versions}

@@ -17,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -86,7 +87,13 @@ public class PredictServiceImpl implements PredictService {
         FlaskInferenceService.ForecastResult inference = flaskInferenceService.forecast(rawData);
         List<Double> predictions = inference.predictions();
         String runtimeModel = inference.model();
-        Long modelVersionId = resolveRuntimeModelVersionId(runtimeModel);
+        ModelVersion modelVersion = resolveRuntimeModelVersion(runtimeModel);
+        Long modelVersionId = modelVersion == null ? null : modelVersion.getId();
+        double intervalHalfWidth = modelVersion != null && modelVersion.getRmse() != null
+                ? Math.max(1.0, modelVersion.getRmse() * 1.2816)
+                : 0;
+        List<Double> lowerBounds = new ArrayList<>();
+        List<Double> upperBounds = new ArrayList<>();
 
         // 4. 预测起点：当前整点的下一小时
         LocalDateTime forecastStart = LocalDateTime.now()
@@ -98,11 +105,17 @@ public class PredictServiceImpl implements PredictService {
             PredictionResult pr = new PredictionResult();
             pr.setPredictTime(forecastStart.plusHours(i));
             pr.setPredictedLoad(predictions.get(i).floatValue());
-            pr.setLowerBound(null);  // 无可靠置信区间，不伪造
-            pr.setUpperBound(null);
+            Float lower = intervalHalfWidth > 0
+                    ? (float) Math.max(0, predictions.get(i) - intervalHalfWidth) : null;
+            Float upper = intervalHalfWidth > 0
+                    ? (float) (predictions.get(i) + intervalHalfWidth) : null;
+            pr.setLowerBound(lower);
+            pr.setUpperBound(upper);
             pr.setModelVersionId(modelVersionId);
             pr.setCreatedAt(batchTime);
             predictionResultMapper.insert(pr);
+            if (lower != null) lowerBounds.add(lower.doubleValue());
+            if (upper != null) upperBounds.add(upper.doubleValue());
         }
         log.info("预测已持久化: {} 条记录, batch={}", predictions.size(), batchTime);
 
@@ -111,6 +124,11 @@ public class PredictServiceImpl implements PredictService {
         response.setPredictions(predictions);
         response.setModel(runtimeModel);
         response.setForecastStartTime(forecastStart);
+        response.setLowerBounds(lowerBounds.isEmpty() ? null : lowerBounds);
+        response.setUpperBounds(upperBounds.isEmpty() ? null : upperBounds);
+        response.setIntervalSource(intervalHalfWidth > 0
+                ? "VALIDATION_RMSE_REFERENCE" : "UNAVAILABLE");
+        response.setModelVersionId(modelVersionId);
 
         double minP = predictions.stream().mapToDouble(Double::doubleValue).min().orElse(0);
         double maxP = predictions.stream().mapToDouble(Double::doubleValue).max().orElse(0);
@@ -119,7 +137,7 @@ public class PredictServiceImpl implements PredictService {
         return response;
     }
 
-    private Long resolveRuntimeModelVersionId(String runtimeModel) {
+    private ModelVersion resolveRuntimeModelVersion(String runtimeModel) {
         String modelName = normalizeRuntimeModel(runtimeModel);
         if (modelName == null) {
             return null;
@@ -133,7 +151,7 @@ public class PredictServiceImpl implements PredictService {
                 .stream()
                 .findFirst()
                 .orElse(null);
-        return version == null ? null : version.getId();
+        return version;
     }
 
     private String normalizeRuntimeModel(String runtimeModel) {

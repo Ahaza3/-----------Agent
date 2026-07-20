@@ -12,6 +12,7 @@ import useAuthStore from '../stores/useAuthStore'
 import useSystemStatusStore from '../stores/useSystemStatusStore'
 import { fetchRealtimeRecent } from '../services/dataApi'
 import type { WsLoadPayload, WsAlertPayload, WsPredictionPayload } from '../types/alert'
+import { showAlertNotification } from '../utils/browserNotification'
 
 const WS_BASE = `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}/ws/dashboard`
 
@@ -99,6 +100,7 @@ export function useWebSocket() {
         try {
           const p: WsAlertPayload = JSON.parse(msg.body)
           if (p.type === 'alert') {
+            showAlertNotification(p.data)
             appendAlert({
               id: p.data.id,
               type: 'THRESHOLD',
