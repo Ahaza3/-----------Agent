@@ -1,6 +1,7 @@
 package com.powerload.service;
 
 import com.powerload.entity.ModelVersion;
+import com.powerload.entity.ModelTrainingTask;
 
 import java.util.List;
 import java.util.Map;
@@ -19,4 +20,6 @@ public interface ModelVersionService {
     Map<String, Object> startRetrain(String modelName);
 
     Map<String, Object> retrainStatus();
+
+    List<ModelTrainingTask> trainingHistory();
 }

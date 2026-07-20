@@ -11,6 +11,7 @@ export interface AgentEvent {
   option?: EChartsOption
   conversationId?: string
   message?: string
+  provenance?: Record<string, unknown>
 }
 
 export interface ConversationSummary {

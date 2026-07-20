@@ -2,6 +2,7 @@ package com.powerload.agent;
 
 import lombok.Data;
 
+import java.util.Map;
 /**
  * 工具执行结果 — 由 Tool.execute() 返回，统一数据结构。
  *
@@ -22,6 +23,9 @@ public class ToolResult {
 
     /** ECharts 图表配置（可选） */
     private Object chart;
+
+    /** 数据来源、时间范围、模型版本等可信度信息 */
+    private Map<String, Object> provenance;
 
     public static ToolResult ok(String message, Object data) {
         ToolResult r = new ToolResult();

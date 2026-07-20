@@ -7,7 +7,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { Table, Tag, Button, Segmented, Space, message, Badge, Modal, Select, Input, Empty, Skeleton } from 'antd'
 import { BellOutlined, ExclamationCircleOutlined, FileTextOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
-import { acknowledgeAlert, fetchAlertEvents, markAlertRead } from '../../services/alertApi'
+import { acknowledgeAlert, fetchAlertEvents, fetchAlertMetrics, markAlertRead } from '../../services/alertApi'
 import { fetchTicketByAlert, createTicket, assignTicket, fetchAssignees, fetchJudgement } from '../../services/ticketApi'
 import type { AssigneeInfo, JudgementResult, Ticket } from '../../services/ticketApi'
 import { ALERT_LEVEL_CONFIG } from '../../types/alert'
@@ -26,6 +26,7 @@ const DispatcherAlertWorkspace = () => {
   const [unreadOnly, setUnreadOnly] = useState(false)
   const [loading, setLoading] = useState(false)
   const [total, setTotal] = useState(0)
+  const [metrics, setMetrics] = useState<Record<string, number> | null>(null)
   const [page, setPage] = useState(1)
   const [ticketMap, setTicketMap] = useState<Record<number, Ticket | null>>({})
   const [selectedAlert, setSelectedAlert] = useState<AlertEvent | null>(null)
@@ -72,6 +73,7 @@ const DispatcherAlertWorkspace = () => {
       const res: any = await fetchAlertEvents(params)
       setEvents(res.records || [])
       setTotal(res.total || 0)
+      try { setMetrics(await fetchAlertMetrics()) } catch { setMetrics(null) }
     } catch { message.error('告警加载失败') }
     finally { setLoading(false) }
   }, [levelFilter, unreadOnly, page])
@@ -270,6 +272,22 @@ const DispatcherAlertWorkspace = () => {
         <Button type={unreadOnly ? 'primary' : 'default'} size="small" onClick={() => setUnreadOnly(!unreadOnly)}>仅未读</Button>
         <Button size="small" onClick={() => fetch()}>刷新</Button>
       </Space>
+
+      {metrics && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 8, marginBottom: 12 }}>
+          {[
+            ['近7天告警', metrics.total ?? 0, '#E7EDF3'],
+            ['重复率', `${Number(metrics.duplicateRate ?? 0).toFixed(1)}%`, '#FAAD14'],
+            ['平均确认', `${Number(metrics.averageAckMinutes ?? 0).toFixed(1)} 分钟`, '#69B1FF'],
+            ['平均恢复', `${Number(metrics.averageRecoveryMinutes ?? 0).toFixed(1)} 分钟`, '#5FA777'],
+          ].map(([label, value, color]) => (
+            <div key={String(label)} style={{ border: '1px solid #2A2A2A', padding: '8px 10px', background: '#0c0c0c' }}>
+              <div style={{ color: '#888', fontSize: 10 }}>{label}</div>
+              <div style={{ color: String(color), fontSize: 16, fontWeight: 700 }}>{value}</div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {loading && events.length === 0 ? (
         <Skeleton active paragraph={{ rows: 8 }} />

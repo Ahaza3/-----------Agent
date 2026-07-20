@@ -5,6 +5,7 @@ import com.powerload.entity.AlertEvent;
 import com.powerload.security.SysUserPrincipal;
 
 import java.time.LocalDateTime;
+import java.util.Map;
 
 /**
  * 告警事件服务
@@ -38,4 +39,7 @@ public interface AlertEventService {
     void acknowledge(Long id, SysUserPrincipal user);
 
     void resolveLatest(Long ruleId, LocalDateTime resolvedAt);
+
+    /** 查询指定时间范围内的告警运营指标 */
+    Map<String, Object> metrics(LocalDateTime start, LocalDateTime end);
 }

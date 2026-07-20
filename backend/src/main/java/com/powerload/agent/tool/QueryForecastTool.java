@@ -120,6 +120,7 @@ public class QueryForecastTool implements Tool {
             Map<String, Object> result = new LinkedHashMap<>();
             result.put("source", "MOCK_FORECAST");
             result.put("model", "LSTM");
+            result.put("modelVersionId", batch.get(0).getModelVersionId());
             result.put("forecastStartTime", batch.get(0).getPredictTime().toString());
             result.put("totalPoints", batch.size());
             result.put("maxLoadMw", (float) maxLoad);
@@ -141,6 +142,13 @@ public class QueryForecastTool implements Tool {
 
             ToolResult toolResult = ToolResult.ok(summary, result);
             toolResult.setChart(chartOption);
+            Map<String, Object> provenance = new LinkedHashMap<>();
+            provenance.put("source", "prediction_result");
+            provenance.put("model", "LSTM");
+            provenance.put("modelVersionId", batch.get(0).getModelVersionId());
+            provenance.put("simulated", true);
+            provenance.put("forecastStartTime", batch.get(0).getPredictTime().toString());
+            toolResult.setProvenance(provenance);
             return toolResult;
 
         } catch (Exception e) {

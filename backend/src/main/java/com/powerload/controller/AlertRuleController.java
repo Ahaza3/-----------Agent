@@ -37,4 +37,16 @@ public class AlertRuleController {
     public R<AlertRule> update(@PathVariable Long id, @RequestBody AlertRule rule) {
         return R.ok(alertRuleService.update(id, rule));
     }
+
+    @PostMapping("/{id}/snooze")
+    public R<AlertRule> snooze(@PathVariable Long id,
+                               @RequestParam(defaultValue = "30") int minutes) {
+        return R.ok(alertRuleService.snooze(id, minutes));
+    }
+
+    @PutMapping("/{id}/maintenance")
+    public R<AlertRule> maintenance(@PathVariable Long id,
+                                    @RequestParam boolean enabled) {
+        return R.ok(alertRuleService.setMaintenance(id, enabled));
+    }
 }

@@ -39,6 +39,17 @@ class AlertRuleValidationTest {
     }
 
     @Test
+    void shouldAcceptAntiFlappingConfig() {
+        AlertRule rule = new AlertRule();
+        rule.setName("防抖规则");
+        rule.setType("THRESHOLD");
+        rule.setConfig("{\"threshold\":1100,\"yellowRatio\":0.9,\"orangeRatio\":1.0,"
+                + "\"redRatio\":1.1,\"coolingTime\":3600,\"triggerDuration\":10,\"hysteresis\":20}");
+
+        assertDoesNotThrow(() -> alertRuleService.create(rule));
+    }
+
+    @Test
     void shouldRejectEmptyConfig() {
         AlertRule rule = new AlertRule();
         rule.setName("空配置规则");
@@ -87,6 +98,24 @@ class AlertRuleValidationTest {
         AlertRule rule = new AlertRule();
         rule.setName("负冷却时间");
         rule.setConfig("{\"threshold\":1100,\"yellowRatio\":0.9,\"orangeRatio\":1.0,\"redRatio\":1.1,\"coolingTime\":-60}");
+
+        assertThrows(IllegalArgumentException.class, () -> alertRuleService.create(rule));
+    }
+
+    @Test
+    void shouldRejectNegativeTriggerDuration() {
+        AlertRule rule = new AlertRule();
+        rule.setName("负触发时长");
+        rule.setConfig("{\"threshold\":1100,\"triggerDuration\":-1}");
+
+        assertThrows(IllegalArgumentException.class, () -> alertRuleService.create(rule));
+    }
+
+    @Test
+    void shouldRejectNegativeHysteresis() {
+        AlertRule rule = new AlertRule();
+        rule.setName("负恢复死区");
+        rule.setConfig("{\"threshold\":1100,\"hysteresis\":-1}");
 
         assertThrows(IllegalArgumentException.class, () -> alertRuleService.create(rule));
     }

@@ -135,6 +135,7 @@ const OperatorTicketWorkspace = () => {
     { title: '概要', dataIndex: 'summary', ellipsis: true },
     { title: '创建人', dataIndex: 'createdByName', width: 70 },
     { title: '处理人', dataIndex: 'assigneeName', width: 80, render: (v: string | null) => v || '--' },
+    { title: 'SLA', dataIndex: 'slaStatus', width: 100, render: (v: string) => v === 'OVERDUE_RESPONSE' ? <Tag color="red">响应超时</Tag> : v === 'OVERDUE_PROCESSING' ? <Tag color="red">处理超时</Tag> : v === 'COMPLETED' ? <Tag color="default">已完成</Tag> : <Tag color="green">正常</Tag> },
     { title: '时间', dataIndex: 'createdAt', width: 110, render: (v: string) => v ? dayjs(v).format('MM-DD HH:mm') : '-' },
     {
       title: '', key: 'acts', width: 160,

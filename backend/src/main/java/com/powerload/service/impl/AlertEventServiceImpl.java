@@ -12,6 +12,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 
 @Slf4j
 @Service
@@ -114,5 +120,65 @@ public class AlertEventServiceImpl implements AlertEventService {
         update.setStatus("RECOVERED");
         update.setResolvedAt(resolvedAt);
         alertEventMapper.updateById(update);
+    }
+
+    @Override
+    public Map<String, Object> metrics(LocalDateTime start, LocalDateTime end) {
+        LambdaQueryWrapper<AlertEvent> wrapper = new LambdaQueryWrapper<AlertEvent>()
+                .ge(start != null, AlertEvent::getTriggerTime, start)
+                .lt(end != null, AlertEvent::getTriggerTime, end)
+                .orderByAsc(AlertEvent::getTriggerTime);
+        List<AlertEvent> events = alertEventMapper.selectList(wrapper);
+
+        long acknowledged = events.stream()
+                .filter(event -> event.getAcknowledgedAt() != null)
+                .count();
+        long recovered = events.stream()
+                .filter(event -> event.getResolvedAt() != null)
+                .count();
+        double ackMinutes = averageMinutes(events, true);
+        double recoveryMinutes = averageMinutes(events, false);
+
+        Map<String, LocalDateTime> lastByKey = new HashMap<>();
+        long duplicates = 0;
+        for (AlertEvent event : events) {
+            String key = event.getRuleId() + ":" + event.getLevel();
+            LocalDateTime previous = lastByKey.put(key, event.getTriggerTime());
+            if (previous != null && event.getTriggerTime() != null
+                    && Duration.between(previous, event.getTriggerTime()).toMinutes() <= 60) {
+                duplicates++;
+            }
+        }
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("start", start);
+        result.put("end", end);
+        result.put("total", events.size());
+        result.put("red", countLevel(events, "RED"));
+        result.put("orange", countLevel(events, "ORANGE"));
+        result.put("yellow", countLevel(events, "YELLOW"));
+        result.put("unread", events.stream().filter(event -> Integer.valueOf(0).equals(event.getIsRead())).count());
+        result.put("acknowledged", acknowledged);
+        result.put("recovered", recovered);
+        result.put("duplicateCount", duplicates);
+        result.put("duplicateRate", events.isEmpty() ? 0d : duplicates * 100d / events.size());
+        result.put("averageAckMinutes", ackMinutes);
+        result.put("averageRecoveryMinutes", recoveryMinutes);
+        return result;
+    }
+
+    private long countLevel(List<AlertEvent> events, String level) {
+        return events.stream().filter(event -> level.equals(event.getLevel())).count();
+    }
+
+    private double averageMinutes(List<AlertEvent> events, boolean acknowledgement) {
+        List<Long> values = new ArrayList<>();
+        for (AlertEvent event : events) {
+            LocalDateTime end = acknowledgement ? event.getAcknowledgedAt() : event.getResolvedAt();
+            if (event.getTriggerTime() != null && end != null) {
+                values.add(Duration.between(event.getTriggerTime(), end).toSeconds());
+            }
+        }
+        return values.stream().mapToLong(Long::longValue).average().orElse(0d) / 60d;
     }
 }

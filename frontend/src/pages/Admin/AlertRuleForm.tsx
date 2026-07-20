@@ -13,6 +13,8 @@ interface RuleConfig {
   orangeRatio: number
   redRatio: number
   coolingTime: number
+  triggerDuration: number
+  hysteresis: number
 }
 
 interface Props {
@@ -39,6 +41,8 @@ const AlertRuleForm = ({ form, editing }: Props) => {
         orangeRatio: cfg.orangeRatio ?? 1.0,
         redRatio: cfg.redRatio ?? 1.1,
         coolingTime: cfg.coolingTime ?? 3600,
+        triggerDuration: cfg.triggerDuration ?? 0,
+        hysteresis: cfg.hysteresis ?? 0,
       }
     } catch {
       setParseError(true)
@@ -58,6 +62,8 @@ const AlertRuleForm = ({ form, editing }: Props) => {
         orangeRatio: parsedConfig?.orangeRatio ?? 1.0,
         redRatio: parsedConfig?.redRatio ?? 1.1,
         coolingTime: parsedConfig?.coolingTime ?? 3600,
+        triggerDuration: parsedConfig?.triggerDuration ?? 0,
+        hysteresis: parsedConfig?.hysteresis ?? 0,
       })
     } else {
       form.resetFields()
@@ -69,6 +75,8 @@ const AlertRuleForm = ({ form, editing }: Props) => {
         orangeRatio: 1.0,
         redRatio: 1.1,
         coolingTime: 3600,
+        triggerDuration: 0,
+        hysteresis: 0,
       })
       setParseError(false)
     }
@@ -165,6 +173,24 @@ const AlertRuleForm = ({ form, editing }: Props) => {
         ]}
       >
         <InputNumber style={{ width: '100%' }} min={0} step={60} addonAfter="秒" />
+      </Form.Item>
+
+      <Form.Item
+        name="triggerDuration"
+        label="连续超限触发时长 (秒)"
+        extra="0 表示保持原有的立即触发行为"
+        rules={[{ required: true }, { type: 'number', min: 0, message: '触发时长不能为负数' }]}
+      >
+        <InputNumber style={{ width: '100%' }} min={0} step={1} addonAfter="秒" />
+      </Form.Item>
+
+      <Form.Item
+        name="hysteresis"
+        label="恢复死区 (MW)"
+        extra="恢复时要求负荷低于黄色阈值减去该数值"
+        rules={[{ required: true }, { type: 'number', min: 0, message: '恢复死区不能为负数' }]}
+      >
+        <InputNumber style={{ width: '100%' }} min={0} step={1} addonAfter="MW" />
       </Form.Item>
 
       {/* 实时阈值计算预览 */}

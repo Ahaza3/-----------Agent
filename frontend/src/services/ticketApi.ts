@@ -33,6 +33,9 @@ export interface Ticket {
   cancelledAt: string | null
   createdAt: string
   updatedAt: string
+  responseDeadline?: string | null
+  processingDeadline?: string | null
+  slaStatus?: 'ON_TRACK' | 'OVERDUE_RESPONSE' | 'OVERDUE_PROCESSING' | 'COMPLETED'
 }
 
 export interface TicketAction {

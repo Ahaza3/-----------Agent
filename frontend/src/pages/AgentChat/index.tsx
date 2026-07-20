@@ -50,6 +50,7 @@ interface ChatMessage {
   content: string
   createdAt: string
   chart?: EChartsOption
+  provenance?: Record<string, unknown>
   pending?: boolean
 }
 
@@ -269,7 +270,7 @@ const AgentChat = () => {
           setThinking('')
           if (event.conversationId) setConversationId(event.conversationId)
           setMessages((previous) => previous.map((item) =>
-            item.id === assistantId ? { ...item, pending: false } : item,
+            item.id === assistantId ? { ...item, pending: false, provenance: event.provenance } : item,
           ))
         }
       },
@@ -440,6 +441,11 @@ const AgentChat = () => {
                 {item.chart && (
                   <div className="agent-message-chart">
                     <LoadChart option={item.chart} height={280} />
+                  </div>
+                )}
+                {item.provenance && Object.keys(item.provenance).length > 0 && (
+                  <div style={{ color: '#7D8A97', fontSize: 11, marginTop: 8 }}>
+                    数据依据：{Object.keys(item.provenance).join('、')}，详情以工具返回的时间范围和模型版本为准
                   </div>
                 )}
               </div>

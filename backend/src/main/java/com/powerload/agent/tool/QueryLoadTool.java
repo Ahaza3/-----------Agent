@@ -165,6 +165,13 @@ public class QueryLoadTool implements Tool {
 
         ToolResult toolResult = ToolResult.ok(summary, result);
         toolResult.setChart(chartOption);
+        Map<String, Object> provenance = new LinkedHashMap<>();
+        provenance.put("source", "load_data");
+        provenance.put("startTime", start.toString());
+        provenance.put("endTime", end.toString());
+        provenance.put("simulated", raw.stream().allMatch(item -> item.getDataSource() == null
+                || item.getDataSource().contains("MOCK")));
+        toolResult.setProvenance(provenance);
         return toolResult;
     }
 

@@ -82,7 +82,10 @@ public class AgentService {
                 }
 
                 // 发送 done
-                sendEvent(emitter, "done", Map.of("conversationId", convId));
+                Map<String, Object> done = new java.util.LinkedHashMap<>();
+                done.put("conversationId", convId);
+                done.put("provenance", response.getProvenance());
+                sendEvent(emitter, "done", done);
                 emitter.complete();
 
             } catch (Exception e) {
