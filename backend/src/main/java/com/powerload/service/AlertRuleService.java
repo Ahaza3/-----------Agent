@@ -20,4 +20,10 @@ public interface AlertRuleService {
 
     /** 更新规则 */
     AlertRule update(Long id, AlertRule rule);
+
+    /** 暂挂规则指定分钟数 */
+    AlertRule snooze(Long id, int minutes);
+
+    /** 开启或关闭维护模式 */
+    AlertRule setMaintenance(Long id, boolean enabled);
 }

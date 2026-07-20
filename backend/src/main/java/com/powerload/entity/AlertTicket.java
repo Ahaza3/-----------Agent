@@ -30,4 +30,13 @@ public class AlertTicket {
     private LocalDateTime cancelledAt;
     private LocalDateTime updatedAt;
     private Integer version;
+
+    @TableField(exist = false)
+    private LocalDateTime responseDeadline;
+
+    @TableField(exist = false)
+    private LocalDateTime processingDeadline;
+
+    @TableField(exist = false)
+    private String slaStatus;
 }

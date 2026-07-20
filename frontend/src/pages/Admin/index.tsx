@@ -276,6 +276,28 @@ const RulesPanel = () => {
   const openCreate = () => { setEditing(null); setEditOpen(true) }
   const openEdit = (r: any) => { setEditing(r); setEditOpen(true) }
 
+  const snoozeRule = async (id: number) => {
+    try {
+      await api.post(`/alert/rules/${id}/snooze?minutes=30`)
+      message.success('规则已暂挂 30 分钟')
+      refresh()
+    } catch (e: any) {
+      message.error(e?.response?.data?.message || e.message || '规则暂挂失败')
+    }
+  }
+
+  const toggleMaintenance = async (r: any) => {
+    try {
+      const config = typeof r.config === 'string' ? JSON.parse(r.config) : r.config
+      const enabled = config?.maintenance !== true
+      await api.put(`/alert/rules/${r.id}/maintenance?enabled=${enabled}`)
+      message.success(enabled ? '已进入维护模式' : '已退出维护模式')
+      refresh()
+    } catch (e: any) {
+      message.error(e?.response?.data?.message || e.message || '维护模式切换失败')
+    }
+  }
+
   const handleSave = async (v: any) => {
     try {
       // 从表单字段构造 config JSON
@@ -285,6 +307,8 @@ const RulesPanel = () => {
         orangeRatio: v.orangeRatio,
         redRatio: v.redRatio,
         coolingTime: v.coolingTime,
+        triggerDuration: v.triggerDuration,
+        hysteresis: v.hysteresis,
       })
 
       // 前端校验
@@ -293,6 +317,7 @@ const RulesPanel = () => {
         message.error('告警比例必须满足：黄色 ≤ 橙色 ≤ 红色'); return
       }
       if (v.coolingTime < 0) { message.error('冷却时间不能为负数'); return }
+      if (v.triggerDuration < 0 || v.hysteresis < 0) { message.error('触发时长和恢复死区不能为负数'); return }
 
       const payload = {
         name: v.name,
@@ -325,13 +350,22 @@ const RulesPanel = () => {
           { title: '启用', dataIndex: 'isActive', key: 'isActive', render: (v: number) => <Tag color={v ? 'green' : 'default'}>{v ? '启用' : '禁用'}</Tag> },
           { title: '配置', dataIndex: 'config', key: 'config', ellipsis: true,
             render: (v: string) => {
-              try { const c = JSON.parse(v); return `${c.threshold || 0}MW / Y${c.yellowRatio??0} O${c.orangeRatio??0} R${c.redRatio??0}` }
+              try { const c = JSON.parse(v); return `${c.threshold || 0}MW / Y${c.yellowRatio??0} O${c.orangeRatio??0} R${c.redRatio??0} / 连续${c.triggerDuration ?? 0}s` }
               catch { return <Tag color="red">配置异常</Tag> }
             }
           },
           {
             title: '操作', key: 'actions', render: (_: any, r: any) => (
-              <Button size="small" icon={<EditOutlined />} onClick={() => openEdit(r)}>编辑</Button>
+              <Space size="small">
+                <Button size="small" icon={<EditOutlined />} onClick={() => openEdit(r)}>编辑</Button>
+                <Button size="small" onClick={() => snoozeRule(r.id)}>暂挂30分钟</Button>
+                <Button size="small" onClick={() => toggleMaintenance(r)}>
+                  {(() => {
+                    try { return JSON.parse(r.config)?.maintenance === true ? '退出维护' : '维护模式' }
+                    catch { return '维护模式' }
+                  })()}
+                </Button>
+              </Space>
             ),
           },
         ]}
@@ -358,20 +392,23 @@ const ModelPanel = () => {
   const [syncing, setSyncing] = useState(false)
   const [retraining, setRetraining] = useState<string | null>(null)
   const [trainingStatus, setTrainingStatus] = useState<any>(null)
+  const [trainingHistory, setTrainingHistory] = useState<any[]>([])
   const [activationNotice, setActivationNotice] = useState<string | null>(null)
 
   const refresh = useCallback(async (showLoading = true) => {
     if (showLoading) setLoading(true)
-    const [forecastResp, versionsResp, healthResp, retrainResp] = await Promise.allSettled([
+    const [forecastResp, versionsResp, healthResp, retrainResp, historyResp] = await Promise.allSettled([
       api.get('/predict/forecast'),
       api.get('/model/versions'),
       api.get('/system/health'),
       api.get('/model/retrain/status'),
+      api.get('/model/retrain/history'),
     ])
     if (forecastResp.status === 'fulfilled') setForecast(forecastResp.value)
     if (versionsResp.status === 'fulfilled') setVersions((versionsResp.value as unknown as any[]) || [])
     if (healthResp.status === 'fulfilled') setHealth(healthResp.value)
     if (retrainResp.status === 'fulfilled') setTrainingStatus(retrainResp.value)
+    if (historyResp.status === 'fulfilled') setTrainingHistory((historyResp.value as unknown as any[]) || [])
     if (showLoading) setLoading(false)
   }, [])
   useEffect(() => { refresh() }, [refresh])
@@ -520,6 +557,22 @@ const ModelPanel = () => {
               </Popconfirm>
             ),
           },
+        ]}
+      />
+      <h4 style={{ color: '#888', fontSize: 11, margin: '16px 0 8px' }}>训练记录</h4>
+      <Table
+        dataSource={trainingHistory}
+        rowKey="id"
+        size="small"
+        pagination={false}
+        locale={{ emptyText: <Empty description="暂无训练记录" /> }}
+        columns={[
+          { title: '模型', dataIndex: 'modelName', width: 80 },
+          { title: '状态', dataIndex: 'status', width: 80, render: (v: string) => <Tag color={v === 'SUCCESS' ? 'green' : v === 'FAILED' ? 'red' : 'processing'}>{v}</Tag> },
+          { title: '样本数', dataIndex: 'sampleCount', width: 80, render: (v: number | null) => v ?? '-' },
+          { title: '数据范围', key: 'range', render: (_: any, r: any) => r.dataStart && r.dataEnd ? `${dayjs(r.dataStart).format('MM-DD HH:mm')} ~ ${dayjs(r.dataEnd).format('MM-DD HH:mm')}` : '-' },
+          { title: '耗时', dataIndex: 'durationMs', width: 80, render: (v: number | null) => v == null ? '-' : `${(v / 1000).toFixed(1)}s` },
+          { title: '结果', dataIndex: 'message', ellipsis: true },
         ]}
       />
     </div>

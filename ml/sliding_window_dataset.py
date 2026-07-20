@@ -8,7 +8,7 @@
 用法（模块导入）:
     from sliding_window_dataset import SlidingWindowDataset, create_dataloaders
 
-    train_loader, val_loader, scaler_y = create_dataloaders(
+    train_loader, val_loader, scaler_x, scaler_y, feature_cols = create_dataloaders(
         df, seq_length=168, batch_size=64, train_ratio=0.85
     )
 
@@ -57,7 +57,7 @@ def build_sliding_windows(
     seq_length: int = 168,
     forecast_horizon: int = 24,
     feature_cols: list | None = None,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, StandardScaler, StandardScaler, list[str]]:
     """
     从 DataFrame 构建滑动窗口数组
 
@@ -72,6 +72,9 @@ def build_sliding_windows(
         features:     (N, seq_length, n_features) 标准化特征数组
         targets:      (N, forecast_horizon) 标准化目标数组
         raw_targets:  (N, forecast_horizon) 原始目标值
+        scaler_x: 输入特征标准化器
+        scaler_y: 目标值标准化器
+        feature_cols: 输入特征列名
     """
     if feature_cols is None:
         # 自动选择：数值列，排除目标列和时间列
@@ -108,7 +111,7 @@ def build_sliding_windows(
         targets[i] = targets_scaled[i + seq_length:i + seq_length + forecast_horizon]
         raw_targets_out[i] = raw_y[i + seq_length:i + seq_length + forecast_horizon]
 
-    return features, targets, raw_targets_out
+    return features, targets, raw_targets_out, scaler_x, scaler_y, feature_cols
 
 
 def create_dataloaders(
@@ -120,7 +123,7 @@ def create_dataloaders(
     train_ratio: float = 0.85,
     feature_cols: list | None = None,
     shuffle_train: bool = True,
-) -> tuple[DataLoader, DataLoader, StandardScaler]:
+) -> tuple[DataLoader, DataLoader, StandardScaler, StandardScaler, list[str]]:
     """
     一站式构建训练/验证 DataLoader
 
@@ -135,11 +138,10 @@ def create_dataloaders(
         shuffle_train: 训练集是否 shuffle
 
     Returns:
-        (train_loader, val_loader, target_scaler)
-        target_scaler 用于反标准化预测值
+        (train_loader, val_loader, feature_scaler, target_scaler, feature_cols)
     """
     # 构建窗口
-    features, targets, _ = build_sliding_windows(
+    features, targets, _, scaler_x, scaler_y, resolved_feature_cols = build_sliding_windows(
         df, target_col=target_col, seq_length=seq_length,
         forecast_horizon=forecast_horizon, feature_cols=feature_cols,
     )
@@ -157,11 +159,7 @@ def create_dataloaders(
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=shuffle_train)
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
 
-    # 拟合目标 scaler（用于反标准化）
-    scaler_y = StandardScaler()
-    scaler_y.fit(df[[target_col]].values)
-
-    return train_loader, val_loader, scaler_y
+    return train_loader, val_loader, scaler_x, scaler_y, resolved_feature_cols
 
 
 def main():

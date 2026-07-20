@@ -59,6 +59,8 @@ public class AlertScheduler {
     private final Map<Long, String> activeLevels = new ConcurrentHashMap<>();
     /** 规则 + 级别最近一次触发时间，用于 coolingTime 去重。 */
     private final Map<String, Long> lastTriggeredAt = new ConcurrentHashMap<>();
+    /** 规则首次连续超限时间，用于 triggerDuration。 */
+    private final Map<Long, Long> overLimitSince = new ConcurrentHashMap<>();
 
     @Scheduled(fixedRate = 1_000) // 每秒检查
     public void checkAlerts() {
@@ -74,13 +76,26 @@ public class AlertScheduler {
                 String activeLevel = activeLevels.get(rule.getId());
 
                 if (level == null) {
-                    if (activeLevel != null) {
+                    if (activeLevel != null && thresholdDetector.canRecover(currentLoad, rule.getConfig())) {
                         activeLevels.remove(rule.getId());
                         alertEventService.resolveLatest(rule.getId(), LocalDateTime.now());
                         log.info("告警恢复: ruleId={}, previousLevel={}, current={}MW",
                                 rule.getId(), activeLevel, currentLoad);
                     }
+                    overLimitSince.remove(rule.getId());
                     continue;
+                }
+
+                if (thresholdDetector.isSuppressed(rule.getConfig(), LocalDateTime.now())) {
+                    overLimitSince.remove(rule.getId());
+                    continue;
+                }
+
+                long now = System.currentTimeMillis();
+                if (activeLevel == null) {
+                    long startedAt = overLimitSince.computeIfAbsent(rule.getId(), ignored -> now);
+                    int triggerDuration = thresholdDetector.getTriggerDuration(rule.getConfig());
+                    if (now - startedAt < triggerDuration * 1_000L) continue;
                 }
 
                 // 下降过程不重复触发较低级别，直到负荷完全回到安全区。
@@ -88,7 +103,6 @@ public class AlertScheduler {
 
                 int coolingTime = Math.max(0, thresholdDetector.getCoolingTime(rule.getConfig()));
                 String coolingKey = rule.getId() + ":" + level;
-                long now = System.currentTimeMillis();
                 long lastTriggered = lastTriggeredAt.getOrDefault(coolingKey, 0L);
                 if (now - lastTriggered < coolingTime * 1_000L) continue;
 

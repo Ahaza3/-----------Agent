@@ -2,12 +2,16 @@ package com.powerload.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.powerload.entity.LoadData;
 import com.powerload.entity.ModelVersion;
+import com.powerload.entity.ModelTrainingTask;
 import com.powerload.mapper.LoadDataMapper;
 import com.powerload.mapper.ModelVersionMapper;
+import com.powerload.mapper.ModelTrainingTaskMapper;
 import com.powerload.ml.FlaskInferenceService;
 import com.powerload.service.ModelVersionService;
+import org.springframework.beans.factory.annotation.Autowired;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -22,12 +26,15 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Instant;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.LinkedHashMap;
+import java.util.function.Consumer;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Pattern;
 
@@ -39,6 +46,9 @@ public class ModelVersionServiceImpl implements ModelVersionService {
     private final LoadDataMapper loadDataMapper;
     private final FlaskInferenceService flaskInferenceService;
 
+    @Autowired(required = false)
+    private ModelTrainingTaskMapper trainingTaskMapper;
+
     private static final int MIN_TRAINING_ROWS = 192;
     @Value("${ml.model-dir:../ml/models}")
     private String modelDir;
@@ -47,6 +57,7 @@ public class ModelVersionServiceImpl implements ModelVersionService {
     private String mlWorkDir;
 
     private static final DateTimeFormatter VERSION_TIME = DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private static final Pattern MAPE_PATTERN = Pattern.compile("MAPE\\s*=\\s*([0-9]+(?:\\.[0-9]+)?)");
     private static final Pattern RMSE_PATTERN = Pattern.compile("RMSE\\s*=\\s*([0-9]+(?:\\.[0-9]+)?)");
     private final AtomicReference<RetrainJob> retrainJob = new AtomicReference<>(RetrainJob.idle());
@@ -96,9 +107,11 @@ public class ModelVersionServiceImpl implements ModelVersionService {
             throw new IllegalStateException("已有模型训练任务正在执行，请等待完成后再重试");
         }
 
-        RetrainJob next = new RetrainJob("RUNNING", normalized, LocalDateTime.now(), null, "训练任务已启动", "");
+        LocalDateTime startedAt = LocalDateTime.now();
+        Long taskId = createTrainingTask(normalized, startedAt);
+        RetrainJob next = new RetrainJob(taskId, "RUNNING", normalized, startedAt, null, "训练任务已启动", "");
         retrainJob.set(next);
-        Thread worker = new Thread(() -> runRetrain(normalized), "model-retrain-" + normalized.toLowerCase(Locale.ROOT));
+        Thread worker = new Thread(() -> runRetrain(normalized, taskId), "model-retrain-" + normalized.toLowerCase(Locale.ROOT));
         worker.setDaemon(true);
         worker.start();
         return next.toMap();
@@ -107,6 +120,14 @@ public class ModelVersionServiceImpl implements ModelVersionService {
     @Override
     public Map<String, Object> retrainStatus() {
         return retrainJob.get().toMap();
+    }
+
+    @Override
+    public List<ModelTrainingTask> trainingHistory() {
+        if (trainingTaskMapper == null) return List.of();
+        return trainingTaskMapper.selectList(new LambdaQueryWrapper<ModelTrainingTask>()
+                .orderByDesc(ModelTrainingTask::getStartedAt)
+                .last("LIMIT 20"));
     }
 
     private List<ModelVersion> listStoredVersions() {
@@ -175,14 +196,19 @@ public class ModelVersionServiceImpl implements ModelVersionService {
         return hasActive || shouldActivate;
     }
 
-    private void runRetrain(String modelName) {
+    private void runRetrain(String modelName, Long taskId) {
         String script = "PROPHET".equals(modelName) ? "train_prophet.py" : "train_lstm.py";
         Path workDir = resolveWorkDir();
         Path python = workDir.resolve(".venv").resolve("Scripts").resolve("python.exe");
         String pythonCommand = Files.exists(python) ? python.toString() : "python";
         StringBuilder output = new StringBuilder();
         try {
-            prepareTrainingData(workDir, pythonCommand, output);
+            TrainingDataSummary data = prepareTrainingData(workDir, pythonCommand, output);
+            updateTrainingTask(taskId, task -> {
+                task.setDataStart(data.start());
+                task.setDataEnd(data.end());
+                task.setSampleCount(data.sampleCount());
+            });
             ProcessBuilder pb = new ProcessBuilder(pythonCommand, script, "--input", "featured_load_data.csv");
             pb.directory(workDir.toFile());
             pb.redirectErrorStream(true);
@@ -197,17 +223,21 @@ public class ModelVersionServiceImpl implements ModelVersionService {
             }
             int exitCode = process.waitFor();
             if (exitCode != 0) {
+                finishTrainingTask(taskId, "FAILED", "训练脚本退出码: " + exitCode, output, null);
                 retrainJob.set(retrainJob.get().finish("FAILED", "训练脚本退出码: " + exitCode, tail(output)));
                 return;
             }
+            Map<String, String> artifacts = validateArtifacts(modelName);
             insertRetrainedVersion(modelName, output.toString());
+            finishTrainingTask(taskId, "SUCCESS", "训练完成，新版本已登记", output, artifacts);
             retrainJob.set(retrainJob.get().finish("SUCCESS", "训练完成，新版本已登记", tail(output)));
         } catch (Exception e) {
+            finishTrainingTask(taskId, "FAILED", e.getMessage(), output, null);
             retrainJob.set(retrainJob.get().finish("FAILED", e.getMessage(), tail(output)));
         }
     }
 
-    private void prepareTrainingData(Path workDir, String pythonCommand, StringBuilder output)
+    private TrainingDataSummary prepareTrainingData(Path workDir, String pythonCommand, StringBuilder output)
             throws IOException, InterruptedException {
         List<LoadData> rows = loadDataMapper.selectList(
                 new LambdaQueryWrapper<LoadData>()
@@ -249,6 +279,10 @@ public class ModelVersionServiceImpl implements ModelVersionService {
         if (exitCode != 0) {
             throw new IllegalStateException("特征工程脚本退出码: " + exitCode);
         }
+        return new TrainingDataSummary(
+                rows.get(0).getTime(),
+                rows.get(rows.size() - 1).getTime(),
+                rows.size());
     }
 
     private void writeTrainingData(Path outputPath, List<LoadData> rows) throws IOException {
@@ -292,6 +326,68 @@ public class ModelVersionServiceImpl implements ModelVersionService {
         version.setTrainedAt(now);
         version.setCreatedAt(now);
         modelVersionMapper.insert(version);
+    }
+
+    private Long createTrainingTask(String modelName, LocalDateTime startedAt) {
+        if (trainingTaskMapper == null) return null;
+        ModelTrainingTask task = new ModelTrainingTask();
+        task.setModelName("PROPHET".equals(modelName) ? "Prophet" : "LSTM");
+        task.setStatus("RUNNING");
+        task.setStartedAt(startedAt);
+        task.setCreatedAt(startedAt);
+        task.setMessage("训练任务已启动");
+        trainingTaskMapper.insert(task);
+        return task.getId();
+    }
+
+    private void updateTrainingTask(Long taskId, Consumer<ModelTrainingTask> change) {
+        if (taskId == null || trainingTaskMapper == null) return;
+        ModelTrainingTask task = trainingTaskMapper.selectById(taskId);
+        if (task == null) return;
+        change.accept(task);
+        trainingTaskMapper.updateById(task);
+    }
+
+    private void finishTrainingTask(Long taskId, String status, String message,
+                                    StringBuilder output, Map<String, String> artifacts) {
+        updateTrainingTask(taskId, task -> {
+            LocalDateTime finishedAt = LocalDateTime.now();
+            task.setStatus(status);
+            task.setFinishedAt(finishedAt);
+            task.setDurationMs(task.getStartedAt() == null ? null
+                    : Duration.between(task.getStartedAt(), finishedAt).toMillis());
+            task.setMessage(message);
+            task.setOutputTail(tail(output));
+            if (artifacts != null) {
+                try {
+                    task.setArtifactManifest(OBJECT_MAPPER.writeValueAsString(artifacts));
+                } catch (Exception ignored) {
+                    task.setArtifactManifest("{}");
+                }
+            }
+        });
+    }
+
+    private Map<String, String> validateArtifacts(String modelName) {
+        Path models = resolveModelDir();
+        List<String> required = "PROPHET".equals(modelName)
+                ? List.of("prophet_model.pkl")
+                : List.of("lstm_model.pt", "lstm_meta.pt", "lstm_scripted.pt",
+                "lstm_scaler.pkl", "lstm_scaler_x.pkl", "lstm_feature_cols.pkl");
+        Map<String, String> manifest = new LinkedHashMap<>();
+        List<String> missing = new java.util.ArrayList<>();
+        for (String file : required) {
+            Path path = models.resolve(file);
+            if (!Files.isRegularFile(path) || path.toFile().length() == 0) {
+                missing.add(file);
+            } else {
+                manifest.put(file, path.toString());
+            }
+        }
+        if (!missing.isEmpty()) {
+            throw new IllegalStateException("训练产物不完整，缺少: " + String.join(", ", missing));
+        }
+        return manifest;
     }
 
     private String normalizeModelName(String modelName) {
@@ -369,25 +465,29 @@ public class ModelVersionServiceImpl implements ModelVersionService {
         return output.length() <= maxLength ? output : output.substring(output.length() - maxLength);
     }
 
-    private record RetrainJob(String status, String modelName, LocalDateTime startedAt, LocalDateTime finishedAt,
+    private record TrainingDataSummary(LocalDateTime start, LocalDateTime end, int sampleCount) {
+    }
+
+    private record RetrainJob(Long taskId, String status, String modelName, LocalDateTime startedAt, LocalDateTime finishedAt,
                               String message, String outputTail) {
         static RetrainJob idle() {
-            return new RetrainJob("IDLE", null, null, null, "暂无训练任务", "");
+            return new RetrainJob(null, "IDLE", null, null, null, "暂无训练任务", "");
         }
 
         RetrainJob finish(String status, String message, String outputTail) {
-            return new RetrainJob(status, modelName, startedAt, LocalDateTime.now(), message, outputTail);
+            return new RetrainJob(taskId, status, modelName, startedAt, LocalDateTime.now(), message, outputTail);
         }
 
         Map<String, Object> toMap() {
-            return Map.of(
-                    "status", status,
-                    "modelName", modelName == null ? "" : modelName,
-                    "startedAt", startedAt == null ? "" : startedAt.toString(),
-                    "finishedAt", finishedAt == null ? "" : finishedAt.toString(),
-                    "message", message == null ? "" : message,
-                    "outputTail", outputTail == null ? "" : outputTail
-            );
+            Map<String, Object> result = new LinkedHashMap<>();
+            result.put("taskId", taskId);
+            result.put("status", status);
+            result.put("modelName", modelName == null ? "" : modelName);
+            result.put("startedAt", startedAt == null ? "" : startedAt.toString());
+            result.put("finishedAt", finishedAt == null ? "" : finishedAt.toString());
+            result.put("message", message == null ? "" : message);
+            result.put("outputTail", outputTail == null ? "" : outputTail);
+            return result;
         }
     }
 }

@@ -61,12 +61,15 @@ public class TicketService {
             w.in(AlertTicket::getAlertId, ids);
         }
         w.orderByDesc(AlertTicket::getCreatedAt);
-        return ticketMapper.selectPage(new Page<>(page, size), w);
+        Page<AlertTicket> result = ticketMapper.selectPage(new Page<>(page, size), w);
+        result.getRecords().forEach(this::applySla);
+        return result;
     }
 
     public AlertTicket getById(Long id) {
         AlertTicket t = ticketMapper.selectById(id);
         if (t == null) throw new IllegalArgumentException("工单不存在");
+        applySla(t);
         return t;
     }
 
@@ -280,6 +283,32 @@ public class TicketService {
 
     private String mapPriority(String level) {
         return switch (level) { case "RED" -> "URGENT"; case "ORANGE" -> "HIGH"; default -> "NORMAL"; };
+    }
+
+    private void applySla(AlertTicket ticket) {
+        if (ticket.getCreatedAt() == null) return;
+        int responseMinutes = switch (ticket.getPriority()) {
+            case "URGENT" -> 5;
+            case "HIGH" -> 15;
+            default -> 30;
+        };
+        int processingMinutes = switch (ticket.getPriority()) {
+            case "URGENT" -> 30;
+            case "HIGH" -> 120;
+            default -> 240;
+        };
+        ticket.setResponseDeadline(ticket.getCreatedAt().plusMinutes(responseMinutes));
+        ticket.setProcessingDeadline(ticket.getCreatedAt().plusMinutes(processingMinutes));
+
+        if (FINAL_STATUS.contains(ticket.getStatus())) {
+            ticket.setSlaStatus("COMPLETED");
+        } else if (ticket.getAssignedAt() == null && LocalDateTime.now().isAfter(ticket.getResponseDeadline())) {
+            ticket.setSlaStatus("OVERDUE_RESPONSE");
+        } else if (LocalDateTime.now().isAfter(ticket.getProcessingDeadline())) {
+            ticket.setSlaStatus("OVERDUE_PROCESSING");
+        } else {
+            ticket.setSlaStatus("ON_TRACK");
+        }
     }
 
     private String normalizeRiskLevel(String riskLevel) {

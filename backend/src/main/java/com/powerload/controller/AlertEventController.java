@@ -76,6 +76,15 @@ public class AlertEventController {
         ));
     }
 
+    @GetMapping("/events/metrics")
+    public R<Map<String, Object>> metrics(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime start,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime end) {
+        LocalDateTime effectiveEnd = end != null ? end : LocalDateTime.now();
+        LocalDateTime effectiveStart = start != null ? start : effectiveEnd.minusDays(7);
+        return R.ok(alertEventService.metrics(effectiveStart, effectiveEnd));
+    }
+
     /** 标记告警已读 */
     @PutMapping("/events/{id}/read")
     public R<Void> markRead(@PathVariable Long id) {

@@ -53,6 +53,36 @@ public class AlertRuleServiceImpl implements AlertRuleService {
         return alertRuleMapper.selectById(id);
     }
 
+    @Override
+    public AlertRule snooze(Long id, int minutes) {
+        if (minutes < 1 || minutes > 7 * 24 * 60) {
+            throw new IllegalArgumentException("暂挂时间必须在 1 分钟到 7 天之间");
+        }
+        return updateConfig(id, config -> config.put(
+                "suspendUntil", LocalDateTime.now().plusMinutes(minutes).toString()));
+    }
+
+    @Override
+    public AlertRule setMaintenance(Long id, boolean enabled) {
+        return updateConfig(id, config -> config.put("maintenance", enabled));
+    }
+
+    @SuppressWarnings("unchecked")
+    private AlertRule updateConfig(Long id, java.util.function.Consumer<Map<String, Object>> change) {
+        AlertRule rule = alertRuleMapper.selectById(id);
+        if (rule == null) throw new IllegalArgumentException("告警规则不存在: " + id);
+        try {
+            Map<String, Object> config = objectMapper.readValue(rule.getConfig(), Map.class);
+            change.accept(config);
+            rule.setConfig(objectMapper.writeValueAsString(config));
+        } catch (Exception e) {
+            throw new IllegalArgumentException("规则配置 JSON 格式无效: " + e.getMessage());
+        }
+        rule.setUpdatedAt(LocalDateTime.now());
+        alertRuleMapper.updateById(rule);
+        return alertRuleMapper.selectById(id);
+    }
+
     /**
      * 校验 config JSON 中的阈值和比例
      */
@@ -85,6 +115,15 @@ public class AlertRuleServiceImpl implements AlertRuleService {
             if (cfg.containsKey("coolingTime")) {
                 double coolingTime = ((Number) cfg.get("coolingTime")).doubleValue();
                 if (coolingTime < 0) throw new IllegalArgumentException("冷却时间不能为负数");
+            }
+
+            if (cfg.containsKey("triggerDuration")) {
+                double triggerDuration = ((Number) cfg.get("triggerDuration")).doubleValue();
+                if (triggerDuration < 0) throw new IllegalArgumentException("连续超限触发时长不能为负数");
+            }
+            if (cfg.containsKey("hysteresis")) {
+                double hysteresis = ((Number) cfg.get("hysteresis")).doubleValue();
+                if (hysteresis < 0) throw new IllegalArgumentException("恢复死区不能为负数");
             }
         } catch (IllegalArgumentException e) {
             throw e;

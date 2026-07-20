@@ -3,6 +3,7 @@ package com.powerload.controller;
 import com.powerload.audit.AuditLog;
 import com.powerload.common.R;
 import com.powerload.entity.ModelVersion;
+import com.powerload.entity.ModelTrainingTask;
 import com.powerload.service.ModelVersionService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -55,5 +56,11 @@ public class ModelVersionController {
     @PreAuthorize("hasAnyRole('OPERATOR', 'SYSTEM_ADMIN')")
     public R<Map<String, Object>> retrainStatus() {
         return R.ok(modelVersionService.retrainStatus());
+    }
+
+    @GetMapping("/retrain/history")
+    @PreAuthorize("hasAnyRole('OPERATOR', 'SYSTEM_ADMIN')")
+    public R<List<ModelTrainingTask>> trainingHistory() {
+        return R.ok(modelVersionService.trainingHistory());
     }
 }

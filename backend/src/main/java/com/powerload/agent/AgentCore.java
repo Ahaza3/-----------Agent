@@ -7,6 +7,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -108,6 +109,7 @@ public class AgentCore {
 
         // Collect charts from tool executions
         Object chartOption = null;
+        Map<String, Object> provenance = new LinkedHashMap<>();
 
         for (Map<String, Object> toolCall : assistant.getToolCalls()) {
             String toolCallId = (String) toolCall.get("id");
@@ -134,11 +136,18 @@ public class AgentCore {
             if (chartOption == null && toolResult.getChart() != null) {
                 chartOption = toolResult.getChart();
             }
+            if (toolResult.getProvenance() != null) {
+                provenance.put(toolName, toolResult.getProvenance());
+            }
         }
 
         // Request LLM again with tool results (keep tools available for multi-round)
         AgentResponse finalResponse = runLoop(messages, toolDefs, round + 1, callback);
         finalResponse.setChart(chartOption);
+        if (finalResponse.getProvenance() != null) {
+            provenance.putAll(finalResponse.getProvenance());
+        }
+        finalResponse.setProvenance(provenance);
         return finalResponse;
     }
 
@@ -163,6 +172,7 @@ public class AgentCore {
         private boolean success;
         private String content;
         private Object chart;
+        private Map<String, Object> provenance;
         private List<AgentMessage> toolMessages; // for Conversation saving
 
         private AgentResponse(boolean success, String content) {

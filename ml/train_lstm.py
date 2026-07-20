@@ -189,7 +189,7 @@ def main():
     print(f"📂 加载数据: {len(df)} 行 × {len(df.columns)} 列")
 
     # 2. 构建 DataLoader（Day5 接口）
-    train_loader, val_loader, scaler_y = create_dataloaders(
+    train_loader, val_loader, scaler_x, scaler_y, feature_cols = create_dataloaders(
         df,
         target_col="load_mw",
         seq_length=args.seq_length,
@@ -263,6 +263,16 @@ def main():
     with open(scaler_path, "wb") as f:
         pickle.dump(scaler_y, f)
     print(f"💾 Scaler 已保存: {scaler_path}")
+
+    scaler_x_path = "models/lstm_scaler_x.pkl"
+    with open(scaler_x_path, "wb") as f:
+        pickle.dump(scaler_x, f)
+    print(f"💾 输入 Scaler 已保存: {scaler_x_path}")
+
+    feature_cols_path = "models/lstm_feature_cols.pkl"
+    with open(feature_cols_path, "wb") as f:
+        pickle.dump(feature_cols, f)
+    print(f"💾 特征列已保存: {feature_cols_path}")
 
     # 6. TorchScript 导出（供 Flask 推理）
     if not args.no_export:

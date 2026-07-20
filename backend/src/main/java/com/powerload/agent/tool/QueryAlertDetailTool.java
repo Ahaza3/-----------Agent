@@ -60,7 +60,12 @@ public class QueryAlertDetailTool implements Tool {
             }
             data.put("aiAnalysis", e.getAiAnalysis());
             data.put("suggestion", e.getSuggestion());
-            return ToolResult.ok("告警详情 (模拟数据): " + data.get("level"), data);
+            ToolResult result = ToolResult.ok("告警详情: " + data.get("level"), data);
+            result.setProvenance(Map.of(
+                    "source", "alert_event",
+                    "alertId", alertId,
+                    "triggerTime", e.getTriggerTime() != null ? e.getTriggerTime().toString() : ""));
+            return result;
         } catch (Exception ex) {
             return ToolResult.fail("告警查询失败: " + ex.getMessage());
         }
