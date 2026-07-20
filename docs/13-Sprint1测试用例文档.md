@@ -48,7 +48,7 @@
 |:-----|:---------|:------:|
 | 数据管道 | Mock 生成 → CSV → MySQL → 特征工程 | 5 |
 | 数据查询 API | `/api/v1/data/range`, `/latest`, `/stats` | 7 |
-| 预测模型 | LSTM 训练 + TorchScript 导出 + Prophet 基线 | 4 |
+| 预测模型 | LSTM 训练 + TorchScript 导出；Prophet 仅作历史兼容验证 | 4 |
 | Flask 推理 | `/predict/forecast`, `/health` | 6 |
 | 通用组件 | `R<T>`, `GlobalExceptionHandler`, `DataCleanService` | 12 |
 | 前端启动 | Vite + Proxy | 4 |
@@ -271,3 +271,5 @@
 > **Sprint 1 测试总计**：**37 条用例**（单元 19 + 集成 17 + E2E 1）  
 > **用例命名规范**：`{层级}-{模块缩写}-{序号}` — 层级: UT/IT/E2E  
 > **下个里程碑**：Day 12 集中编写测试代码，目标覆盖率 ≥ 80%
+
+> **当前状态说明（2026-07-20）**：本文件保留 Sprint 1 测试用例。当前新增模型训练前数据导出、模型版本查询只读、显式同步、告警研判缓存只读和待确认工单草稿边界，详见 [当前实现同步说明](./14-当前实现同步说明.md)。

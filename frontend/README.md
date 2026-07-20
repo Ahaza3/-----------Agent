@@ -1,32 +1,35 @@
-# React + TypeScript + Vite
+# 电力负荷预测与智能告警 Agent 前端
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+前端使用 React、TypeScript、Vite、Ant Design、ECharts 和 Zustand，提供以下页面：
 
-Currently, two official plugins are available:
+- 运行大屏：历史负荷、恢复段、实时模拟负荷、预测曲线、天气信息和告警状态。
+- 告警中心：告警确认、红色告警待确认工单草稿、正式工单提交和处置时间线。
+- Agent 聊天：SSE Markdown 文本、ECharts 图表、会话历史和数据来源信息。
+- 运维管理：告警规则、模型版本、训练记录、预测质量和线上复盘。
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## 启动
 
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```bash
+npm install
+npm run dev
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+默认访问地址：`http://localhost:5173`
+
+## 构建和测试
+
+```bash
+npm run build
+npm run test
+```
+
+## 当前实现约定
+
+- Agent 助手消息中的图表配置会随会话保存，历史会话重新打开时恢复图表。
+- 红色告警只显示“待确认工单草稿”，只有调度员确认后才提交正式工单。
+- 未创建工单的告警不显示处置时间线。
+- 模型管理页面区分数据库发布版本和 Flask 实际运行模型，并显示“已生效”“待重启”或“推理服务异常”。
+- 产品已决定停用 Prophet；当前页面仍保留兼容入口，下一步会移除 Prophet 重训练按钮，后端兼容逻辑暂时保留。
+- 前端显示实时数据来源，演示环境中的实时负荷和恢复段不代表真实 SCADA 数据。
+
+详细接口和当前项目边界见 [`docs/14-当前实现同步说明.md`](../docs/14-当前实现同步说明.md)。
