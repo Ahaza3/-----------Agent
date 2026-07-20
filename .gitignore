@@ -68,3 +68,5 @@ logs/
 flyway*.jar
 mock_load_data.csv
 featured_load_data.csv
+
+projects/
