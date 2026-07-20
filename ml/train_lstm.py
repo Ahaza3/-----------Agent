@@ -1,4 +1,4 @@
-"""Train the LSTM load forecaster and export TorchScript artifacts."""
+"""训练 LSTM 负荷预测模型并导出 TorchScript 模型文件。"""
 
 import argparse
 import os
@@ -16,7 +16,7 @@ from sliding_window_dataset import create_dataloaders
 
 
 class LSTMLoadPredictor(nn.Module):
-    """LSTM encoder with an optional future-weather covariate branch."""
+    """带可选未来天气协变量分支的 LSTM 编码器。"""
 
     def __init__(
         self,
@@ -79,7 +79,7 @@ def export_torchscript(
         traced = torch.jit.trace(model, (example_x, example_weather))
     traced = torch.jit.freeze(traced)
     traced.save(save_path)
-    print(f"TorchScript model exported: {save_path}")
+    print(f"TorchScript 模型已导出: {save_path}")
 
 
 def train_epoch(model, loader, optimizer, criterion, device):
@@ -172,32 +172,32 @@ def train_model(
         else:
             patience_counter += 1
             if patience_counter >= patience:
-                print(f"Early stopping at epoch {epoch}")
+                print(f"提前停止训练，当前轮次: {epoch}")
                 break
 
     if best_state is None:
-        raise RuntimeError("training produced no validation checkpoint")
+        raise RuntimeError("训练未生成有效的验证集检查点")
     model.load_state_dict(best_state)
     return model, {"val_loss": best_val_loss}
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Train LSTM and export TorchScript")
-    parser.add_argument("--input", default="featured_load_data.csv", help="feature CSV path")
-    parser.add_argument("--seq_length", type=int, default=168, help="historical window in hours")
-    parser.add_argument("--horizon", type=int, default=24, help="forecast horizon in hours")
-    parser.add_argument("--batch_size", type=int, default=64, help="batch size")
-    parser.add_argument("--epochs", type=int, default=80, help="maximum epochs")
-    parser.add_argument("--lr", type=float, default=0.001, help="learning rate")
-    parser.add_argument("--no-export", action="store_true", help="skip TorchScript export")
+    parser = argparse.ArgumentParser(description="训练 LSTM 模型并导出 TorchScript")
+    parser.add_argument("--input", default="featured_load_data.csv", help="特征 CSV 文件路径")
+    parser.add_argument("--seq_length", type=int, default=168, help="历史窗口长度，单位为小时")
+    parser.add_argument("--horizon", type=int, default=24, help="预测时长，单位为小时")
+    parser.add_argument("--batch_size", type=int, default=64, help="批次大小")
+    parser.add_argument("--epochs", type=int, default=80, help="最大训练轮数")
+    parser.add_argument("--lr", type=float, default=0.001, help="学习率")
+    parser.add_argument("--no-export", action="store_true", help="跳过 TorchScript 导出")
     args = parser.parse_args()
 
     if not os.path.exists(args.input):
-        print(f"Input file not found: {args.input}")
+        print(f"输入文件不存在: {args.input}")
         sys.exit(1)
 
     df = pd.read_csv(args.input)
-    print(f"Loaded data: {len(df)} rows x {len(df.columns)} columns")
+    print(f"已加载训练数据: {len(df)} 行 x {len(df.columns)} 列")
 
     (
         train_loader,
@@ -219,14 +219,14 @@ def main():
     input_size = x_sample.shape[-1]
     future_weather_features = weather_sample.shape[-1]
     print(
-        f"seq_length={args.seq_length}, horizon={args.horizon}, "
-        f"input_size={input_size}, future_weather_features={future_weather_features}"
+        f"历史窗口={args.seq_length} 小时，预测时长={args.horizon} 小时，"
+        f"输入特征数={input_size}，未来天气特征数={future_weather_features}"
     )
-    print(f"train samples={len(train_loader.dataset)}")
-    print(f"validation samples={len(val_loader.dataset)}")
+    print(f"训练样本数={len(train_loader.dataset)}")
+    print(f"验证样本数={len(val_loader.dataset)}")
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"Training LSTM on {device}...")
+    print(f"开始训练 LSTM，运行设备: {device}")
     model, _ = train_model(
         train_loader,
         val_loader,
@@ -252,14 +252,14 @@ def main():
         np.abs((targets - preds) / np.clip(targets, 1, None)), axis=0
     ) * 100
 
-    print("LSTM validation metrics:")
+    print("LSTM 验证集指标:")
     print(f"MAE  = {mae:.2f} MW")
     print(f"RMSE = {rmse:.2f} MW")
     print(f"MAPE = {mape:.2f}%")
     print(
-        f"Hourly MAPE: 1h={hourly_mape[0]:.2f}%  "
-        f"6h={hourly_mape[5]:.2f}%  12h={hourly_mape[11]:.2f}%  "
-        f"24h={hourly_mape[23]:.2f}%"
+        f"分小时 MAPE: 1 小时={hourly_mape[0]:.2f}%  "
+        f"6 小时={hourly_mape[5]:.2f}%  12 小时={hourly_mape[11]:.2f}%  "
+        f"24 小时={hourly_mape[23]:.2f}%"
     )
 
     os.makedirs("models", exist_ok=True)

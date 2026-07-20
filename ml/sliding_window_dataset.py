@@ -1,4 +1,4 @@
-"""Sliding-window dataset for load forecasting."""
+"""负荷预测滑动窗口数据集。"""
 
 import argparse
 import os
@@ -14,7 +14,7 @@ DEFAULT_WEATHER_COLS = ["temperature", "humidity"]
 
 
 class SlidingWindowDataset(Dataset):
-    """Return historical features, future weather covariates, and targets."""
+    """返回历史特征、未来天气协变量和预测目标。"""
 
     def __init__(
         self,
@@ -41,7 +41,7 @@ def build_sliding_windows(
     feature_cols: list | None = None,
     weather_cols: list[str] | None = None,
 ) -> tuple:
-    """Build normalized historical and future-weather windows."""
+    """构建标准化的历史特征窗口和未来天气窗口。"""
     if feature_cols is None:
         exclude = {target_col, "time", "created_at"}
         feature_cols = [
@@ -52,7 +52,7 @@ def build_sliding_windows(
     weather_cols = weather_cols or DEFAULT_WEATHER_COLS
     missing_weather = [col for col in weather_cols if col not in df.columns]
     if missing_weather:
-        raise ValueError(f"missing weather columns: {', '.join(missing_weather)}")
+        raise ValueError(f"缺少天气字段: {', '.join(missing_weather)}")
 
     data = df[feature_cols].apply(pd.to_numeric, errors="coerce").bfill().ffill().fillna(0).values
     raw_y = pd.to_numeric(df[target_col], errors="coerce").bfill().ffill().fillna(0).values.astype(np.float32)
@@ -69,7 +69,7 @@ def build_sliding_windows(
     n_samples = len(data) - seq_length - forecast_horizon + 1
     if n_samples <= 0:
         raise ValueError(
-            f"need more data than seq_length={seq_length} + horizon={forecast_horizon}, got {len(data)}"
+            f"数据量不足，至少需要 seq_length={seq_length} + horizon={forecast_horizon}，实际为 {len(data)}"
         )
 
     scaler_x = StandardScaler()
@@ -117,7 +117,7 @@ def create_dataloaders(
     feature_cols: list | None = None,
     shuffle_train: bool = True,
 ) -> tuple:
-    """Build time-ordered train and validation DataLoaders."""
+    """按时间顺序构建训练集和验证集 DataLoader。"""
     (
         features,
         future_weather,
@@ -137,7 +137,7 @@ def create_dataloaders(
 
     split_idx = int(len(features) * train_ratio)
     if split_idx <= 0 or split_idx >= len(features):
-        raise ValueError("train_ratio must leave both train and validation samples")
+        raise ValueError("train_ratio 必须同时保留训练样本和验证样本")
 
     train_dataset = SlidingWindowDataset(
         features[:split_idx], future_weather[:split_idx], targets[:split_idx]
@@ -152,19 +152,19 @@ def create_dataloaders(
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Build and inspect sliding-window datasets")
-    parser.add_argument("--input", default="featured_load_data.csv", help="feature CSV path")
-    parser.add_argument("--seq_length", type=int, default=168, help="historical window in hours")
-    parser.add_argument("--batch_size", type=int, default=64, help="batch size")
-    parser.add_argument("--train_ratio", type=float, default=0.85, help="train split ratio")
+    parser = argparse.ArgumentParser(description="构建并检查负荷预测滑动窗口数据集")
+    parser.add_argument("--input", default="featured_load_data.csv", help="特征 CSV 文件路径")
+    parser.add_argument("--seq_length", type=int, default=168, help="历史窗口长度，单位为小时")
+    parser.add_argument("--batch_size", type=int, default=64, help="批次大小")
+    parser.add_argument("--train_ratio", type=float, default=0.85, help="训练集比例")
     args = parser.parse_args()
 
     if not os.path.exists(args.input):
-        print(f"Input file not found: {args.input}")
+        print(f"输入文件不存在: {args.input}")
         return
 
     df = pd.read_csv(args.input)
-    print(f"Loaded feature data: {len(df)} rows x {len(df.columns)} columns")
+    print(f"已加载特征数据: {len(df)} 行 x {len(df.columns)} 列")
 
     train_loader, val_loader, _, scaler_y, _, feature_cols = create_dataloaders(
         df,
@@ -174,18 +174,18 @@ def main():
         train_ratio=args.train_ratio,
     )
 
-    print("Sliding-window dataset ready")
-    print(f"  seq_length = {args.seq_length}h")
-    print(f"  features = {len(feature_cols)}")
-    print(f"  train = {len(train_loader.dataset)} samples, {len(train_loader)} batches")
-    print(f"  validation = {len(val_loader.dataset)} samples, {len(val_loader)} batches")
+    print("滑动窗口数据集构建完成")
+    print(f"  历史窗口 = {args.seq_length} 小时")
+    print(f"  特征数 = {len(feature_cols)}")
+    print(f"  训练集 = {len(train_loader.dataset)} 个样本，{len(train_loader)} 个批次")
+    print(f"  验证集 = {len(val_loader.dataset)} 个样本，{len(val_loader)} 个批次")
 
     x, weather, y = next(iter(train_loader))
-    print(f"  X shape: {x.shape}")
-    print(f"  future weather shape: {weather.shape}")
-    print(f"  y shape: {y.shape}")
+    print(f"  历史特征形状: {x.shape}")
+    print(f"  未来天气形状: {weather.shape}")
+    print(f"  目标值形状: {y.shape}")
     print(
-        "  y sample:",
+        "  目标值示例:",
         scaler_y.inverse_transform(y[:3].numpy().reshape(-1, 1)).flatten(),
     )
 

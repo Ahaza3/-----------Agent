@@ -64,18 +64,18 @@ public class OpenMeteoWeatherProvider implements WeatherProvider {
         try (Response response = client.newCall(request).execute()) {
             String body = response.body() == null ? "{}" : response.body().string();
             if (!response.isSuccessful()) {
-                throw new IllegalStateException("weather service returned HTTP " + response.code());
+                throw new IllegalStateException("天气服务返回 HTTP " + response.code());
             }
             Map<String, Object> root = objectMapper.readValue(body, Map.class);
             Map<String, Object> hourly = (Map<String, Object>) root.get("hourly");
             if (hourly == null) {
-                throw new IllegalStateException("weather response is missing hourly data");
+                throw new IllegalStateException("天气响应缺少 hourly 数据");
             }
             List<String> times = (List<String>) hourly.get("time");
             List<Number> temperatures = (List<Number>) hourly.get("temperature_2m");
             List<Number> humidities = (List<Number>) hourly.get("relative_humidity_2m");
             if (times == null || temperatures == null || humidities == null) {
-                throw new IllegalStateException("weather response is missing temperature or humidity fields");
+                throw new IllegalStateException("天气响应缺少温度或湿度字段");
             }
 
             List<WeatherPoint> points = new ArrayList<>();
@@ -88,8 +88,8 @@ public class OpenMeteoWeatherProvider implements WeatherProvider {
             }
             return points;
         } catch (Exception e) {
-            log.warn("Open-Meteo weather forecast fetch failed: {}", e.getMessage());
-            throw new IllegalStateException("future weather forecast is temporarily unavailable", e);
+            log.warn("Open-Meteo 天气预报获取失败: {}", e.getMessage());
+            throw new IllegalStateException("未来天气预报暂时不可用", e);
         }
     }
 }

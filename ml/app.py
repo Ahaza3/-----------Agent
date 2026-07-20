@@ -1,4 +1,4 @@
-"""Flask inference service for load forecasting."""
+"""负荷预测 Flask 推理服务。"""
 
 import math
 import os
@@ -30,7 +30,7 @@ try:
         model = torch.jit.load(script_path, map_location="cpu")
         model.eval()
         model_type = "torchscript"
-        print(f"TorchScript model loaded: {script_path}")
+        print(f"TorchScript 模型已加载: {script_path}")
 
         meta = torch.load(
             "models/lstm_meta.pt", weights_only=True, map_location="cpu"
@@ -39,11 +39,11 @@ try:
         forecast_horizon = int(meta.get("forecast_horizon", 24))
         future_weather_features = int(meta.get("future_weather_features", 0))
         print(
-            f"seq_length={seq_length}, horizon={forecast_horizon}, "
-            f"future_weather_features={future_weather_features}"
+            f"历史窗口={seq_length}，预测时长={forecast_horizon}，"
+            f"未来天气特征数={future_weather_features}"
         )
     else:
-        print(f"TorchScript model not found: {script_path}")
+        print(f"未找到 TorchScript 模型: {script_path}")
 
     for fname, attr_name in [
         ("lstm_scaler_x.pkl", "scaler_x"),
@@ -55,9 +55,9 @@ try:
         if os.path.exists(path):
             with open(path, "rb") as f:
                 globals()[attr_name] = pickle.load(f)
-            print(f"{attr_name} loaded: {path}")
+            print(f"推理文件已加载: {path}")
 except Exception as e:
-    print(f"Model load failed: {e}")
+    print(f"模型加载失败: {e}")
 
 
 if model is None:
@@ -67,14 +67,14 @@ if model is None:
             with open(prophet_path, "rb") as f:
                 model = pickle.load(f)
             model_type = "prophet"
-            print(f"Prophet model loaded: {prophet_path}")
+            print(f"Prophet 模型已加载: {prophet_path}")
     except Exception as e:
-        print(f"Prophet model load failed: {e}")
+        print(f"Prophet 模型加载失败: {e}")
 
 if model is None:
-    print("No model available. Run train_lstm.py first.")
+    print("当前没有可用模型，请先运行 train_lstm.py。")
 else:
-    print(f"Inference ready (model={model_type})")
+    print(f"推理服务已就绪，当前模型: {model_type}")
 
 
 def _engineer_features(raw_rows: list[dict]) -> np.ndarray:
@@ -116,7 +116,7 @@ def _number(value):
 
 
 def _future_weather_tensor(raw_rows: list[dict], rows: list[dict]):
-    """Create a standardized weather tensor and report fallback usage."""
+    """构建标准化天气张量，并返回是否使用回退数据。"""
     last_row = raw_rows[-1] if raw_rows else {}
     fallback_values = np.array(
         [
@@ -155,12 +155,12 @@ def _future_weather_tensor(raw_rows: list[dict], rows: list[dict]):
 def predict_forecast():
     data = request.json
     if not data or "data" not in data:
-        return jsonify({"error": "missing 'data' field"}), 400
+        return jsonify({"error": "缺少 data 字段"}), 400
 
     raw_rows = data["data"]
     future_weather = data.get("future_weather", [])
     if len(raw_rows) < seq_length:
-        return jsonify({"error": f"need >= {seq_length} rows, got {len(raw_rows)}"}), 400
+        return jsonify({"error": f"历史数据至少需要 {seq_length} 行，实际收到 {len(raw_rows)} 行"}), 400
 
     if model is None:
         return jsonify(
@@ -198,7 +198,7 @@ def predict_forecast():
         else:
             predictions = preds_scaled.tolist()
     except Exception as e:
-        return jsonify({"error": f"inference failed: {e}"}), 500
+        return jsonify({"error": f"模型推理失败: {e}"}), 500
 
     predictions = [round(float(p), 1) for p in predictions[:forecast_horizon]]
     return jsonify(
