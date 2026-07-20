@@ -85,7 +85,7 @@ describe('快捷问题按角色区分', () => {
   const questions: Record<string, string[]> = {
     DISPATCHER: ['最近一个告警是否需要创建工单？', '生成当前告警研判和调度建议'],
     OPERATOR: ['帮我生成这个工单的处理报告', '当前待处理工单优先处理哪一个？'],
-    SYSTEM_ADMIN: ['查看最近自动建单和人工操作记录', '检查告警到工单闭环是否完整'],
+    SYSTEM_ADMIN: ['查看最近待确认工单草稿和人工操作记录', '检查告警到工单闭环是否完整'],
   }
 
   it('调度员快捷问题应包含研判和建单', () => {
@@ -101,6 +101,6 @@ describe('快捷问题按角色区分', () => {
 
   it('管理员快捷问题应包含审计', () => {
     const qs = questions['SYSTEM_ADMIN']
-    expect(qs.some((q) => q.includes('审计') || q.includes('自动建单'))).toBe(true)
+    expect(qs.some((q) => q.includes('审计') || q.includes('待确认工单草稿'))).toBe(true)
   })
 })

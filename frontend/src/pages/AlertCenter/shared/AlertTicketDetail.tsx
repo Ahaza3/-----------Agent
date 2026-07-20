@@ -332,11 +332,9 @@ const AlertTicketDetail = ({
             </div>
             <Descriptions size="small" column={1} labelStyle={{ color: '#888', background: '#0c0c0c', width: 100 }} contentStyle={{ color: '#ccc', background: '#0e0e0e' }}>
               <Descriptions.Item label="建单建议">
-                {judgement.autoCreateTicket
-                  ? <Tag color="blue">已自动创建工单</Tag>
-                  : judgement.shouldCreateTicket
-                    ? <Tag color="green">建议创建工单</Tag>
-                    : <Tag color="default">暂不建议建单</Tag>
+                {judgement.shouldCreateTicket
+                  ? <Tag color="green">建议提交待确认工单草稿</Tag>
+                  : <Tag color="default">暂不建议建单</Tag>
                 }
               </Descriptions.Item>
               <Descriptions.Item label="推荐优先级">
@@ -375,7 +373,8 @@ const AlertTicketDetail = ({
         )}
         {!judgement && !judgementLoading && (
           <div style={{ marginBottom: 12, border: '1px solid #2A2A2A', padding: 12, background: '#0c0c0c', textAlign: 'center' }}>
-            <Button size="small" loading={judgementLoading} onClick={handleRejudge}>生成研判</Button>
+            <div style={{ color: '#888', fontSize: 12, marginBottom: 8 }}>暂无缓存研判，请点击重新研判。</div>
+            <Button size="small" loading={judgementLoading} onClick={handleRejudge}>重新研判</Button>
           </div>
         )}
 

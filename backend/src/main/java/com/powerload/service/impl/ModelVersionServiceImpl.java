@@ -64,7 +64,7 @@ public class ModelVersionServiceImpl implements ModelVersionService {
 
     @Override
     public List<ModelVersion> listVersions() {
-        return syncLocalArtifacts();
+        return listStoredVersions();
     }
 
     @Override

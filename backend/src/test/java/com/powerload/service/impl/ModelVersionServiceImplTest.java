@@ -34,21 +34,21 @@ class ModelVersionServiceImplTest {
     }
 
     @Test
-    void shouldListVersionsWithActiveFirst() {
-        when(mapper.selectCount(any())).thenReturn(0L);
+    void shouldListVersionsWithoutSyncingArtifacts() {
         when(mapper.selectList(any())).thenReturn(List.of(new ModelVersion()));
 
         assertEquals(1, service.listVersions().size());
-        verify(mapper).delete(any());
         verify(mapper).selectList(any());
+        verify(mapper, never()).delete(any());
+        verify(flaskInferenceService, never()).getHealth();
     }
 
     @Test
-    void shouldCleanInactiveMetriclessVersionsWhenListing() {
+    void shouldCleanInactiveMetriclessVersionsOnlyWhenSyncing() {
         when(mapper.selectCount(any())).thenReturn(1L);
         when(mapper.selectList(any())).thenReturn(List.of());
 
-        service.listVersions();
+        service.syncLocalArtifacts();
 
         verify(mapper).delete(any());
     }

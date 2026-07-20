@@ -100,14 +100,10 @@ public class AlertEventController {
         return R.ok();
     }
 
-    /** 查询告警智能研判（GET — 已有则返回，无则生成一次） */
+    /** 查询告警智能研判（GET 只读缓存，无缓存时返回 null） */
     @GetMapping("/events/{id}/judgement")
     public R<AlertJudgementResult> getJudgement(@PathVariable Long id) {
-        AlertJudgementResult existing = alertJudgementService.getExistingJudgement(id);
-        if (existing != null) return R.ok(existing);
-        AlertEvent event = alertEventMapper.selectById(id);
-        if (event == null) throw new IllegalArgumentException("告警不存在: " + id);
-        return R.ok(alertJudgementService.judgeRuleBased(event));
+        return R.ok(alertJudgementService.getExistingJudgement(id));
     }
 
     /** 手动重新研判（POST — 幂等，不重复建单） */

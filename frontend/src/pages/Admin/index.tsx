@@ -241,7 +241,7 @@ const HealthPanel = () => {
     { label: '启动时长', children: `${Math.floor(health.uptimeSeconds / 3600)}h ${Math.floor(health.uptimeSeconds % 3600 / 60)}m` },
     { label: 'MySQL', children: <Tag color={health.mysql === 'UP' ? 'green' : 'red'}>{health.mysql}</Tag> },
     { label: 'Redis', children: <Tag>{health.redis || 'N/A'}</Tag> },
-    { label: 'Flask/LSTM', children: <Tag color={health.flask === 'UP' ? 'green' : 'red'}>{health.flask}</Tag> },
+    { label: 'Flask 推理服务', children: <Tag color={health.flask === 'UP' ? 'green' : 'red'}>{health.flask}</Tag> },
     { label: 'LLM', children: health.llm ? <Tag color={health.llm.configured ? 'green' : 'default'}>{health.llm.configured ? '已配置' : '未配置'}</Tag> : 'N/A' },
     { label: 'LLM 模型', children: health.llm?.model || 'N/A' },
     { label: '最近预测', children: health.lastPrediction && health.lastPrediction !== 'NONE' ? dayjs(health.lastPrediction).format('MM-DD HH:mm:ss') : 'N/A' },
@@ -448,6 +448,13 @@ const ModelPanel = () => {
       ? 'Prophet'
       : ''
   const runtimeTypeMismatch = Boolean(activeVersion && runtimeModelType && String(activeVersion.modelName).toUpperCase() !== runtimeModelType.toUpperCase())
+  const runtimeEffectStatus = !activeVersion
+    ? { color: 'default', label: '未发布' }
+    : health?.flask !== 'UP'
+      ? { color: 'red', label: '推理服务异常' }
+      : (activationNotice || runtimeTypeMismatch)
+        ? { color: 'gold', label: '待重启' }
+        : { color: 'green', label: '已生效' }
   const reviewChartOption = useMemo<EChartsOption>(() => {
     const points = Array.isArray(review?.series) ? review.series : []
     const times = points.map((point: any) => dayjs(point.time).format('MM-DD HH:mm'))
@@ -546,6 +553,7 @@ const ModelPanel = () => {
         items={[
           { label: '数据库发布版本', children: activeVersion ? `${activeVersion.modelName} ${activeVersion.version}` : '未发布' },
           { label: 'Flask 实际推理模型', children: runtimeModel || '未获取' },
+          { label: '模型生效状态', children: <Tag color={runtimeEffectStatus.color}>{runtimeEffectStatus.label}</Tag> },
           { label: '推理服务', children: <Tag color={health?.flask === 'UP' ? 'green' : 'red'}>{health?.flask === 'UP' ? '正常' : '异常'}</Tag> },
           { label: '训练 MAPE', children: activeVersion?.mape != null ? `${Number(activeVersion.mape).toFixed(2)}%` : 'N/A' },
           { label: '训练 RMSE', children: activeVersion?.rmse != null ? `${Number(activeVersion.rmse).toFixed(2)} MW` : 'N/A' },
