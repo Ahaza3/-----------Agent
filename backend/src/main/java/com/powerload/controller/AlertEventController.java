@@ -9,11 +9,13 @@ import com.powerload.entity.AlertAdvice;
 import com.powerload.entity.AlertEvent;
 import com.powerload.mapper.AlertAdviceMapper;
 import com.powerload.mapper.AlertEventMapper;
+import com.powerload.security.SysUserPrincipal;
 import com.powerload.service.AlertEventService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
@@ -81,14 +83,22 @@ public class AlertEventController {
         return R.ok();
     }
 
+    @PutMapping("/events/{id}/acknowledge")
+    @PreAuthorize("hasAnyRole('DISPATCHER','SYSTEM_ADMIN')")
+    public R<Void> acknowledge(@PathVariable Long id,
+                               @AuthenticationPrincipal SysUserPrincipal user) {
+        alertEventService.acknowledge(id, user);
+        return R.ok();
+    }
+
     /** 查询告警智能研判（GET — 已有则返回，无则生成一次） */
     @GetMapping("/events/{id}/judgement")
     public R<AlertJudgementResult> getJudgement(@PathVariable Long id) {
         AlertJudgementResult existing = alertJudgementService.getExistingJudgement(id);
-        if (existing != null && "LLM_AGENT".equals(existing.getSource())) return R.ok(existing);
+        if (existing != null) return R.ok(existing);
         AlertEvent event = alertEventMapper.selectById(id);
         if (event == null) throw new IllegalArgumentException("告警不存在: " + id);
-        return R.ok(alertJudgementService.judge(event));
+        return R.ok(alertJudgementService.judgeRuleBased(event));
     }
 
     /** 手动重新研判（POST — 幂等，不重复建单） */

@@ -2,6 +2,7 @@ package com.powerload.service;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.powerload.entity.AlertEvent;
+import com.powerload.security.SysUserPrincipal;
 
 import java.time.LocalDateTime;
 
@@ -33,4 +34,8 @@ public interface AlertEventService {
      * 检查同一小时内同级别是否已有告警（去重）
      */
     boolean isDuplicate(LocalDateTime triggerTime, String level, Long ruleId);
+
+    void acknowledge(Long id, SysUserPrincipal user);
+
+    void resolveLatest(Long ruleId, LocalDateTime resolvedAt);
 }

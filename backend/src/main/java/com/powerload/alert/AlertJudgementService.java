@@ -229,6 +229,7 @@ public class AlertJudgementService {
         // 从 alert_advice 读取 RULE_BASED_AGENT 记录
         var wrapper = new LambdaQueryWrapper<AlertAdvice>()
                 .eq(AlertAdvice::getAlertId, alertId)
+                .eq(AlertAdvice::getAudienceRole, "JUDGEMENT")
                 .eq(AlertAdvice::getStatus, "SUCCESS")
                 .last("LIMIT 1");
         AlertAdvice adv = alertAdviceMapper.selectOne(wrapper);

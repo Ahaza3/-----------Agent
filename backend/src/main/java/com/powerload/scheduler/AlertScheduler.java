@@ -76,6 +76,7 @@ public class AlertScheduler {
                 if (level == null) {
                     if (activeLevel != null) {
                         activeLevels.remove(rule.getId());
+                        alertEventService.resolveLatest(rule.getId(), LocalDateTime.now());
                         log.info("告警恢复: ruleId={}, previousLevel={}, current={}MW",
                                 rule.getId(), activeLevel, currentLoad);
                     }
@@ -92,6 +93,11 @@ public class AlertScheduler {
                 if (now - lastTriggered < coolingTime * 1_000L) continue;
 
                 LocalDateTime triggerTime = LocalDateTime.now();
+                if (alertEventService.isDuplicate(triggerTime, level, rule.getId())) {
+                    activeLevels.put(rule.getId(), level);
+                    lastTriggeredAt.put(coolingKey, now);
+                    continue;
+                }
 
                 float threshold = thresholdDetector.getThreshold(rule.getConfig());
                 AlertEvent event = new AlertEvent();
@@ -104,6 +110,7 @@ public class AlertScheduler {
                 event.setAiAnalysis(alertTemplate.generateAnalysis(level, currentLoad, threshold));
                 event.setSuggestion(alertTemplate.generateSuggestion(level));
                 event.setIsRead(0);
+                event.setStatus("ACTIVE");
                 event.setCreatedAt(LocalDateTime.now());
 
                 alertEventService.save(event);

@@ -7,7 +7,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { Table, Tag, Button, Segmented, Space, message, Badge, Modal, Select, Input, Empty, Skeleton } from 'antd'
 import { BellOutlined, ExclamationCircleOutlined, FileTextOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
-import { fetchAlertEvents, markAlertRead } from '../../services/alertApi'
+import { acknowledgeAlert, fetchAlertEvents, markAlertRead } from '../../services/alertApi'
 import { fetchTicketByAlert, createTicket, assignTicket, fetchAssignees, fetchJudgement } from '../../services/ticketApi'
 import type { AssigneeInfo, JudgementResult, Ticket } from '../../services/ticketApi'
 import { ALERT_LEVEL_CONFIG } from '../../types/alert'
@@ -104,6 +104,27 @@ const DispatcherAlertWorkspace = () => {
   const handleMarkRead = async (id: number) => {
     try { await markAlertRead(id); setEvents((prev) => prev.map((e) => e.id === id ? { ...e, isRead: 1 } : e)) }
     catch { message.error('操作失败') }
+  }
+
+  const handleAcknowledge = async (id: number) => {
+    try {
+      await acknowledgeAlert(id)
+      setEvents((prev) => prev.map((e) => e.id === id ? {
+        ...e,
+        status: 'ACKNOWLEDGED',
+        acknowledgedAt: new Date().toISOString(),
+        acknowledgedByName: user?.username || null,
+      } : e))
+      setSelectedAlert((prev) => prev?.id === id ? {
+        ...prev,
+        status: 'ACKNOWLEDGED',
+        acknowledgedAt: new Date().toISOString(),
+        acknowledgedByName: user?.username || null,
+      } : prev)
+      message.success('告警已确认')
+    } catch (e: any) {
+      message.error(e?.response?.data?.message || e.message || '告警确认失败')
+    }
   }
 
   const loadAssignees = async () => {
@@ -213,11 +234,15 @@ const DispatcherAlertWorkspace = () => {
     { title: '当前负荷', dataIndex: 'currentValue', width: 90, render: (v: number) => `${v?.toFixed(1)} MW` },
     { title: '阈值', dataIndex: 'thresholdValue', width: 80, render: (v: number) => `${v?.toFixed(0)} MW` },
     { title: '时间', dataIndex: 'triggerTime', width: 130, render: (v: string) => v ? dayjs(v).format('MM-DD HH:mm:ss') : '-' },
+    { title: '状态', dataIndex: 'status', width: 80, render: (v: AlertEvent['status']) => <Tag color={v === 'RECOVERED' ? 'default' : v === 'ACKNOWLEDGED' ? 'blue' : 'red'}>{v === 'RECOVERED' ? '已恢复' : v === 'ACKNOWLEDGED' ? '已确认' : '待确认'}</Tag> },
     { title: '工单', dataIndex: 'id', width: 100, render: (_: number, record: AlertEvent) => statusTag(record, ticketMap[record.id]) },
     { title: '已读', dataIndex: 'isRead', width: 50, render: (v: number) => v === 0 ? <Badge status="error" /> : <Badge status="default" /> },
     {
       title: '', key: 'actions', width: 80, render: (_: any, r: AlertEvent) => (
         <Space size="small">
+          {r.status !== 'ACKNOWLEDGED' && r.status !== 'RECOVERED' && (
+            <Button size="small" onClick={(e) => { e.stopPropagation(); handleAcknowledge(r.id) }}>确认</Button>
+          )}
           {r.isRead === 0 && <Button size="small" onClick={(e) => { e.stopPropagation(); handleMarkRead(r.id) }}>已读</Button>}
           <Button size="small" type="link" onClick={() => openDetail(r)}>详情</Button>
         </Space>
@@ -275,11 +300,18 @@ const DispatcherAlertWorkspace = () => {
             currentValue: selectedAlert.currentValue,
             thresholdValue: selectedAlert.thresholdValue,
             triggerTime: selectedAlert.triggerTime,
+            status: selectedAlert.status,
+            acknowledgedAt: selectedAlert.acknowledgedAt,
+            acknowledgedByName: selectedAlert.acknowledgedByName,
             aiAnalysis: selectedAlert.aiAnalysis,
             suggestion: selectedAlert.suggestion,
           }}
           ticket={ticketMap[selectedAlert.id] || null}
           onTicketUpdated={handleTicketUpdate}
+          onAlertAcknowledged={(updated) => {
+            setSelectedAlert((prev) => prev ? { ...prev, ...updated } : prev)
+            setEvents((prev) => prev.map((e) => e.id === updated.id ? { ...e, ...updated } : e))
+          }}
           onAssign={() => { loadAssignees(); setAssignOpen(true); setAssignUserId(undefined) }}
           onResolve={() => {}}
           fullscreen={isMobile}

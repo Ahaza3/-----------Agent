@@ -3,8 +3,10 @@ package com.powerload.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.powerload.dto.response.ForecastResponse;
 import com.powerload.entity.LoadData;
+import com.powerload.entity.ModelVersion;
 import com.powerload.entity.PredictionResult;
 import com.powerload.mapper.LoadDataMapper;
+import com.powerload.mapper.ModelVersionMapper;
 import com.powerload.mapper.PredictionResultMapper;
 import com.powerload.ml.FlaskInferenceService;
 import com.powerload.service.PredictService;
@@ -18,6 +20,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Locale;
 import java.util.stream.Collectors;
 
 /**
@@ -34,6 +37,7 @@ public class PredictServiceImpl implements PredictService {
     private final LoadDataMapper loadDataMapper;
     private final PredictionResultMapper predictionResultMapper;
     private final FlaskInferenceService flaskInferenceService;
+    private final ModelVersionMapper modelVersionMapper;
 
     /** 上下文窗口：期望至少 168 个合法整点，最多取 200 个 */
     private static final int WINDOW_HOURS = 200;
@@ -79,7 +83,10 @@ public class PredictServiceImpl implements PredictService {
         }).collect(Collectors.toList());
 
         // 3. 调用 Flask 推理
-        List<Double> predictions = flaskInferenceService.forecast(rawData);
+        FlaskInferenceService.ForecastResult inference = flaskInferenceService.forecast(rawData);
+        List<Double> predictions = inference.predictions();
+        String runtimeModel = inference.model();
+        Long modelVersionId = resolveRuntimeModelVersionId(runtimeModel);
 
         // 4. 预测起点：当前整点的下一小时
         LocalDateTime forecastStart = LocalDateTime.now()
@@ -93,7 +100,7 @@ public class PredictServiceImpl implements PredictService {
             pr.setPredictedLoad(predictions.get(i).floatValue());
             pr.setLowerBound(null);  // 无可靠置信区间，不伪造
             pr.setUpperBound(null);
-            pr.setModelVersionId(null);
+            pr.setModelVersionId(modelVersionId);
             pr.setCreatedAt(batchTime);
             predictionResultMapper.insert(pr);
         }
@@ -102,7 +109,7 @@ public class PredictServiceImpl implements PredictService {
         // 6. 封装响应
         ForecastResponse response = new ForecastResponse();
         response.setPredictions(predictions);
-        response.setModel("LSTM");
+        response.setModel(runtimeModel);
         response.setForecastStartTime(forecastStart);
 
         double minP = predictions.stream().mapToDouble(Double::doubleValue).min().orElse(0);
@@ -110,5 +117,36 @@ public class PredictServiceImpl implements PredictService {
         log.debug("预测完成: {} 个值, 起点={}, 范围 [{}, {}]",
                 predictions.size(), forecastStart, minP, maxP);
         return response;
+    }
+
+    private Long resolveRuntimeModelVersionId(String runtimeModel) {
+        String modelName = normalizeRuntimeModel(runtimeModel);
+        if (modelName == null) {
+            return null;
+        }
+        var version = modelVersionMapper.selectList(
+                new LambdaQueryWrapper<ModelVersion>()
+                        .eq(ModelVersion::getModelName, modelName)
+                        .orderByDesc(ModelVersion::getIsActive)
+                        .orderByDesc(ModelVersion::getTrainedAt)
+                        .last("LIMIT 1"))
+                .stream()
+                .findFirst()
+                .orElse(null);
+        return version == null ? null : version.getId();
+    }
+
+    private String normalizeRuntimeModel(String runtimeModel) {
+        if (runtimeModel == null) {
+            return null;
+        }
+        String normalized = runtimeModel.trim().toLowerCase(Locale.ROOT);
+        if ("torchscript".equals(normalized) || "lstm".equals(normalized)) {
+            return "LSTM";
+        }
+        if ("prophet".equals(normalized)) {
+            return "Prophet";
+        }
+        return null;
     }
 }

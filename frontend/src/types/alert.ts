@@ -18,6 +18,9 @@ export interface AlertEvent {
   suggestion: string
   isRead: number
   resolvedAt: string | null
+  status?: 'ACTIVE' | 'ACKNOWLEDGED' | 'RECOVERED'
+  acknowledgedAt?: string | null
+  acknowledgedByName?: string | null
   createdAt: string
 }
 
