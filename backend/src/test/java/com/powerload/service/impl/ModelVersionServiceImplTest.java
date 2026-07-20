@@ -1,6 +1,7 @@
 package com.powerload.service.impl;
 
 import com.powerload.entity.ModelVersion;
+import com.powerload.mapper.LoadDataMapper;
 import com.powerload.mapper.ModelVersionMapper;
 import com.powerload.ml.FlaskInferenceService;
 import org.junit.jupiter.api.BeforeEach;
@@ -17,15 +18,17 @@ import static org.mockito.Mockito.*;
 class ModelVersionServiceImplTest {
 
     private ModelVersionMapper mapper;
+    private LoadDataMapper loadDataMapper;
     private FlaskInferenceService flaskInferenceService;
     private ModelVersionServiceImpl service;
 
     @BeforeEach
     void setUp() {
         mapper = mock(ModelVersionMapper.class);
+        loadDataMapper = mock(LoadDataMapper.class);
         flaskInferenceService = mock(FlaskInferenceService.class);
         when(flaskInferenceService.getHealth()).thenReturn(Map.of("healthy", true, "model_type", "torchscript"));
-        service = new ModelVersionServiceImpl(mapper, flaskInferenceService);
+        service = new ModelVersionServiceImpl(mapper, loadDataMapper, flaskInferenceService);
         ReflectionTestUtils.setField(service, "modelDir", "not-existing-model-dir");
         ReflectionTestUtils.setField(service, "mlWorkDir", "../ml");
     }

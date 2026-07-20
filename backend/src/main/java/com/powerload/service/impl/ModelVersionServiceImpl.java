@@ -2,7 +2,9 @@ package com.powerload.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
+import com.powerload.entity.LoadData;
 import com.powerload.entity.ModelVersion;
+import com.powerload.mapper.LoadDataMapper;
 import com.powerload.mapper.ModelVersionMapper;
 import com.powerload.ml.FlaskInferenceService;
 import com.powerload.service.ModelVersionService;
@@ -12,6 +14,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -32,8 +36,10 @@ import java.util.regex.Pattern;
 public class ModelVersionServiceImpl implements ModelVersionService {
 
     private final ModelVersionMapper modelVersionMapper;
+    private final LoadDataMapper loadDataMapper;
     private final FlaskInferenceService flaskInferenceService;
 
+    private static final int MIN_TRAINING_ROWS = 192;
     @Value("${ml.model-dir:../ml/models}")
     private String modelDir;
 
@@ -176,7 +182,8 @@ public class ModelVersionServiceImpl implements ModelVersionService {
         String pythonCommand = Files.exists(python) ? python.toString() : "python";
         StringBuilder output = new StringBuilder();
         try {
-            ProcessBuilder pb = new ProcessBuilder(pythonCommand, script);
+            prepareTrainingData(workDir, pythonCommand, output);
+            ProcessBuilder pb = new ProcessBuilder(pythonCommand, script, "--input", "featured_load_data.csv");
             pb.directory(workDir.toFile());
             pb.redirectErrorStream(true);
             pb.environment().put("PYTHONIOENCODING", "utf-8");
@@ -197,6 +204,71 @@ public class ModelVersionServiceImpl implements ModelVersionService {
             retrainJob.set(retrainJob.get().finish("SUCCESS", "训练完成，新版本已登记", tail(output)));
         } catch (Exception e) {
             retrainJob.set(retrainJob.get().finish("FAILED", e.getMessage(), tail(output)));
+        }
+    }
+
+    private void prepareTrainingData(Path workDir, String pythonCommand, StringBuilder output)
+            throws IOException, InterruptedException {
+        List<LoadData> rows = loadDataMapper.selectList(
+                new LambdaQueryWrapper<LoadData>()
+                        .apply("MINUTE(time) = 0 AND SECOND(time) = 0")
+                        .isNotNull(LoadData::getTime)
+                        .isNotNull(LoadData::getLoadMw)
+                        .orderByAsc(LoadData::getTime));
+        if (rows.size() < MIN_TRAINING_ROWS) {
+            throw new IllegalStateException("可用于重训练的整点负荷数据不足，至少需要 "
+                    + MIN_TRAINING_ROWS + " 条，当前只有 " + rows.size() + " 条");
+        }
+
+        Path rawData = workDir.resolve("retrain_load_data.csv");
+        writeTrainingData(rawData, rows);
+        output.append("训练数据已从 load_data 导出: ")
+                .append(rows.size())
+                .append(" 条 -> ")
+                .append(rawData)
+                .append(System.lineSeparator());
+
+        ProcessBuilder featureProcess = new ProcessBuilder(
+                pythonCommand,
+                "feature_engineering.py",
+                "--input", rawData.getFileName().toString(),
+                "--output", "featured_load_data.csv");
+        featureProcess.directory(workDir.toFile());
+        featureProcess.redirectErrorStream(true);
+        featureProcess.environment().put("PYTHONIOENCODING", "utf-8");
+        featureProcess.environment().put("PYTHONUTF8", "1");
+        Process process = featureProcess.start();
+        try (BufferedReader reader = new BufferedReader(
+                new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                output.append(line).append(System.lineSeparator());
+            }
+        }
+        int exitCode = process.waitFor();
+        if (exitCode != 0) {
+            throw new IllegalStateException("特征工程脚本退出码: " + exitCode);
+        }
+    }
+
+    private void writeTrainingData(Path outputPath, List<LoadData> rows) throws IOException {
+        try (BufferedWriter writer = Files.newBufferedWriter(
+                outputPath, StandardCharsets.UTF_8)) {
+            writer.write("time,load_mw,temperature,humidity,is_holiday,hour,day_of_week,month");
+            writer.newLine();
+            for (LoadData row : rows) {
+                LocalDateTime time = row.getTime();
+                writer.write(String.join(",",
+                        time.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")),
+                        String.valueOf(row.getLoadMw()),
+                        String.valueOf(row.getTemperature() == null ? 0f : row.getTemperature()),
+                        String.valueOf(row.getHumidity() == null ? 0f : row.getHumidity()),
+                        String.valueOf(row.getIsHoliday() == null ? 0 : row.getIsHoliday()),
+                        String.valueOf(row.getHour() == null ? time.getHour() : row.getHour()),
+                        String.valueOf(row.getDayOfWeek() == null ? time.getDayOfWeek().getValue() - 1 : row.getDayOfWeek()),
+                        String.valueOf(row.getMonth() == null ? time.getMonthValue() : row.getMonth())));
+                writer.newLine();
+            }
         }
     }
 
