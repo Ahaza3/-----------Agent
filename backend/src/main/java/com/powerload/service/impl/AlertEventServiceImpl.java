@@ -81,10 +81,10 @@ public class AlertEventServiceImpl implements AlertEventService {
     public void acknowledge(Long id, SysUserPrincipal user) {
         AlertEvent event = alertEventMapper.selectById(id);
         if (event == null) {
-            throw new IllegalArgumentException("鍛婅涓嶅瓨鍦? " + id);
+            throw new IllegalArgumentException("告警不存在: " + id);
         }
         if ("RECOVERED".equals(event.getStatus())) {
-            throw new IllegalStateException("宸茶鎭㈢殑鍛婅涓嶅彲纭");
+            throw new IllegalStateException("已恢复的告警不可确认");
         }
 
         AlertEvent update = new AlertEvent();
