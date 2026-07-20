@@ -29,13 +29,26 @@ public class LoadDataServiceImpl implements LoadDataService {
         wrapper.ge(LoadData::getTime, start)
                .lt(LoadData::getTime, end)
                .orderByAsc(LoadData::getTime);
-        return loadDataMapper.selectList(wrapper);
+        return loadDataMapper.selectList(wrapper).stream()
+                .filter(data -> data.getTime() != null
+                        && data.getTime().getMinute() == 0
+                        && data.getTime().getSecond() == 0)
+                .toList();
     }
 
     @Override
     public LoadData getLatest() {
         LambdaQueryWrapper<LoadData> wrapper = new LambdaQueryWrapper<>();
         wrapper.orderByDesc(LoadData::getTime)
+               .last("LIMIT 1");
+        return loadDataMapper.selectOne(wrapper);
+    }
+
+    @Override
+    public LoadData getLatestHourly() {
+        LambdaQueryWrapper<LoadData> wrapper = new LambdaQueryWrapper<>();
+        wrapper.apply("MINUTE(time) = 0 AND SECOND(time) = 0")
+               .orderByDesc(LoadData::getTime)
                .last("LIMIT 1");
         return loadDataMapper.selectOne(wrapper);
     }

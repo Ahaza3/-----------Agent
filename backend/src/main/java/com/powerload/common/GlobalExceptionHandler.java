@@ -17,7 +17,39 @@ public class GlobalExceptionHandler {
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public R<Void> handleIllegalArgument(IllegalArgumentException e) {
         log.warn("参数校验失败: {}", e.getMessage());
-        return R.fail(400, "参数校验失败：" + e.getMessage());
+        return R.fail(400, e.getMessage());
+    }
+
+    @ExceptionHandler(IllegalStateException.class)
+    @ResponseStatus(HttpStatus.CONFLICT)
+    public R<Void> handleIllegalState(IllegalStateException e) {
+        log.warn("业务规则冲突: {}", e.getMessage());
+        return R.fail(409, e.getMessage());
+    }
+
+    @ExceptionHandler(org.springframework.security.authentication.BadCredentialsException.class)
+    @ResponseStatus(HttpStatus.UNAUTHORIZED)
+    public R<Void> handleBadCredentials(org.springframework.security.authentication.BadCredentialsException e) {
+        return R.fail(401, "用户名或密码错误");
+    }
+
+    @ExceptionHandler(org.springframework.security.authentication.DisabledException.class)
+    @ResponseStatus(HttpStatus.FORBIDDEN)
+    public R<Void> handleDisabled(org.springframework.security.authentication.DisabledException e) {
+        return R.fail(403, "账户已禁用");
+    }
+
+    @ExceptionHandler(org.springframework.security.access.AccessDeniedException.class)
+    @ResponseStatus(HttpStatus.FORBIDDEN)
+    public R<Void> handleAccessDenied(org.springframework.security.access.AccessDeniedException e) {
+        return R.fail(403, "权限不足");
+    }
+
+    @ExceptionHandler(RuntimeException.class)
+    @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
+    public R<Void> handleRuntime(RuntimeException e) {
+        log.error("运行时异常: {}", e.getMessage(), e);
+        return R.fail(500, "服务器内部错误：" + e.getMessage());
     }
 
     @ExceptionHandler(Exception.class)

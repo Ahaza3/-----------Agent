@@ -7,6 +7,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -42,9 +43,20 @@ public class FlaskInferenceService {
      * @return 24 个预测值 (MW)
      */
     @SuppressWarnings("unchecked")
-    public List<Double> forecast(List<Map<String, Object>> rawData) {
+    public ForecastResult forecast(List<Map<String, Object>> rawData) {
+        return forecast(rawData, List.of());
+    }
+
+    @SuppressWarnings("unchecked")
+    public ForecastResult forecast(
+            List<Map<String, Object>> rawData,
+            List<Map<String, Object>> futureWeather) {
         try {
-            Map<String, Object> body = Map.of("data", rawData);
+            Map<String, Object> body = new LinkedHashMap<>();
+            body.put("data", rawData);
+            if (futureWeather != null && !futureWeather.isEmpty()) {
+                body.put("future_weather", futureWeather);
+            }
             String json = objectMapper.writeValueAsString(body);
 
             Request request = new Request.Builder()
@@ -60,7 +72,12 @@ public class FlaskInferenceService {
                 }
 
                 Map<String, Object> result = objectMapper.readValue(responseBody, Map.class);
-                return (List<Double>) result.get("predictions");
+                List<Double> predictions = (List<Double>) result.get("predictions");
+                Object modelValue = result.get("model");
+                String model = modelValue == null ? "" : modelValue.toString();
+                boolean futureWeatherApplied = Boolean.TRUE.equals(result.get("future_weather_applied"));
+                boolean futureWeatherFallback = Boolean.TRUE.equals(result.get("future_weather_fallback"));
+                return new ForecastResult(predictions, model, futureWeatherApplied, futureWeatherFallback);
             }
         } catch (IOException e) {
             log.error("调用 Flask 推理服务异常", e);
@@ -68,20 +85,44 @@ public class FlaskInferenceService {
         }
     }
 
+    public record ForecastResult(
+            List<Double> predictions,
+            String model,
+            boolean futureWeatherApplied,
+            boolean futureWeatherFallback) {
+        public ForecastResult(List<Double> predictions, String model) {
+            this(predictions, model, false, false);
+        }
+    }
+
     /**
      * 健康检查
      */
     public boolean isHealthy() {
+        return Boolean.TRUE.equals(getHealth().get("healthy"));
+    }
+
+    /**
+     * 获取推理服务健康状态及当前实际加载的模型。
+     */
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> getHealth() {
         try {
             Request request = new Request.Builder()
                     .url(baseUrl + "/health")
                     .get()
                     .build();
             try (Response response = client.newCall(request).execute()) {
-                return response.isSuccessful();
+                if (!response.isSuccessful()) {
+                    return Map.of("healthy", false);
+                }
+                String responseBody = response.body() != null ? response.body().string() : "{}";
+                Map<String, Object> result = objectMapper.readValue(responseBody, Map.class);
+                result.put("healthy", true);
+                return result;
             }
         } catch (Exception e) {
-            return false;
+            return Map.of("healthy", false);
         }
     }
 }

@@ -28,6 +28,13 @@ public interface LoadDataService {
     LoadData getLatest();
 
     /**
+     * 获取最后一条合法整点小时级数据（minute=0, second=0）
+     *
+     * @return 最后一条整点记录，无数据时返回 null
+     */
+    LoadData getLatestHourly();
+
+    /**
      * 统计指定时间范围内的负荷数据
      *
      * @param start 起始时间（含）

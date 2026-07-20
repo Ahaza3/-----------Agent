@@ -2,7 +2,7 @@
  * 类型定义统一导出
  */
 export type { R, PageQuery, PageResult } from './api'
-export type { LoadData, LoadQuery, LoadStats } from './load'
+export type { LoadData, LoadQuery, LoadStats, RealtimeLoadPoint } from './load'
 export type { PredictionResult, ModelVersion, ForecastResponse } from './prediction'
 export type { AlertLevel, AlertEvent, AlertRule } from './alert'
 export { ALERT_LEVEL_CONFIG } from './alert'
