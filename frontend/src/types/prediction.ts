@@ -13,6 +13,8 @@ export interface ForecastResponse {
   upperBounds?: number[] | null
   intervalSource?: string | null
   modelVersionId?: number | null
+  futureWeatherAvailable?: boolean
+  weatherSource?: string | null
 }
 
 /**

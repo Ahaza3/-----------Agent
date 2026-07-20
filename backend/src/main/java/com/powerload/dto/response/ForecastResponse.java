@@ -29,4 +29,8 @@ public class ForecastResponse {
     private String intervalSource;
 
     private Long modelVersionId;
+
+    private boolean futureWeatherAvailable;
+
+    private String weatherSource;
 }

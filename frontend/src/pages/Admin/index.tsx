@@ -551,6 +551,7 @@ const ModelPanel = () => {
           { label: '训练 RMSE', children: activeVersion?.rmse != null ? `${Number(activeVersion.rmse).toFixed(2)} MW` : 'N/A' },
           { label: '预测起点', children: forecast?.forecastStartTime ? dayjs(forecast.forecastStartTime).format('MM-DD HH:mm') : 'N/A' },
           { label: '预测点数', children: forecast?.predictions?.length || 0 },
+          { label: '未来天气', children: forecast?.futureWeatherAvailable ? `已缓存并传递（${forecast.weatherSource || '未知来源'}）` : '暂无缓存' },
           { label: '训练任务', children: <Tag color={trainingStatus?.status === 'RUNNING' ? 'processing' : trainingStatus?.status === 'FAILED' ? 'red' : trainingStatus?.status === 'SUCCESS' ? 'green' : 'default'}>{trainingStatus?.message || '暂无训练任务'}</Tag> },
         ]}
         labelStyle={{ color: '#888', background: '#0c0c0c' }} contentStyle={{ color: '#ccc', background: '#0e0e0e' }}

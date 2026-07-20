@@ -127,6 +127,7 @@ def predict_forecast():
         return jsonify({"error": "missing 'data' field"}), 400
 
     raw_rows = data["data"]
+    future_weather = data.get("future_weather", [])
     if len(raw_rows) < seq_length:
         return jsonify({"error": f"need >= {seq_length} rows, got {len(raw_rows)}"}), 400
 
@@ -156,7 +157,11 @@ def predict_forecast():
         return jsonify({"error": f"inference failed: {e}"}), 500
 
     predictions = [round(p, 1) for p in predictions[:24]]
-    return jsonify({"predictions": predictions, "model": model_type})
+    return jsonify({
+        "predictions": predictions,
+        "model": model_type,
+        "future_weather_received": len(future_weather),
+    })
 
 
 @app.route("/health")

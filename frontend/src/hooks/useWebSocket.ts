@@ -130,6 +130,12 @@ export function useWebSocket() {
               predictions: p.data.predictions,
               model: p.data.model,
               forecastStartTime: p.data.forecastStartTime ?? null,
+              lowerBounds: p.data.lowerBounds ?? null,
+              upperBounds: p.data.upperBounds ?? null,
+              intervalSource: p.data.intervalSource ?? null,
+              modelVersionId: p.data.modelVersionId ?? null,
+              futureWeatherAvailable: p.data.futureWeatherAvailable ?? false,
+              weatherSource: p.data.weatherSource ?? null,
             })
           }
         } catch (err) {

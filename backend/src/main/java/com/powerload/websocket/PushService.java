@@ -79,6 +79,12 @@ public class PushService {
         data.put("predictions", forecast.getPredictions());
         data.put("model", forecast.getModel() != null ? forecast.getModel() : "");
         data.put("forecastStartTime", forecast.getForecastStartTime() != null ? forecast.getForecastStartTime().toString() : null);
+        data.put("lowerBounds", forecast.getLowerBounds());
+        data.put("upperBounds", forecast.getUpperBounds());
+        data.put("intervalSource", forecast.getIntervalSource());
+        data.put("modelVersionId", forecast.getModelVersionId());
+        data.put("futureWeatherAvailable", forecast.isFutureWeatherAvailable());
+        data.put("weatherSource", forecast.getWeatherSource());
         payload.put("data", data);
         messagingTemplate.convertAndSend("/topic/predictions", payload);
         log.debug("预测推送: model={}, {} values", forecast.getModel(),

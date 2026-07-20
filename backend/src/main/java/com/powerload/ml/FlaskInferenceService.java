@@ -7,6 +7,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -43,8 +44,19 @@ public class FlaskInferenceService {
      */
     @SuppressWarnings("unchecked")
     public ForecastResult forecast(List<Map<String, Object>> rawData) {
+        return forecast(rawData, List.of());
+    }
+
+    @SuppressWarnings("unchecked")
+    public ForecastResult forecast(
+            List<Map<String, Object>> rawData,
+            List<Map<String, Object>> futureWeather) {
         try {
-            Map<String, Object> body = Map.of("data", rawData);
+            Map<String, Object> body = new LinkedHashMap<>();
+            body.put("data", rawData);
+            if (futureWeather != null && !futureWeather.isEmpty()) {
+                body.put("future_weather", futureWeather);
+            }
             String json = objectMapper.writeValueAsString(body);
 
             Request request = new Request.Builder()

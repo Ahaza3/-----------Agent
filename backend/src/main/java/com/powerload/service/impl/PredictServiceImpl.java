@@ -5,13 +5,16 @@ import com.powerload.dto.response.ForecastResponse;
 import com.powerload.entity.LoadData;
 import com.powerload.entity.ModelVersion;
 import com.powerload.entity.PredictionResult;
+import com.powerload.entity.WeatherForecast;
 import com.powerload.mapper.LoadDataMapper;
 import com.powerload.mapper.ModelVersionMapper;
 import com.powerload.mapper.PredictionResultMapper;
 import com.powerload.ml.FlaskInferenceService;
 import com.powerload.service.PredictService;
+import com.powerload.service.WeatherForecastService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -39,6 +42,9 @@ public class PredictServiceImpl implements PredictService {
     private final PredictionResultMapper predictionResultMapper;
     private final FlaskInferenceService flaskInferenceService;
     private final ModelVersionMapper modelVersionMapper;
+
+    @Autowired(required = false)
+    private WeatherForecastService weatherForecastService;
 
     /** 上下文窗口：期望至少 168 个合法整点，最多取 200 个 */
     private static final int WINDOW_HOURS = 200;
@@ -84,7 +90,12 @@ public class PredictServiceImpl implements PredictService {
         }).collect(Collectors.toList());
 
         // 3. 调用 Flask 推理
-        FlaskInferenceService.ForecastResult inference = flaskInferenceService.forecast(rawData);
+        LocalDateTime forecastStart = LocalDateTime.now()
+                .withMinute(0).withSecond(0).withNano(0).plusHours(1);
+        List<Map<String, Object>> futureWeather = futureWeather(forecastStart, 24);
+        FlaskInferenceService.ForecastResult inference = futureWeather.isEmpty()
+                ? flaskInferenceService.forecast(rawData)
+                : flaskInferenceService.forecast(rawData, futureWeather);
         List<Double> predictions = inference.predictions();
         String runtimeModel = inference.model();
         ModelVersion modelVersion = resolveRuntimeModelVersion(runtimeModel);
@@ -96,9 +107,6 @@ public class PredictServiceImpl implements PredictService {
         List<Double> upperBounds = new ArrayList<>();
 
         // 4. 预测起点：当前整点的下一小时
-        LocalDateTime forecastStart = LocalDateTime.now()
-                .withMinute(0).withSecond(0).withNano(0).plusHours(1);
-
         // 5. 持久化 24 条同批次记录
         LocalDateTime batchTime = LocalDateTime.now();
         for (int i = 0; i < predictions.size(); i++) {
@@ -129,6 +137,9 @@ public class PredictServiceImpl implements PredictService {
         response.setIntervalSource(intervalHalfWidth > 0
                 ? "VALIDATION_RMSE_REFERENCE" : "UNAVAILABLE");
         response.setModelVersionId(modelVersionId);
+        response.setFutureWeatherAvailable(!futureWeather.isEmpty());
+        response.setWeatherSource(futureWeather.isEmpty()
+                ? null : String.valueOf(futureWeather.get(0).getOrDefault("source", "OPEN_METEO")));
 
         double minP = predictions.stream().mapToDouble(Double::doubleValue).min().orElse(0);
         double maxP = predictions.stream().mapToDouble(Double::doubleValue).max().orElse(0);
@@ -152,6 +163,26 @@ public class PredictServiceImpl implements PredictService {
                 .findFirst()
                 .orElse(null);
         return version;
+    }
+
+    private List<Map<String, Object>> futureWeather(LocalDateTime start, int horizon) {
+        if (weatherForecastService == null) return List.of();
+        try {
+            List<WeatherForecast> rows = weatherForecastService.getForecast(
+                    start, start.plusHours(horizon - 1L));
+            DateTimeFormatter fmt = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+            return rows.stream().map(row -> {
+                Map<String, Object> point = new LinkedHashMap<>();
+                point.put("time", row.getForecastTime().format(fmt));
+                point.put("temperature", row.getTemperature());
+                point.put("humidity", row.getHumidity());
+                point.put("source", row.getSource());
+                return point;
+            }).collect(Collectors.toList());
+        } catch (Exception e) {
+            log.warn("未来天气读取失败，使用无天气输入预测: {}", e.getMessage());
+            return List.of();
+        }
     }
 
     private String normalizeRuntimeModel(String runtimeModel) {
