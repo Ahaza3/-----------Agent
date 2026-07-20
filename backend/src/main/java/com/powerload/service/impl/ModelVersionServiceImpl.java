@@ -373,7 +373,8 @@ public class ModelVersionServiceImpl implements ModelVersionService {
         List<String> required = "PROPHET".equals(modelName)
                 ? List.of("prophet_model.pkl")
                 : List.of("lstm_model.pt", "lstm_meta.pt", "lstm_scripted.pt",
-                "lstm_scaler.pkl", "lstm_scaler_x.pkl", "lstm_feature_cols.pkl");
+                "lstm_scaler.pkl", "lstm_scaler_x.pkl", "lstm_weather_scaler.pkl",
+                "lstm_feature_cols.pkl");
         Map<String, String> manifest = new LinkedHashMap<>();
         List<String> missing = new java.util.ArrayList<>();
         for (String file : required) {

@@ -85,6 +85,8 @@ public class PushService {
         data.put("modelVersionId", forecast.getModelVersionId());
         data.put("futureWeatherAvailable", forecast.isFutureWeatherAvailable());
         data.put("weatherSource", forecast.getWeatherSource());
+        data.put("futureWeatherApplied", forecast.isFutureWeatherApplied());
+        data.put("futureWeatherFallback", forecast.isFutureWeatherFallback());
         payload.put("data", data);
         messagingTemplate.convertAndSend("/topic/predictions", payload);
         log.debug("预测推送: model={}, {} values", forecast.getModel(),

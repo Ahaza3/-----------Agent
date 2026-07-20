@@ -551,7 +551,7 @@ const ModelPanel = () => {
           { label: '训练 RMSE', children: activeVersion?.rmse != null ? `${Number(activeVersion.rmse).toFixed(2)} MW` : 'N/A' },
           { label: '预测起点', children: forecast?.forecastStartTime ? dayjs(forecast.forecastStartTime).format('MM-DD HH:mm') : 'N/A' },
           { label: '预测点数', children: forecast?.predictions?.length || 0 },
-          { label: '未来天气', children: forecast?.futureWeatherAvailable ? `已缓存并传递（${forecast.weatherSource || '未知来源'}）` : '暂无缓存' },
+          { label: '未来天气', children: forecast?.futureWeatherApplied ? (forecast.futureWeatherFallback ? '模型已使用（部分回退）' : `模型已使用（${forecast.weatherSource || '未知来源'}）`) : forecast?.futureWeatherAvailable ? '已缓存，但当前模型未实际使用' : '暂无缓存' },
           { label: '训练任务', children: <Tag color={trainingStatus?.status === 'RUNNING' ? 'processing' : trainingStatus?.status === 'FAILED' ? 'red' : trainingStatus?.status === 'SUCCESS' ? 'green' : 'default'}>{trainingStatus?.message || '暂无训练任务'}</Tag> },
         ]}
         labelStyle={{ color: '#888', background: '#0c0c0c' }} contentStyle={{ color: '#ccc', background: '#0e0e0e' }}
@@ -564,7 +564,7 @@ const ModelPanel = () => {
           { label: '连续性', children: quality?.continuityRate != null ? `${quality.continuityRate}%` : 'N/A' },
           { label: '缺失点', children: quality?.missingPoints ?? 'N/A' },
           { label: '天气缺失', children: quality?.weatherMissingPoints ?? 'N/A' },
-          { label: '天气特征', children: '历史天气辅助，未接入未来预报' },
+          { label: '天气特征', children: forecast?.futureWeatherApplied ? '历史天气 + 未来预报' : '历史天气辅助' },
           { label: '线上 MAPE', children: review?.mape != null ? `${review.mape.toFixed(2)}%` : 'N/A' },
           { label: '线上 RMSE', children: review?.rmse != null ? `${review.rmse.toFixed(2)} MW` : 'N/A' },
           { label: '峰值误差', children: review?.peakErrorMw != null ? `${review.peakErrorMw.toFixed(2)} MW` : 'N/A' },

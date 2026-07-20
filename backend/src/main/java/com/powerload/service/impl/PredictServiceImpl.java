@@ -140,6 +140,8 @@ public class PredictServiceImpl implements PredictService {
         response.setFutureWeatherAvailable(!futureWeather.isEmpty());
         response.setWeatherSource(futureWeather.isEmpty()
                 ? null : String.valueOf(futureWeather.get(0).getOrDefault("source", "OPEN_METEO")));
+        response.setFutureWeatherApplied(inference.futureWeatherApplied());
+        response.setFutureWeatherFallback(inference.futureWeatherFallback());
 
         double minP = predictions.stream().mapToDouble(Double::doubleValue).min().orElse(0);
         double maxP = predictions.stream().mapToDouble(Double::doubleValue).max().orElse(0);

@@ -75,7 +75,9 @@ public class FlaskInferenceService {
                 List<Double> predictions = (List<Double>) result.get("predictions");
                 Object modelValue = result.get("model");
                 String model = modelValue == null ? "" : modelValue.toString();
-                return new ForecastResult(predictions, model);
+                boolean futureWeatherApplied = Boolean.TRUE.equals(result.get("future_weather_applied"));
+                boolean futureWeatherFallback = Boolean.TRUE.equals(result.get("future_weather_fallback"));
+                return new ForecastResult(predictions, model, futureWeatherApplied, futureWeatherFallback);
             }
         } catch (IOException e) {
             log.error("调用 Flask 推理服务异常", e);
@@ -83,7 +85,14 @@ public class FlaskInferenceService {
         }
     }
 
-    public record ForecastResult(List<Double> predictions, String model) {
+    public record ForecastResult(
+            List<Double> predictions,
+            String model,
+            boolean futureWeatherApplied,
+            boolean futureWeatherFallback) {
+        public ForecastResult(List<Double> predictions, String model) {
+            this(predictions, model, false, false);
+        }
     }
 
     /**

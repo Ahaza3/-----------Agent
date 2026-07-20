@@ -136,6 +136,8 @@ export function useWebSocket() {
               modelVersionId: p.data.modelVersionId ?? null,
               futureWeatherAvailable: p.data.futureWeatherAvailable ?? false,
               weatherSource: p.data.weatherSource ?? null,
+              futureWeatherApplied: p.data.futureWeatherApplied ?? false,
+              futureWeatherFallback: p.data.futureWeatherFallback ?? false,
             })
           }
         } catch (err) {

@@ -33,4 +33,8 @@ public class ForecastResponse {
     private boolean futureWeatherAvailable;
 
     private String weatherSource;
+
+    private boolean futureWeatherApplied;
+
+    private boolean futureWeatherFallback;
 }
