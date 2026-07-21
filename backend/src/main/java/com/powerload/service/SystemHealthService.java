@@ -8,6 +8,7 @@ import com.powerload.mapper.PredictionResultMapper;
 import com.powerload.ml.FlaskInferenceService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.stereotype.Service;
 
 import javax.sql.DataSource;
@@ -22,6 +23,7 @@ import java.util.Map;
 public class SystemHealthService {
 
     private final DataSource dataSource;
+    private final RedisConnectionFactory redisConnectionFactory;
     private final FlaskInferenceService flaskService;
     private final PredictionResultMapper predictionResultMapper;
     private final AlertEventMapper alertEventMapper;
@@ -47,8 +49,8 @@ public class SystemHealthService {
         // MySQL
         health.put("mysql", checkMysql());
 
-        // Redis (当前profile禁用时显示DISABLED)
-        health.put("redis", redisHost.isBlank() ? "DISABLED" : "UNKNOWN");
+        // Redis
+        health.put("redis", checkRedis());
 
         // Flask 及当前实际加载的推理模型
         Map<String, Object> flaskHealth = flaskService.getHealth();
@@ -79,6 +81,18 @@ public class SystemHealthService {
     private String checkMysql() {
         try (Connection conn = dataSource.getConnection()) {
             return conn.isValid(2) ? "UP" : "DOWN";
+        } catch (Exception e) {
+            return "DOWN (" + e.getMessage() + ")";
+        }
+    }
+
+    private String checkRedis() {
+        if (redisHost.isBlank()) {
+            return "DISABLED";
+        }
+        try (var connection = redisConnectionFactory.getConnection()) {
+            String response = connection.ping();
+            return "PONG".equalsIgnoreCase(response) ? "UP" : "DOWN";
         } catch (Exception e) {
             return "DOWN (" + e.getMessage() + ")";
         }
