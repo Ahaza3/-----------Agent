@@ -1,0 +1,6 @@
+target/
+apache-maven-*/
+.mvn/
+*.log
+.idea/
+.vscode/

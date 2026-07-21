@@ -1,35 +1,32 @@
-# 开发环境 Docker Compose — 仅起 MySQL + Redis
-# Java / 前端 / ML 推理在本地运行（热重载）
-#
-# 使用方式:
-#   docker-compose up -d          # 启动数据库
-#   docker-compose down           # 停止
-#   docker-compose down -v        # 停止并清除数据卷
-
-version: '3.8'
-
 services:
   mysql:
     image: mysql:8.0
-    container_name: mysql-dev
+    container_name: power-load-mysql
     ports:
-      - "3306:3306"
+      - "${MYSQL_HOST_PORT:-3307}:3306"
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-123456}
-      MYSQL_DATABASE: power_load
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-power_load}
+      TZ: Asia/Shanghai
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --default-time-zone=+08:00
     volumes:
       - mysql-data:/var/lib/mysql
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-root}"]
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -p$${MYSQL_ROOT_PASSWORD} --silent"]
       interval: 10s
       timeout: 5s
-      retries: 5
+      retries: 10
       start_period: 30s
     restart: unless-stopped
+    networks:
+      - power-load-net
 
   redis:
     image: redis:7-alpine
-    container_name: redis-dev
+    container_name: power-load-redis
     ports:
       - "6379:6379"
     volumes:
@@ -40,7 +37,89 @@ services:
       timeout: 3s
       retries: 5
     restart: unless-stopped
+    networks:
+      - power-load-net
+
+  ml-inference:
+    build:
+      context: ./ml
+      dockerfile: Dockerfile
+    container_name: power-load-ml
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./ml/models:/app/models:ro
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:5000/health', timeout=5)\""]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped
+    networks:
+      - power-load-net
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: power-load-backend
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-power_load}
+      MYSQL_USER: root
+      MYSQL_PASSWORD: ${MYSQL_ROOT_PASSWORD:-123456}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      ML_SERVICE_URL: http://ml-inference:5000
+      ML_MODEL_DIR: /app/ml/models
+      ML_WORK_DIR: /app/ml
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_API_URL: ${LLM_API_URL:-https://api.deepseek.com/v1}
+      LLM_MODEL: ${LLM_MODEL:-deepseek-chat}
+      JWT_SECRET: ${JWT_SECRET:-power-load-docker-jwt-secret-key-32chars}
+      TZ: Asia/Shanghai
+    volumes:
+      - ./ml:/app/ml
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      ml-inference:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+    restart: unless-stopped
+    networks:
+      - power-load-net
+
+  web:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: power-load-web
+    ports:
+      - "80:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - power-load-net
 
 volumes:
   mysql-data:
   redis-data:
+
+networks:
+  power-load-net:
+    driver: bridge

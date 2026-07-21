@@ -19,7 +19,7 @@ import java.time.LocalDateTime;
  */
 @Slf4j
 @Component
-@Profile("dev")
+@Profile({"dev", "docker"})
 @RequiredArgsConstructor
 public class DataInitializer implements CommandLineRunner {
 

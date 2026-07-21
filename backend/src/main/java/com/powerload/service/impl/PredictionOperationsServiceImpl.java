@@ -87,7 +87,10 @@ public class PredictionOperationsServiceImpl implements PredictionOperationsServ
                         LinkedHashMap::new,
                         Collectors.counting()));
 
-        long delayMinutes = Math.max(0, Duration.between(latest.getTime(), LocalDateTime.now()).toMinutes());
+        LocalDateTime expectedLatestHour = LocalDateTime.now()
+                .truncatedTo(ChronoUnit.HOURS)
+                .minusHours(1);
+        long delayMinutes = Math.max(0, Duration.between(latest.getTime(), expectedLatestHour).toMinutes());
         double continuityRate = expectedPoints == 0 ? 0 : actualPoints * 100.0 / expectedPoints;
         double weatherMissingRate = actualPoints == 0 ? 0 : weatherMissingPoints * 100.0 / actualPoints;
         String status = delayMinutes > 90
