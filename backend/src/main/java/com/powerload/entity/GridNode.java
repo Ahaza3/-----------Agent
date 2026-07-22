@@ -24,6 +24,7 @@ public class GridNode {
     private String nodeName;
     private String nodeType;
     private Long parentId;
+    private Long responsibleUserId;
     private Float allocationRatio;
     private Float ratedCapacityMw;
     private String voltageLevel;

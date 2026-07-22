@@ -10,6 +10,7 @@ import com.powerload.dto.response.GridScenarioEdgeImpact;
 import com.powerload.dto.response.GridScenarioNodeImpact;
 import com.powerload.dto.response.GridScenarioResponse;
 import com.powerload.dto.response.GridTopologyResponse;
+import com.powerload.dto.response.GridResponsibility;
 import com.powerload.dto.response.RealtimeLoadPoint;
 import com.powerload.entity.GridEdge;
 import com.powerload.entity.GridNode;
@@ -19,6 +20,7 @@ import com.powerload.mapper.GridEdgeMapper;
 import com.powerload.mapper.GridNodeMapper;
 import com.powerload.mapper.LoadDataMapper;
 import com.powerload.mapper.PredictionResultMapper;
+import com.powerload.mapper.SysUserMapper;
 import com.powerload.service.GridTopologyService;
 import com.powerload.service.LoadDataService;
 import com.powerload.service.RealtimeLoadService;
@@ -51,6 +53,7 @@ public class GridTopologyServiceImpl implements GridTopologyService {
     private final RealtimeLoadService realtimeLoadService;
     private final PredictionResultMapper predictionResultMapper;
     private final LoadDataMapper loadDataMapper;
+    private final SysUserMapper sysUserMapper;
 
     public GridTopologyServiceImpl(GridNodeMapper gridNodeMapper,
                                    GridEdgeMapper gridEdgeMapper,
@@ -58,7 +61,17 @@ public class GridTopologyServiceImpl implements GridTopologyService {
                                    RealtimeLoadService realtimeLoadService,
                                    PredictionResultMapper predictionResultMapper) {
         this(gridNodeMapper, gridEdgeMapper, loadDataService, realtimeLoadService,
-                predictionResultMapper, null);
+                predictionResultMapper, null, null);
+    }
+
+    public GridTopologyServiceImpl(GridNodeMapper gridNodeMapper,
+                                   GridEdgeMapper gridEdgeMapper,
+                                   LoadDataService loadDataService,
+                                   RealtimeLoadService realtimeLoadService,
+                                   PredictionResultMapper predictionResultMapper,
+                                   LoadDataMapper loadDataMapper) {
+        this(gridNodeMapper, gridEdgeMapper, loadDataService, realtimeLoadService,
+                predictionResultMapper, loadDataMapper, null);
     }
 
     @Autowired
@@ -67,13 +80,15 @@ public class GridTopologyServiceImpl implements GridTopologyService {
                                    LoadDataService loadDataService,
                                    RealtimeLoadService realtimeLoadService,
                                    PredictionResultMapper predictionResultMapper,
-                                   LoadDataMapper loadDataMapper) {
+                                   LoadDataMapper loadDataMapper,
+                                   SysUserMapper sysUserMapper) {
         this.gridNodeMapper = gridNodeMapper;
         this.gridEdgeMapper = gridEdgeMapper;
         this.loadDataService = loadDataService;
         this.realtimeLoadService = realtimeLoadService;
         this.predictionResultMapper = predictionResultMapper;
         this.loadDataMapper = loadDataMapper;
+        this.sysUserMapper = sysUserMapper;
     }
 
     @Override
@@ -281,6 +296,14 @@ public class GridTopologyServiceImpl implements GridTopologyService {
         view.setParentId(node.getParentId());
         GridNode parent = node.getParentId() == null ? null : byId.get(node.getParentId());
         view.setParentCode(parent != null ? parent.getNodeCode() : null);
+        view.setResponsibleUserId(node.getResponsibleUserId());
+        if (sysUserMapper != null && node.getResponsibleUserId() != null) {
+            var user = sysUserMapper.selectById(node.getResponsibleUserId());
+            if (user != null) {
+                view.setResponsibleUserName(user.getDisplayName() != null
+                        ? user.getDisplayName() : user.getUsername());
+            }
+        }
         view.setAllocationRatio(node.getAllocationRatio());
         view.setRatedCapacityMw(node.getRatedCapacityMw());
         view.setVoltageLevel(node.getVoltageLevel());
@@ -288,6 +311,62 @@ public class GridTopologyServiceImpl implements GridTopologyService {
         view.setTopologyVersion(node.getTopologyVersion());
         view.setSortOrder(node.getSortOrder());
         return view;
+    }
+
+    @Override
+    public GridResponsibility resolveResponsibility(Long nodeId) {
+        GridResponsibility result = new GridResponsibility();
+        result.setSourceNodeId(nodeId);
+        result.setDispatchCenter(true);
+        result.setRouteReason("ROOT_OR_UNMAPPED");
+
+        if (nodeId == null) {
+            result.setRouteReason("NO_NODE");
+            return result;
+        }
+
+        List<GridNode> nodes = activeNodes();
+        Map<Long, GridNode> byId = indexNodes(nodes);
+        GridNode source = byId.get(nodeId);
+        if (source == null) {
+            result.setRouteReason("NODE_NOT_FOUND");
+            return result;
+        }
+        result.setSourceNodeCode(source.getNodeCode());
+        result.setSourceNodeName(source.getNodeName());
+
+        GridNode current = source;
+        while (current != null) {
+            if ("SUBSTATION".equals(current.getNodeType())) {
+                result.setSubstationCode(current.getNodeCode());
+                result.setSubstationName(current.getNodeName());
+                Long userId = current.getResponsibleUserId();
+                if (userId == null) {
+                    result.setRouteReason("SUBSTATION_UNASSIGNED");
+                    return result;
+                }
+                result.setAssigneeUserId(userId);
+                if (sysUserMapper == null) {
+                    result.setAssigneeUserId(null);
+                    result.setRouteReason("ASSIGNEE_LOOKUP_UNAVAILABLE");
+                    return result;
+                }
+                var user = sysUserMapper.selectById(userId);
+                if (user == null || !Integer.valueOf(1).equals(user.getIsActive())
+                        || !"OPERATOR".equals(user.getRole())) {
+                    result.setAssigneeUserId(null);
+                    result.setRouteReason("ASSIGNEE_UNAVAILABLE");
+                    return result;
+                }
+                result.setAssigneeName(user.getDisplayName() != null
+                        ? user.getDisplayName() : user.getUsername());
+                result.setDispatchCenter(false);
+                result.setRouteReason("SUBSTATION_RESPONSIBILITY");
+                return result;
+            }
+            current = current.getParentId() == null ? null : byId.get(current.getParentId());
+        }
+        return result;
     }
 
     private GridEdgeView toEdgeView(GridEdge edge, Map<Long, GridNode> byId) {

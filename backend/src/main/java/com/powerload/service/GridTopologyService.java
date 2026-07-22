@@ -4,6 +4,7 @@ import com.powerload.dto.request.GridScenarioRequest;
 import com.powerload.dto.response.GridRiskSnapshot;
 import com.powerload.dto.response.GridScenarioResponse;
 import com.powerload.dto.response.GridTopologyResponse;
+import com.powerload.dto.response.GridResponsibility;
 
 import java.util.List;
 
@@ -29,6 +30,11 @@ public interface GridTopologyService {
      * 只读故障场景推演：计算受影响节点、可转供余量和预计未供负荷。
      */
     GridScenarioResponse simulateScenario(GridScenarioRequest request);
+
+    /**
+     * 沿节点父链解析所属变电站和责任运维人员。
+     */
+    GridResponsibility resolveResponsibility(Long nodeId);
 
     /**
      * 返回去重后的告警根节点。

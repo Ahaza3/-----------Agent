@@ -11,6 +11,7 @@ import com.powerload.entity.AlertAdvice;
 import com.powerload.entity.AlertEvent;
 import com.powerload.mapper.AlertAdviceMapper;
 import com.powerload.dto.response.GridRiskSnapshot;
+import com.powerload.dto.response.GridResponsibility;
 import com.powerload.service.GridTopologyService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
@@ -243,6 +244,19 @@ public class AlertAdviceService {
         ev.put("dataSource", "MOCK_RUNTIME");
         if (alert.getNodeId() != null) {
             try {
+                GridResponsibility responsibility = gridTopologyService.resolveResponsibility(alert.getNodeId());
+                if (responsibility != null) {
+                    Map<String, Object> routing = new LinkedHashMap<>();
+                    routing.put("sourceNodeCode", responsibility.getSourceNodeCode());
+                    routing.put("sourceNodeName", responsibility.getSourceNodeName());
+                    routing.put("substationCode", responsibility.getSubstationCode());
+                    routing.put("substationName", responsibility.getSubstationName());
+                    routing.put("assigneeUserId", responsibility.getAssigneeUserId());
+                    routing.put("assigneeName", responsibility.getAssigneeName());
+                    routing.put("dispatchCenter", responsibility.isDispatchCenter());
+                    routing.put("routeReason", responsibility.getRouteReason());
+                    ev.put("responsibility", routing);
+                }
                 GridRiskSnapshot topologyRisk = gridTopologyService.getRiskSnapshot().stream()
                         .filter(snapshot -> alert.getNodeId().equals(snapshot.getNodeId()))
                         .findFirst()

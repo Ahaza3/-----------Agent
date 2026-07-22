@@ -5,11 +5,11 @@
  */
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { Table, Tag, Button, Space, message, Badge, Modal, Select, Input, Empty, Skeleton, Tabs, DatePicker } from 'antd'
-import { BellOutlined, ExclamationCircleOutlined, FileTextOutlined, ReloadOutlined } from '@ant-design/icons'
+import { ApartmentOutlined, BellOutlined, ExclamationCircleOutlined, FileTextOutlined, ReloadOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import type { Dayjs } from 'dayjs'
 import { acknowledgeAlert, fetchAlertEvents, fetchAlertMetrics, markAlertRead } from '../../services/alertApi'
-import { fetchTicketByAlert, createTicket, assignTicket, fetchAssignees, fetchJudgement } from '../../services/ticketApi'
+import { fetchTicketByAlert, createTicket, assignTicket, fetchAssignees, rejudge } from '../../services/ticketApi'
 import type { AssigneeInfo, JudgementResult, Ticket } from '../../services/ticketApi'
 import { ALERT_LEVEL_CONFIG } from '../../types/alert'
 import type { AlertEvent, AlertLevel, AlertType } from '../../types/alert'
@@ -156,6 +156,7 @@ const DispatcherAlertWorkspace = () => {
   }
 
   const buildTicketSummary = (alert: AlertEvent, judgement?: JudgementResult) => {
+    if (judgement?.ticketSummary) return judgement.ticketSummary
     const levelLabel = ALERT_LEVEL_CONFIG[alert.level]?.label || alert.level
     const limitLabel = alert.type === 'TOPOLOGY_RISK' ? '节点容量' : '阈值'
     const lines = [
@@ -186,11 +187,14 @@ const DispatcherAlertWorkspace = () => {
     loadAssignees()
     setCreateOpen(true)
 
-    if (mode === 'red-draft') {
+    if (mode === 'red-draft' || mode === 'manual') {
       try {
-        const judgement = await fetchJudgement(alertId)
+        const judgement = await rejudge(alertId)
         if (draftAlertIdRef.current === alertId) {
           setSummary(buildTicketSummary(alert, judgement ?? undefined))
+          if (judgement?.recommendedAssigneeUserId) {
+            setAssignUserId(judgement.recommendedAssigneeUserId)
+          }
         }
       } catch {
         // 保留基于告警事件的草稿，LLM 研判失败不阻塞调度员确认建单。
@@ -219,8 +223,7 @@ const DispatcherAlertWorkspace = () => {
     }
     setCreateSubmitting(true)
     try {
-      const t = await createTicket(creatingId, summary.trim())
-      if (assignUserId) await assignTicket(t.id, assignUserId)
+      const t = await createTicket(creatingId, summary.trim(), assignUserId)
       message.success('工单已提交' + (assignUserId ? '并指派' : ''))
       setTicketMap((prev) => ({ ...prev, [creatingId]: t }))
       resetCreateModal()
@@ -336,6 +339,11 @@ const DispatcherAlertWorkspace = () => {
           <p>按风险来源、处置状态和确认进度组织当前告警</p>
         </div>
         <Button icon={<ReloadOutlined />} onClick={() => fetch()} loading={loading}>刷新告警</Button>
+      </div>
+      <div className="alert-center-topology-link">
+        <Button icon={<ApartmentOutlined />} onClick={() => { window.location.href = '/topology' }}>
+          查看拓扑风险
+        </Button>
       </div>
       <hr className="brutalist" />
 

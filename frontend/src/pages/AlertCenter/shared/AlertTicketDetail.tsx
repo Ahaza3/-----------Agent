@@ -394,6 +394,29 @@ const AlertTicketDetail = ({
               <div className="alert-judgement-callout__label">运维建议</div>
               <div>{judgement.operatorAdvice}</div>
             </div>
+            <Descriptions className="alert-judgement-routing" size="small" column={1}>
+              <Descriptions.Item label="拓扑责任路由">
+                <Tag color={judgement.routingTarget === 'SUBSTATION_OPERATOR' ? 'blue' : 'gold'}>
+                  {judgement.routingTarget === 'SUBSTATION_OPERATOR' ? '变电站运维' : '调度中心'}
+                </Tag>
+                {judgement.recommendedAssigneeName
+                  ? ` ${judgement.recommendedAssigneeName}`
+                  : ' 待调度中心认领'}
+              </Descriptions.Item>
+              {judgement.ticketTitle && (
+                <Descriptions.Item label="工单草稿标题">{judgement.ticketTitle}</Descriptions.Item>
+              )}
+              {judgement.impactScope?.length > 0 && (
+                <Descriptions.Item label="影响范围">
+                  {judgement.impactScope.join('、')}
+                </Descriptions.Item>
+              )}
+              {judgement.rootCauseHints?.length > 0 && (
+                <Descriptions.Item label="候选根因">
+                  {judgement.rootCauseHints.join('；')}
+                </Descriptions.Item>
+              )}
+            </Descriptions>
             <div className="alert-judgement-source">
               <Tag color="default">来源：规则型智能 Agent</Tag>
             </div>

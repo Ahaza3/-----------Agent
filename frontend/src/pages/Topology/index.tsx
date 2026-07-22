@@ -279,6 +279,7 @@ const Topology = () => {
         riskLevel,
         currentLoadMw: nodeRisk?.currentLoadMw,
         forecastPeakMw: nodeRisk?.forecastPeakMw,
+        responsibleUserName: node.responsibleUserName,
         category: categoryIndex[node.nodeType],
         x: position.x,
         y: position.y,
@@ -310,6 +311,7 @@ const Topology = () => {
           return [
             `<strong>${data.name}</strong>`,
             `<span>${data.nodeCode}</span>`,
+            data.responsibleUserName ? `责任运维：${data.responsibleUserName}` : '',
             `当前负荷：${formatMw(data.currentLoadMw)}`,
             `预测峰值：${formatMw(data.forecastPeakMw)}`,
           ].join('<br/>')

@@ -8,6 +8,8 @@ export interface GridNodeView {
   nodeType: GridNodeType
   parentId: number | null
   parentCode: string | null
+  responsibleUserId: number | null
+  responsibleUserName: string | null
   allocationRatio: number
   ratedCapacityMw: number | null
   voltageLevel: string | null

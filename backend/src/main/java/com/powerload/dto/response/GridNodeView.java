@@ -14,6 +14,8 @@ public class GridNodeView {
     private String nodeType;
     private Long parentId;
     private String parentCode;
+    private Long responsibleUserId;
+    private String responsibleUserName;
     private Float allocationRatio;
     private Float ratedCapacityMw;
     private String voltageLevel;

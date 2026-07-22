@@ -2,6 +2,7 @@ package com.powerload.scheduler;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.powerload.alert.AlertCreatedEvent;
+import com.powerload.alert.AlertJudgementService;
 import com.powerload.dto.response.GridRiskSnapshot;
 import com.powerload.entity.AlertEvent;
 import com.powerload.mapper.AlertEventMapper;
@@ -39,6 +40,7 @@ public class TopologyAlertScheduler {
     private final AlertEventMapper alertEventMapper;
     private final PushService pushService;
     private final ApplicationEventPublisher eventPublisher;
+    private final AlertJudgementService alertJudgementService;
 
     private final Map<Long, String> activeLevels = new ConcurrentHashMap<>();
 
@@ -69,6 +71,11 @@ public class TopologyAlertScheduler {
                 event.setRootEventId(event.getId());
                 alertEventMapper.updateById(event);
                 pushService.pushAlert(event);
+                try {
+                    alertJudgementService.judgeRuleBased(event);
+                } catch (Exception e) {
+                    log.warn("拓扑告警规则研判失败: alertId={}, reason={}", event.getId(), e.getMessage());
+                }
                 eventPublisher.publishEvent(new AlertCreatedEvent(this, event));
                 activeLevels.put(snapshot.getNodeId(), snapshot.getRiskLevel());
                 log.info("拓扑根告警触发: node={}, level={}, impact={}MW",
