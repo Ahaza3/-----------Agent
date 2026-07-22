@@ -10,6 +10,8 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.List;
 import java.util.Map;
+import java.nio.file.Files;
+import java.nio.file.Path;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -75,5 +77,29 @@ class ModelVersionServiceImplTest {
 
         assertThrows(IllegalArgumentException.class, () -> service.activate(99L));
         verify(mapper, never()).updateById(any(ModelVersion.class));
+    }
+
+    @Test
+    void shouldPreferUnixPythonInDockerEvenIfWindowsVenvExists() throws Exception {
+        Path workDir = Files.createTempDirectory("ml-workdir");
+        Path windowsVenv = workDir.resolve(".venv").resolve("Scripts");
+        Files.createDirectories(windowsVenv);
+        Files.createFile(windowsVenv.resolve("python.exe"));
+
+        String command = service.resolvePythonCommand(workDir, "Linux");
+
+        assertEquals("python3", command);
+    }
+
+    @Test
+    void shouldUseWindowsVenvOnWindows() throws Exception {
+        Path workDir = Files.createTempDirectory("ml-workdir");
+        Path windowsVenv = workDir.resolve(".venv").resolve("Scripts");
+        Files.createDirectories(windowsVenv);
+        Path pythonExe = Files.createFile(windowsVenv.resolve("python.exe"));
+
+        String command = service.resolvePythonCommand(workDir, "Windows 11");
+
+        assertEquals(pythonExe.toString(), command);
     }
 }
