@@ -70,6 +70,8 @@ class PredictionOperationsServiceImplTest {
         assertEquals(2, result.get("candidatePoints"));
         assertEquals(2.5, result.get("mape"));
         assertEquals(35.36, result.get("rmse"));
+        List<Map<String, Object>> series = (List<Map<String, Object>>) result.get("series");
+        assertEquals("LEGACY", series.get(0).get("traceabilityStatus"));
     }
 
     private LoadData load(LocalDateTime time, float load, Float temperature, Float humidity, String source) {

@@ -43,4 +43,13 @@ public class ForecastResponse {
     private boolean futureWeatherApplied;
 
     private boolean futureWeatherFallback;
+
+    private String runId;
+    private LocalDateTime issuedAt;
+    private LocalDateTime dataCutoff;
+    private Integer forecastHorizonHours;
+    private String modelVersion;
+    private String artifactChecksum;
+    private LocalDateTime weatherIssuedAt;
+    private String traceabilityStatus;
 }
