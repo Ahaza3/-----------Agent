@@ -30,10 +30,13 @@ public class PredictionOperationsController {
 
     @GetMapping("/review")
     public R<Map<String, Object>> review(
+            @RequestParam(required = false) Long nodeId,
+            @RequestParam(defaultValue = "24") int leadHour,
             @RequestParam(required = false)
-            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime start,
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startTime,
             @RequestParam(required = false)
-            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime end) {
-        return R.ok(predictionOperationsService.review(start, end));
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endTime,
+            @RequestParam(required = false) String modelVersion) {
+        return R.ok(predictionOperationsService.review(nodeId, leadHour, startTime, endTime, modelVersion));
     }
 }
