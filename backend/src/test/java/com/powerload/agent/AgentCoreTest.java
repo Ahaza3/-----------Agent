@@ -1,12 +1,16 @@
 package com.powerload.agent;
 
+import com.powerload.audit.AgentToolAuditService;
+import com.powerload.security.SysUserPrincipal;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.mock;
 
 class AgentCoreTest {
 
@@ -18,7 +22,7 @@ class AgentCoreTest {
     @BeforeEach
     void setUp() {
         mockLlm = new MockLlmClient();
-        toolRegistry = new ToolRegistry(List.of(dummyQueryTool()));
+        toolRegistry = registry(dummyQueryTool());
         agentCore = new AgentCore(mockLlm, toolRegistry);
         thinkingLog = new StringBuilder();
     }
@@ -80,7 +84,7 @@ class AgentCoreTest {
         );
         AgentCore core = new AgentCore(sequenced, toolRegistry);
 
-        AgentCore.AgentResponse r = core.run("当前负荷", List.of(), thinkingLog::append, null);
+        AgentCore.AgentResponse r = core.run("当前负荷", List.of(), thinkingLog::append, dispatcher());
 
         assertTrue(r.isSuccess());
         assertTrue(r.getContent().contains("900 MW"));
@@ -104,7 +108,7 @@ class AgentCoreTest {
         );
         AgentCore core = new AgentCore(sequenced, toolRegistry);
 
-        AgentCore.AgentResponse r = core.run("复杂查询", List.of(), thinkingLog::append, null);
+        AgentCore.AgentResponse r = core.run("复杂查询", List.of(), thinkingLog::append, dispatcher());
 
         assertTrue(r.isSuccess());
         assertTrue(r.getContent().contains("最终结果"));
@@ -121,7 +125,7 @@ class AgentCoreTest {
         ));
         mockLlm.setNextResponse(alwaysTool);
 
-        AgentCore.AgentResponse r = agentCore.run("查询", List.of(), thinkingLog::append, null);
+        AgentCore.AgentResponse r = agentCore.run("查询", List.of(), thinkingLog::append, dispatcher());
 
         assertFalse(r.isSuccess());
         assertTrue(r.getContent().contains("最大工具调用轮次"));
@@ -134,10 +138,11 @@ class AgentCoreTest {
         Tool crashTool = new Tool() {
             @Override public String name() { return "crash"; }
             @Override public String description() { return "crash"; }
+            @Override public Set<String> allowedRoles() { return Set.of("DISPATCHER", "OPERATOR", "SYSTEM_ADMIN"); }
             @Override public Map<String, Object> parameters() { return Map.of("type", "object"); }
             @Override public ToolResult execute(String args) { throw new RuntimeException("tool crash"); }
         };
-        ToolRegistry crashRegistry = new ToolRegistry(List.of(crashTool));
+        ToolRegistry crashRegistry = registry(crashTool);
         SequencedLlmClient sequenced = new SequencedLlmClient(
                 AgentMessage.assistantWithToolCalls(List.of(
                         Map.of("id", "call_1", "type", "function",
@@ -147,7 +152,7 @@ class AgentCoreTest {
         );
         AgentCore core = new AgentCore(sequenced, crashRegistry);
 
-        AgentCore.AgentResponse r = core.run("test", List.of(), thinkingLog::append, null);
+        AgentCore.AgentResponse r = core.run("test", List.of(), thinkingLog::append, dispatcher());
         // Should not throw — tool error is captured and LLM gets the error
         assertTrue(r.isSuccess());
     }
@@ -184,7 +189,7 @@ class AgentCoreTest {
         );
         AgentCore core = new AgentCore(sequenced, toolRegistry);
 
-        AgentCore.AgentResponse r = core.run("test", List.of(), thinkingLog::append, null);
+        AgentCore.AgentResponse r = core.run("test", List.of(), thinkingLog::append, dispatcher());
         assertTrue(r.isSuccess());
     }
 
@@ -201,12 +206,30 @@ class AgentCoreTest {
         assertFalse(r.isSuccess());
     }
 
+    @Test
+    void shouldSendDifferentToolDefinitionsToDifferentRoles() {
+        CapturingLlmClient llm = new CapturingLlmClient();
+        Tool dispatcherTool = tool("dispatcher_tool", Set.of("DISPATCHER", "SYSTEM_ADMIN"));
+        Tool operatorTool = tool("operator_tool", Set.of("OPERATOR", "SYSTEM_ADMIN"));
+        Tool commonTool = tool("common_tool", Set.of("DISPATCHER", "OPERATOR", "SYSTEM_ADMIN"));
+        AgentCore core = new AgentCore(llm, registry(dispatcherTool, operatorTool, commonTool));
+
+        assertTrue(core.run("查询", List.of(), thinkingLog::append,
+                new SysUserPrincipal(1L, "dispatcher", "DISPATCHER")).isSuccess());
+        assertEquals(Set.of("dispatcher_tool", "common_tool"), llm.toolNames());
+
+        assertTrue(core.run("查询", List.of(), thinkingLog::append,
+                new SysUserPrincipal(2L, "operator", "OPERATOR")).isSuccess());
+        assertEquals(Set.of("operator_tool", "common_tool"), llm.toolNames());
+    }
+
     /* ─── helpers ─── */
 
     private static Tool dummyQueryTool() {
         return new Tool() {
             @Override public String name() { return "test_tool"; }
             @Override public String description() { return "test tool"; }
+            @Override public Set<String> allowedRoles() { return Set.of("DISPATCHER", "OPERATOR", "SYSTEM_ADMIN"); }
             @Override public Map<String, Object> parameters() {
                 return Map.of("type", "object", "properties", Map.of());
             }
@@ -214,6 +237,41 @@ class AgentCoreTest {
                 return ToolResult.ok("ok", Map.of("result", "test"));
             }
         };
+    }
+
+    private static Tool tool(String name, Set<String> roles) {
+        return new Tool() {
+            @Override public String name() { return name; }
+            @Override public String description() { return name; }
+            @Override public Set<String> allowedRoles() { return roles; }
+            @Override public Map<String, Object> parameters() { return Map.of("type", "object"); }
+            @Override public ToolResult execute(String args) { return ToolResult.ok("ok", null); }
+        };
+    }
+
+    private static ToolRegistry registry(Tool... tools) {
+        return new ToolRegistry(List.of(tools), mock(AgentToolAuditService.class));
+    }
+
+    private static SysUserPrincipal dispatcher() {
+        return new SysUserPrincipal(1L, "dispatcher", "DISPATCHER");
+    }
+
+    static class CapturingLlmClient implements LlmClient {
+        private List<Map<String, Object>> tools = List.of();
+
+        @Override
+        public AgentMessage chat(List<AgentMessage> messages, List<Map<String, Object>> tools) {
+            this.tools = List.copyOf(tools);
+            return AgentMessage.assistant("ok");
+        }
+
+        Set<String> toolNames() {
+            return tools.stream()
+                    .map(def -> (Map<String, Object>) def.get("function"))
+                    .map(function -> (String) function.get("name"))
+                    .collect(java.util.stream.Collectors.toSet());
+        }
     }
 
     /** 按序列返回预设响应的 LlmClient */

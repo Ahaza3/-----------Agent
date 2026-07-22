@@ -30,6 +30,11 @@ public class QueryGridRiskTool implements Tool {
     }
 
     @Override
+    public java.util.Set<String> allowedRoles() {
+        return java.util.Set.of("DISPATCHER", "OPERATOR", "SYSTEM_ADMIN");
+    }
+
+    @Override
     public String description() {
         return "查询区域、变电站和馈线的当前负荷、预测峰值、容量余量和风险等级。"
                 + "适用于询问哪个节点风险最高、哪些节点即将过载、拓扑风险排名等。"

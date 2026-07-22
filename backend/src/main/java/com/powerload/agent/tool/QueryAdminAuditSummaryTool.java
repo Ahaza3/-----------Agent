@@ -31,6 +31,11 @@ public class QueryAdminAuditSummaryTool implements Tool {
     }
 
     @Override
+    public java.util.Set<String> allowedRoles() {
+        return java.util.Set.of("SYSTEM_ADMIN");
+    }
+
+    @Override
     public String description() {
         return "查询系统管理员审计摘要，包括用户角色分布、停用账号、最近失败操作和系统健康状态。适用于权限审计、操作日志风险和系统管理建议。";
     }
