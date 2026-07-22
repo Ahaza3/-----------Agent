@@ -23,7 +23,7 @@ import java.util.UUID;
 public class AgentService {
 
     private static final int MAX_HISTORY_MESSAGES = 10;
-    private static final long SSE_TIMEOUT_MS = 60_000L;
+    private static final long SSE_TIMEOUT_MS = 300_000L;
 
     private final AgentCore agentCore;
     private final ConversationService conversationService;

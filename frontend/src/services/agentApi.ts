@@ -56,12 +56,15 @@ export function agentChat(
   onComplete: () => void,
 ): AbortController {
   const controller = new AbortController()
+  let hasResponsePayload = false
 
   const token = useAuthStore.getState().accessToken
   fetch('/api/v1/agent/chat', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
+      Accept: 'text/event-stream',
+      'Cache-Control': 'no-cache',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
     body: JSON.stringify({
@@ -108,6 +111,9 @@ export function agentChat(
                 type: currentEvent as AgentEvent['type'],
                 ...data,
               }
+              if (event.type === 'text' || event.type === 'chart' || event.type === 'done') {
+                hasResponsePayload = true
+              }
               onEvent(event)
             } catch {
               // Skip malformed JSON
@@ -120,7 +126,7 @@ export function agentChat(
       onComplete()
     })
     .catch((err) => {
-      if (err.name !== 'AbortError') {
+      if (err.name !== 'AbortError' && !hasResponsePayload) {
         onEvent({ type: 'error', message: err.message || '网络错误' })
       }
       onComplete()

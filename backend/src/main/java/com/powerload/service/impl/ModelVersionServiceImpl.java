@@ -199,8 +199,7 @@ public class ModelVersionServiceImpl implements ModelVersionService {
     private void runRetrain(String modelName, Long taskId) {
         String script = "PROPHET".equals(modelName) ? "train_prophet.py" : "train_lstm.py";
         Path workDir = resolveWorkDir();
-        Path python = workDir.resolve(".venv").resolve("Scripts").resolve("python.exe");
-        String pythonCommand = Files.exists(python) ? python.toString() : "python";
+        String pythonCommand = resolvePythonCommand(workDir);
         StringBuilder output = new StringBuilder();
         try {
             TrainingDataSummary data = prepareTrainingData(workDir, pythonCommand, output);
@@ -434,6 +433,28 @@ public class ModelVersionServiceImpl implements ModelVersionService {
             return projectRootPath.toAbsolutePath().normalize();
         }
         return Paths.get("../ml").toAbsolutePath().normalize();
+    }
+
+    String resolvePythonCommand(Path workDir) {
+        String osName = System.getProperty("os.name", "");
+        return resolvePythonCommand(workDir, osName);
+    }
+
+    String resolvePythonCommand(Path workDir, String osName) {
+        String normalizedOs = osName == null ? "" : osName.toLowerCase(Locale.ROOT);
+        if (normalizedOs.contains("win")) {
+            Path windowsVenv = workDir.resolve(".venv").resolve("Scripts").resolve("python.exe");
+            if (Files.isRegularFile(windowsVenv)) {
+                return windowsVenv.toString();
+            }
+            return "python";
+        }
+
+        Path unixVenv = workDir.resolve(".venv").resolve("bin").resolve("python");
+        if (Files.isRegularFile(unixVenv) && Files.isExecutable(unixVenv)) {
+            return unixVenv.toString();
+        }
+        return "python3";
     }
 
     private boolean isDefaultPath(String value, String... defaults) {
