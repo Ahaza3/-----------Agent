@@ -185,6 +185,7 @@ public class PredictionOperationsServiceImpl implements PredictionOperationsServ
             point.put("error", round(error));
             point.put("lowerBound", prediction.getLowerBound());
             point.put("upperBound", prediction.getUpperBound());
+            point.put("traceabilityStatus", prediction.getForecastRunId() == null ? "LEGACY" : "TRACEABLE");
             series.add(point);
         }
 

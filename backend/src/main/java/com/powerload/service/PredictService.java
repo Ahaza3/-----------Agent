@@ -25,6 +25,11 @@ public interface PredictService {
      */
     ForecastResponse forecast(Long nodeId);
 
+    /** 使用可复用幂等键触发预测；为空时每次创建新批次。 */
+    default ForecastResponse forecast(Long nodeId, String idempotencyKey) {
+        return forecast(nodeId);
+    }
+
     /**
      * 批量执行节点预测。单个节点失败不会阻断其他节点。
      */
