@@ -35,6 +35,11 @@ public class KnowledgeSearchTool implements Tool {
     }
 
     @Override
+    public java.util.Set<String> allowedRoles() {
+        return java.util.Set.of("DISPATCHER", "OPERATOR", "SYSTEM_ADMIN");
+    }
+
+    @Override
     public String description() {
         return "检索电力行业知识库，适用于负荷预测原理、异常识别、调度术语、智能告警处置等问题。"
                 + "返回知识片段和来源。涉及行业知识时必须优先调用，不能用常识替代知识库依据。";

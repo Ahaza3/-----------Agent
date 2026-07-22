@@ -26,6 +26,11 @@ public class QueryTicketWorkloadTool implements Tool {
     }
 
     @Override
+    public java.util.Set<String> allowedRoles() {
+        return java.util.Set.of("OPERATOR", "SYSTEM_ADMIN");
+    }
+
+    @Override
     public String description() {
         return "查询运维工单工作负载，包括待认领、分配给我、处理中、预警工单和最近工单。适用于运维排查、工单优先级和处理建议。";
     }

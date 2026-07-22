@@ -45,6 +45,11 @@ public class QueryLoadTool implements Tool {
     }
 
     @Override
+    public java.util.Set<String> allowedRoles() {
+        return java.util.Set.of("DISPATCHER", "OPERATOR", "SYSTEM_ADMIN");
+    }
+
+    @Override
     public String description() {
         return "查询指定时间范围内的历史负荷数据（小时级），返回负荷值 MW、温度℃、湿度%。" +
                "适合绘制趋势图和回答诸如'昨天负荷高峰'、'本周趋势'等问题。" +

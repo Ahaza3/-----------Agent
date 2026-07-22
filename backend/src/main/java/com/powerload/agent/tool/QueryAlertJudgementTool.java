@@ -29,6 +29,11 @@ public class QueryAlertJudgementTool implements Tool {
     public String name() { return "query_alert_judgement"; }
 
     @Override
+    public java.util.Set<String> allowedRoles() {
+        return java.util.Set.of("DISPATCHER", "SYSTEM_ADMIN");
+    }
+
+    @Override
     public String description() {
         return "查询最近一条告警的智能研判结果，或按 alertId 查询指定告警的研判。" +
                "返回：是否建议提交待确认工单草稿、推荐优先级、调度员建议、运维建议、研判原因。" +

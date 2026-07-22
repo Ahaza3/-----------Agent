@@ -48,6 +48,11 @@ public class GetStatsTool implements Tool {
     }
 
     @Override
+    public java.util.Set<String> allowedRoles() {
+        return java.util.Set.of("DISPATCHER", "OPERATOR", "SYSTEM_ADMIN");
+    }
+
+    @Override
     public String description() {
         return "获取当前实时负荷数据、统计指标（峰值/谷值/平均值/负荷率）和最近告警。" +
                "不传时间参数时仅返回当前实时负荷；传时间参数时查询该区间的统计信息。" +

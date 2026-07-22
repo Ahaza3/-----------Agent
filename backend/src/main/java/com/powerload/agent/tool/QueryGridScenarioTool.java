@@ -37,6 +37,11 @@ public class QueryGridScenarioTool implements Tool {
     }
 
     @Override
+    public java.util.Set<String> allowedRoles() {
+        return java.util.Set.of("DISPATCHER", "OPERATOR", "SYSTEM_ADMIN");
+    }
+
+    @Override
     public String description() {
         return "执行节点或线路故障后的拓扑影响场景推演，返回受影响节点、受影响负荷、可转供余量和未供负荷。"
                 + "计算由拓扑规则完成，适用于询问节点故障、线路故障、影响范围、风险根因和处置建议。"

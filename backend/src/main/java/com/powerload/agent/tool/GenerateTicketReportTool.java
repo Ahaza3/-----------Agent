@@ -24,6 +24,11 @@ public class GenerateTicketReportTool implements Tool {
     public String name() { return "generate_ticket_report"; }
 
     @Override
+    public java.util.Set<String> allowedRoles() {
+        return java.util.Set.of("OPERATOR", "SYSTEM_ADMIN");
+    }
+
+    @Override
     public String description() {
         return "按 ticketId 生成结构化工单处理报告（规则型 Agent 模板，非 LLM）。" +
                "运维人员询问'这个工单怎么处理/帮我生成处理报告/处理结果怎么写'时必须调用此工具。" +

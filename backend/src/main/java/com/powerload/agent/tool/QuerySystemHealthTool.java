@@ -20,6 +20,10 @@ public class QuerySystemHealthTool implements Tool {
 
     @Override public String name() { return "query_system_health"; }
 
+    @Override public java.util.Set<String> allowedRoles() {
+        return java.util.Set.of("OPERATOR", "SYSTEM_ADMIN");
+    }
+
     @Override public String description() {
         return "查询系统健康状态：MySQL、Flask 推理服务、LLM配置、最近预测和告警时间等。";
     }

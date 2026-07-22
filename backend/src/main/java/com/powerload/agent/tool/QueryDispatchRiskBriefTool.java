@@ -42,6 +42,11 @@ public class QueryDispatchRiskBriefTool implements Tool {
     }
 
     @Override
+    public java.util.Set<String> allowedRoles() {
+        return java.util.Set.of("DISPATCHER", "SYSTEM_ADMIN");
+    }
+
+    @Override
     public String description() {
         return "生成调度员当前运行风险简报，聚合实时负荷、预测峰值、告警阈值、未读告警和预警工单建议。"
                 + "适用于询问运行风险、未来峰值、是否需要提前建预警工单、调度建议等。";

@@ -42,6 +42,11 @@ public class QueryForecastTool implements Tool {
     }
 
     @Override
+    public java.util.Set<String> allowedRoles() {
+        return java.util.Set.of("DISPATCHER", "OPERATOR", "SYSTEM_ADMIN");
+    }
+
+    @Override
     public String description() {
         return "查询未来 24 小时的负荷预测数据，包括每个小时的预测值、峰值时间、平均值等。" +
                "适用于用户询问'未来负荷趋势'、'预测最高负荷'、'明天负荷会到多少'等问题。" +

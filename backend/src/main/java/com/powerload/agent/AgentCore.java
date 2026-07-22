@@ -61,10 +61,10 @@ public class AgentCore {
             }
             messages.add(AgentMessage.user(userMessage));
 
-            List<Map<String, Object>> toolDefs = toolRegistry.getToolDefinitions();
+            List<Map<String, Object>> toolDefs = toolRegistry.getToolDefinitions(user);
 
             try {
-                return runLoop(messages, toolDefs, 0, callback);
+                return runLoop(messages, toolDefs, 0, callback, user);
             } catch (LlmException e) {
                 log.error("Agent LLM 异常", e);
                 return AgentResponse.error("LLM 调用失败: " + e.getMessage());
@@ -80,7 +80,8 @@ public class AgentCore {
     private AgentResponse runLoop(List<AgentMessage> messages,
                                    List<Map<String, Object>> toolDefs,
                                    int round,
-                                   AgentCallback callback) throws LlmException {
+                                   AgentCallback callback,
+                                   SysUserPrincipal user) throws LlmException {
         if (round >= MAX_TOOL_ROUNDS) {
             return AgentResponse.error("达到最大工具调用轮次限制（" + MAX_TOOL_ROUNDS + "），请简化查询后重试。");
         }
@@ -122,7 +123,7 @@ public class AgentCore {
 
             callback.onThinking("正在调用工具: " + toolName + "…");
 
-            ToolResult toolResult = toolRegistry.execute(toolName, arguments);
+            ToolResult toolResult = toolRegistry.execute(user, toolName, arguments);
 
             // Truncate tool result for LLM
             String resultJson = JSONUtil.toJsonStr(toolResult);
@@ -142,7 +143,7 @@ public class AgentCore {
         }
 
         // Request LLM again with tool results (keep tools available for multi-round)
-        AgentResponse finalResponse = runLoop(messages, toolDefs, round + 1, callback);
+        AgentResponse finalResponse = runLoop(messages, toolDefs, round + 1, callback, user);
         finalResponse.setChart(chartOption);
         if (finalResponse.getProvenance() != null) {
             provenance.putAll(finalResponse.getProvenance());
