@@ -398,17 +398,21 @@ const ModelPanel = () => {
   const [activationNotice, setActivationNotice] = useState<string | null>(null)
   const [quality, setQuality] = useState<any>(null)
   const [review, setReview] = useState<any>(null)
+  const [reviewNodeId, setReviewNodeId] = useState(1)
+  const [reviewLeadHour, setReviewLeadHour] = useState<1 | 4 | 24>(24)
+  const [reviewNodes, setReviewNodes] = useState<{ value: number; label: string }[]>([{ value: 1, label: '根区域（模拟）' }])
 
   const refresh = useCallback(async (showLoading = true) => {
     if (showLoading) setLoading(true)
-    const [forecastResp, versionsResp, healthResp, retrainResp, historyResp, qualityResp, reviewResp] = await Promise.allSettled([
+    const [forecastResp, versionsResp, healthResp, retrainResp, historyResp, qualityResp, reviewResp, topologyResp] = await Promise.allSettled([
       api.get('/predict/forecast'),
       api.get('/model/versions'),
       api.get('/system/health'),
       api.get('/model/retrain/status'),
       api.get('/model/retrain/history'),
       api.get('/predict/quality'),
-      api.get('/predict/review'),
+      api.get('/predict/review', { params: { nodeId: reviewNodeId, leadHour: reviewLeadHour } }),
+      api.get('/topology'),
     ])
     if (forecastResp.status === 'fulfilled') setForecast(forecastResp.value)
     if (versionsResp.status === 'fulfilled') setVersions((versionsResp.value as unknown as any[]) || [])
@@ -417,8 +421,9 @@ const ModelPanel = () => {
     if (historyResp.status === 'fulfilled') setTrainingHistory((historyResp.value as unknown as any[]) || [])
     if (qualityResp.status === 'fulfilled') setQuality(qualityResp.value)
     if (reviewResp.status === 'fulfilled') setReview(reviewResp.value)
+    if (topologyResp.status === 'fulfilled') setReviewNodes(((topologyResp.value as any)?.nodes || []).map((node: any) => ({ value: node.id, label: `${node.nodeName}（模拟）` })))
     if (showLoading) setLoading(false)
-  }, [])
+  }, [reviewLeadHour, reviewNodeId])
   useEffect(() => { refresh() }, [refresh])
   useEffect(() => {
     if (trainingStatus?.status !== 'RUNNING') return undefined
@@ -460,7 +465,8 @@ const ModelPanel = () => {
     const times = points.map((point: any) => dayjs(point.time).format('MM-DD HH:mm'))
     return {
       animation: false,
-      grid: { top: 20, left: 52, right: 20, bottom: 42 },
+      title: { text: `根区域负荷预测复盘（${reviewLeadHour}h 提前量）`, textStyle: { color: WHITE, fontSize: 13 } },
+      grid: { top: 44, left: 52, right: 20, bottom: 42 },
       tooltip: { trigger: 'axis' },
       legend: { data: ['实际', '预测', '参考下界', '参考上界'], textStyle: { color: '#7D8A97', fontSize: 11 }, bottom: 0 },
       xAxis: { type: 'category', data: times, axisLabel: { color: '#7D8A97', hideOverlap: true } },
@@ -472,7 +478,7 @@ const ModelPanel = () => {
         { name: '参考上界', type: 'line', data: points.map((point: any) => point.upperBound), smooth: true, symbol: 'none', lineStyle: { color: '#8B98A6', width: 1, type: 'dotted' } },
       ],
     }
-  }, [review])
+  }, [review, reviewLeadHour])
 
   if (loading) return <Skeleton active paragraph={{ rows: 4 }} />
 
@@ -573,16 +579,22 @@ const ModelPanel = () => {
           { label: '缺失点', children: quality?.missingPoints ?? 'N/A' },
           { label: '天气缺失', children: quality?.weatherMissingPoints ?? 'N/A' },
           { label: '天气特征', children: forecast?.futureWeatherApplied ? '历史天气 + 未来预报' : '历史天气辅助' },
-          { label: '线上 MAPE', children: review?.mape != null ? `${review.mape.toFixed(2)}%` : 'N/A' },
-          { label: '线上 RMSE', children: review?.rmse != null ? `${review.rmse.toFixed(2)} MW` : 'N/A' },
-          { label: '峰值误差', children: review?.peakErrorMw != null ? `${review.peakErrorMw.toFixed(2)} MW` : 'N/A' },
+          { label: '固定提前量 MAPE', children: review?.mape != null ? `${review.mape.toFixed(2)}%` : '暂无足够样本' },
+          { label: 'WMAPE', children: review?.wmape != null ? `${review.wmape.toFixed(2)}%` : '暂无足够样本' },
+          { label: '峰值时刻误差', children: review?.peakTimeErrorHours != null ? `${review.peakTimeErrorHours} 小时` : '暂无足够样本' },
+          { label: '高负荷低估率', children: review?.highLoadUnderForecastRate != null ? `${review.highLoadUnderForecastRate.toFixed(2)}%` : '暂无足够样本' },
+          { label: '有效样本数', children: review?.sampleCount ?? 0 },
         ]}
         labelStyle={{ color: '#888', background: '#0c0c0c' }}
         contentStyle={{ color: '#ccc', background: '#0e0e0e' }}
       />
+      <Space style={{ marginTop: 16 }} wrap>
+        <Select value={reviewNodeId} onChange={setReviewNodeId} style={{ width: 150 }} options={reviewNodes} />
+        <Select value={reviewLeadHour} onChange={setReviewLeadHour} style={{ width: 150 }} options={[1, 4, 24].map(value => ({ value, label: `${value}h 提前量` }))} />
+      </Space>
       <div style={{ color: '#888', fontSize: 11, marginTop: 8 }}>
         线上复盘覆盖 {review?.evaluatedPoints ?? 0} 个已回填实际值的预测点；
-        预测区间来源：{forecast?.intervalSource === 'VALIDATION_RMSE_REFERENCE' ? '验证集 RMSE 参考区间' : '暂无区间数据'}。
+        历史 LEGACY 预测未进入固定提前量统计；当前指标基于模拟负荷数据，不代表真实电网预测精度。
       </div>
       {review?.series?.length > 0 && (
         <ReactECharts option={reviewChartOption} notMerge style={{ height: 250, marginTop: 8 }} />
