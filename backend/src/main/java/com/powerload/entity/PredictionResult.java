@@ -19,6 +19,9 @@ public class PredictionResult {
     @TableId(type = IdType.AUTO)
     private Long id;
 
+    /** 预测目标拓扑节点 ID；历史单区域预测归属区域根节点 */
+    private Long nodeId;
+
     /** 预测的时间点 */
     private LocalDateTime predictTime;
 

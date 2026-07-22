@@ -34,6 +34,7 @@ const PRIORITY: Record<string, { label: string; color: string }> = {
 
 interface AlertInfo {
   id: number | null
+  type?: string
   level: AlertLevel
   currentValue: number
   thresholdValue: number
@@ -205,6 +206,7 @@ const AlertTicketDetail = ({
   const st = ticket ? STATUS[ticket.status] || { label: ticket.status, color: 'default' } : null
   const pr = ticket ? PRIORITY[ticket.priority] || { label: ticket.priority, color: 'default' } : null
   const alertLevelCfg = ALERT_LEVEL_CONFIG[alert.level]
+  const limitLabel = alert.type === 'TOPOLOGY_RISK' ? '节点容量' : '阈值'
 
   const handleClaim = useCallback(async () => {
     if (!ticket) return
@@ -295,7 +297,7 @@ const AlertTicketDetail = ({
           items={[
             { label: ticket?.sourceType === 'PREWARNING' ? '预警级别' : '告警级别', children: alertLevelCfg ? <Tag color={alertLevelCfg.color}>{alertLevelCfg.label}</Tag> : alert.level },
             { label: ticket?.sourceType === 'PREWARNING' ? '预测负荷' : '当前负荷', children: `${alert.currentValue?.toFixed(1)} MW` },
-            { label: '阈值', children: `${alert.thresholdValue?.toFixed(0)} MW` },
+            { label: limitLabel, children: `${alert.thresholdValue?.toFixed(0)} MW` },
             { label: ticket?.sourceType === 'PREWARNING' ? '预测时间' : '触发时间', children: alert.triggerTime ? dayjs(alert.triggerTime).format('MM-DD HH:mm:ss') : '-' },
             { label: '告警状态', children: alert.status === 'RECOVERED' ? <Tag>已恢复</Tag> : alert.status === 'ACKNOWLEDGED' ? <Tag color="blue">已确认</Tag> : <Tag color="red">待确认</Tag> },
             ...(alert.acknowledgedAt ? [{ label: '确认信息', children: `${alert.acknowledgedByName || '调度员'} · ${dayjs(alert.acknowledgedAt).format('MM-DD HH:mm:ss')}` }] : []),

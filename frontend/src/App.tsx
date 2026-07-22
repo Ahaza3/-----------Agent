@@ -15,6 +15,7 @@ import Dashboard from './pages/Dashboard'
 import AlertCenter from './pages/AlertCenter'
 import AgentChat from './pages/AgentChat'
 import DataQuery from './pages/DataQuery'
+import Topology from './pages/Topology'
 import Admin from './pages/Admin'
 import Forbidden from './pages/Forbidden'
 import NotFound from './pages/NotFound'
@@ -47,6 +48,7 @@ function App() {
                 <Route element={<RoleGuard allowedRoles={['DISPATCHER', 'OPERATOR', 'SYSTEM_ADMIN']} />}>
                   <Route path="/agent" element={<AgentChat />} />
                   <Route path="/data" element={<DataQuery />} />
+                  <Route path="/topology" element={<Topology />} />
                 </Route>
 
                 {/* 操作员 & 系统管理员可见 */}

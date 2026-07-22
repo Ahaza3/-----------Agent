@@ -83,6 +83,23 @@ public class AlertEventServiceImpl implements AlertEventService {
     }
 
     @Override
+    public boolean isDuplicate(LocalDateTime triggerTime, String level, Long ruleId, Long nodeId, String type) {
+        LocalDateTime hourStart = triggerTime.withMinute(0).withSecond(0).withNano(0);
+        LocalDateTime hourEnd = hourStart.plusHours(1);
+
+        LambdaQueryWrapper<AlertEvent> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(AlertEvent::getLevel, level)
+               .eq(ruleId != null, AlertEvent::getRuleId, ruleId)
+               .isNull(ruleId == null, AlertEvent::getRuleId)
+               .eq(nodeId != null, AlertEvent::getNodeId, nodeId)
+               .eq(type != null && !type.isBlank(), AlertEvent::getType, type)
+               .ge(AlertEvent::getTriggerTime, hourStart)
+               .lt(AlertEvent::getTriggerTime, hourEnd);
+
+        return alertEventMapper.selectCount(wrapper) > 0;
+    }
+
+    @Override
     @Transactional
     public void acknowledge(Long id, SysUserPrincipal user) {
         AlertEvent event = alertEventMapper.selectById(id);
@@ -105,8 +122,17 @@ public class AlertEventServiceImpl implements AlertEventService {
     @Override
     @Transactional
     public void resolveLatest(Long ruleId, LocalDateTime resolvedAt) {
+        resolveLatest(ruleId, null, null, resolvedAt);
+    }
+
+    @Override
+    @Transactional
+    public void resolveLatest(Long ruleId, Long nodeId, String type, LocalDateTime resolvedAt) {
         LambdaQueryWrapper<AlertEvent> wrapper = new LambdaQueryWrapper<AlertEvent>()
-                .eq(AlertEvent::getRuleId, ruleId)
+                .eq(ruleId != null, AlertEvent::getRuleId, ruleId)
+                .isNull(ruleId == null, AlertEvent::getRuleId)
+                .eq(nodeId != null, AlertEvent::getNodeId, nodeId)
+                .eq(type != null && !type.isBlank(), AlertEvent::getType, type)
                 .ne(AlertEvent::getStatus, "RECOVERED")
                 .orderByDesc(AlertEvent::getTriggerTime)
                 .last("LIMIT 1");

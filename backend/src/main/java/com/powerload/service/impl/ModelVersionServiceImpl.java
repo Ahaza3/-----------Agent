@@ -1,6 +1,7 @@
 package com.powerload.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.powerload.common.GridTopologyConstants;
 import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.powerload.entity.LoadData;
@@ -240,6 +241,7 @@ public class ModelVersionServiceImpl implements ModelVersionService {
             throws IOException, InterruptedException {
         List<LoadData> rows = loadDataMapper.selectList(
                 new LambdaQueryWrapper<LoadData>()
+                        .eq(LoadData::getNodeId, GridTopologyConstants.ROOT_NODE_ID)
                         .apply("MINUTE(time) = 0 AND SECOND(time) = 0")
                         .isNotNull(LoadData::getTime)
                         .isNotNull(LoadData::getLoadMw)

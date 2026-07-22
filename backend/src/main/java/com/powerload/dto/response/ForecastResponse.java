@@ -13,6 +13,12 @@ import java.util.List;
 @Data
 public class ForecastResponse {
 
+    /** 预测目标拓扑节点 ID */
+    private Long nodeId;
+
+    /** 预测数据来源 */
+    private String source;
+
     /** 预测负荷值序列（24 个 float，单位 MW） */
     private List<Double> predictions;
 

@@ -139,8 +139,9 @@ const DispatcherAlertWorkspace = () => {
 
   const buildTicketSummary = (alert: AlertEvent, judgement?: JudgementResult) => {
     const levelLabel = ALERT_LEVEL_CONFIG[alert.level]?.label || alert.level
+    const limitLabel = alert.type === 'TOPOLOGY_RISK' ? '节点容量' : '阈值'
     const lines = [
-      `【${levelLabel}告警】${dayjs(alert.triggerTime).format('MM-DD HH:mm:ss')} 负荷 ${alert.currentValue?.toFixed(1)} MW，阈值 ${alert.thresholdValue?.toFixed(0)} MW。`,
+      `【${levelLabel}告警】${dayjs(alert.triggerTime).format('MM-DD HH:mm:ss')} 负荷 ${alert.currentValue?.toFixed(1)} MW，${limitLabel} ${alert.thresholdValue?.toFixed(0)} MW。`,
     ]
     const analysis = judgement?.decisionReason || alert.aiAnalysis
     const advice = judgement?.dispatcherAdvice || alert.suggestion
@@ -234,7 +235,7 @@ const DispatcherAlertWorkspace = () => {
   const alertColumns: ColumnsType<AlertEvent> = [
     { title: '级别', dataIndex: 'level', width: 70, render: (v: AlertLevel) => <Tag color={ALERT_LEVEL_CONFIG[v]?.color}>{ALERT_LEVEL_CONFIG[v]?.label}</Tag> },
     { title: '当前负荷', dataIndex: 'currentValue', width: 90, render: (v: number) => `${v?.toFixed(1)} MW` },
-    { title: '阈值', dataIndex: 'thresholdValue', width: 80, render: (v: number) => `${v?.toFixed(0)} MW` },
+    { title: '阈值/容量', dataIndex: 'thresholdValue', width: 100, render: (v: number, record: AlertEvent) => `${record.type === 'TOPOLOGY_RISK' ? '容量' : '阈值'} ${v?.toFixed(0)} MW` },
     { title: '时间', dataIndex: 'triggerTime', width: 130, render: (v: string) => v ? dayjs(v).format('MM-DD HH:mm:ss') : '-' },
     { title: '状态', dataIndex: 'status', width: 80, render: (v: AlertEvent['status']) => <Tag color={v === 'RECOVERED' ? 'default' : v === 'ACKNOWLEDGED' ? 'blue' : 'red'}>{v === 'RECOVERED' ? '已恢复' : v === 'ACKNOWLEDGED' ? '已确认' : '待确认'}</Tag> },
     { title: '工单', dataIndex: 'id', width: 100, render: (_: number, record: AlertEvent) => statusTag(record, ticketMap[record.id]) },
@@ -314,6 +315,7 @@ const DispatcherAlertWorkspace = () => {
           userId={userId}
           alert={{
             id: selectedAlert.id,
+            type: selectedAlert.type,
             level: selectedAlert.level,
             currentValue: selectedAlert.currentValue,
             thresholdValue: selectedAlert.thresholdValue,

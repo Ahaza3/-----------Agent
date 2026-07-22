@@ -1,12 +1,14 @@
 package com.powerload.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.powerload.common.GridTopologyConstants;
 import com.powerload.entity.AlertEvent;
 import com.powerload.entity.PredictionResult;
 import com.powerload.mapper.AlertEventMapper;
 import com.powerload.mapper.PredictionResultMapper;
 import com.powerload.ml.FlaskInferenceService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.stereotype.Service;
@@ -23,7 +25,7 @@ import java.util.Map;
 public class SystemHealthService {
 
     private final DataSource dataSource;
-    private final RedisConnectionFactory redisConnectionFactory;
+    private final ObjectProvider<RedisConnectionFactory> redisConnectionFactoryProvider;
     private final FlaskInferenceService flaskService;
     private final PredictionResultMapper predictionResultMapper;
     private final AlertEventMapper alertEventMapper;
@@ -65,6 +67,7 @@ public class SystemHealthService {
         // Recent predictions
         var lastPred = predictionResultMapper.selectOne(
                 new LambdaQueryWrapper<PredictionResult>()
+                        .eq(PredictionResult::getNodeId, GridTopologyConstants.ROOT_NODE_ID)
                         .orderByDesc(PredictionResult::getCreatedAt).last("LIMIT 1"));
         health.put("lastPrediction", lastPred != null ? lastPred.getCreatedAt().toString() : "NONE");
 
@@ -88,6 +91,10 @@ public class SystemHealthService {
 
     private String checkRedis() {
         if (redisHost.isBlank()) {
+            return "DISABLED";
+        }
+        RedisConnectionFactory redisConnectionFactory = redisConnectionFactoryProvider.getIfAvailable();
+        if (redisConnectionFactory == null) {
             return "DISABLED";
         }
         try (var connection = redisConnectionFactory.getConnection()) {

@@ -20,6 +20,9 @@ public class LoadData {
     @TableId(type = IdType.AUTO)
     private Long id;
 
+    /** 归属拓扑节点 ID；历史单区域数据归属区域根节点 */
+    private Long nodeId;
+
     /** 数据时间点（精确到小时） */
     private LocalDateTime time;
 

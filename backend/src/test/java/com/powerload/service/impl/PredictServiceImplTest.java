@@ -110,6 +110,36 @@ class PredictServiceImplTest {
         }
     }
 
+    @Test
+    void shouldCalibrateNonRootForecastToNodeScale() {
+        List<LoadData> raw = new ArrayList<>();
+        for (int i = 0; i < 200; i++) {
+            raw.add(hourlyRecord(
+                    LocalDateTime.of(2026, 7, 8, 0, 0).plusHours(i),
+                    300f + (i % 24)));
+        }
+        List<Double> rootScalePredictions = new ArrayList<>();
+        for (int i = 0; i < 24; i++) {
+            rootScalePredictions.add(600.0 + i * 5.0);
+        }
+        when(loadDataMapper.selectList(any())).thenReturn(raw);
+        when(flaskInferenceService.forecast(any()))
+                .thenReturn(new FlaskInferenceService.ForecastResult(rootScalePredictions, "torchscript"));
+
+        var captured = new ArrayList<PredictionResult>();
+        doAnswer(inv -> {
+            captured.add(inv.getArgument(0, PredictionResult.class));
+            return 1;
+        }).when(predictionResultMapper).insert(any(PredictionResult.class));
+
+        var result = predictService.forecast(4L);
+
+        assertEquals("NODE_LEVEL_SIMULATION", result.getSource());
+        assertEquals(24, captured.size());
+        assertTrue(captured.stream().mapToDouble(item -> item.getPredictedLoad()).max().orElse(0) < 450);
+        assertTrue(captured.stream().mapToDouble(item -> item.getPredictedLoad()).average().orElse(0) < 360);
+    }
+
     private static List<Double> genPredictions() {
         var list = new ArrayList<Double>();
         for (int i = 0; i < 24; i++) list.add(900.0 + i * 5.0);

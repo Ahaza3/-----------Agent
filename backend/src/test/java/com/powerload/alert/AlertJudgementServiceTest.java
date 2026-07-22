@@ -4,10 +4,12 @@ import com.powerload.dto.response.AlertJudgementResult;
 import com.powerload.agent.AgentMessage;
 import com.powerload.agent.LlmClient;
 import com.powerload.dto.response.ForecastResponse;
+import com.powerload.dto.response.GridRiskSnapshot;
 import com.powerload.dto.response.RealtimeLoadPoint;
 import com.powerload.entity.AlertEvent;
 import com.powerload.mapper.AlertAdviceMapper;
 import com.powerload.mapper.AlertTicketMapper;
+import com.powerload.service.GridTopologyService;
 import com.powerload.service.PredictService;
 import com.powerload.service.RealtimeLoadService;
 import org.junit.jupiter.api.BeforeEach;
@@ -30,6 +32,7 @@ class AlertJudgementServiceTest {
     @Mock private AlertTicketMapper alertTicketMapper;
     @Mock private RealtimeLoadService realtimeLoadService;
     @Mock private PredictService predictService;
+    @Mock private GridTopologyService gridTopologyService;
     @Mock private LlmClient llmClient;
     @InjectMocks private AlertJudgementService service;
 
@@ -105,6 +108,27 @@ class AlertJudgementServiceTest {
         AlertJudgementResult r = service.judge(makeAlert("YELLOW", 980f, 1000f));
         assertTrue(r.getShouldCreateTicket());
         assertFalse(r.getAutoCreateTicket());
+    }
+
+    @Test
+    void topologyRiskShouldExplainForecastInsteadOfClaimingCurrentOverload() {
+        GridRiskSnapshot snapshot = new GridRiskSnapshot();
+        snapshot.setNodeId(1L);
+        snapshot.setCurrentLoadMw(950f);
+        snapshot.setForecastPeakMw(1800f);
+        snapshot.setRatedCapacityMw(1600f);
+        snapshot.setRiskBasis("FORECAST_PEAK");
+        when(gridTopologyService.getRiskSnapshot()).thenReturn(List.of(snapshot));
+
+        AlertEvent alert = makeAlert("RED", 950f, 1600f);
+        alert.setType("TOPOLOGY_RISK");
+        alert.setNodeId(1L);
+
+        AlertJudgementResult result = service.judgeRuleBased(alert);
+
+        assertTrue(result.getDecisionReason().contains("预测峰值"));
+        assertFalse(result.getDecisionReason().contains("当前负荷 950.0 MW 超过阈值"));
+        assertTrue(result.getDispatcherAdvice().contains("节点容量"));
     }
 
     @Test
