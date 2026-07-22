@@ -171,19 +171,13 @@ public class AlertJudgementService {
                 shouldCreate = true;
                 autoCreate = false;
                 priority = "URGENT";
-                if (topologyRisk && forecastPeak > 0 && threshold != null
-                        && forecastPeak >= threshold
-                        && (currentLoad == null || forecastPeak > currentLoad)) {
-                    reason.append("拓扑红色风险，预测峰值 ")
-                            .append(String.format("%.1f", forecastPeak))
-                            .append(" MW 超过节点容量 ")
-                            .append(String.format("%.0f", threshold))
-                            .append(" MW");
+                if (topologyRisk) {
+                    appendTopologyRiskReason(reason, currentLoad, threshold, forecastPeak);
                 } else {
-                    reason.append(topologyRisk ? "拓扑红色风险，节点当前负荷 " : "红色告警，负荷 ")
+                    reason.append("红色告警，负荷 ")
                             .append(String.format("%.1f", currentLoad))
                             .append(" MW ")
-                            .append(topologyRisk ? "超过或接近节点容量 " : "超过阈值 ")
+                            .append("超过阈值 ")
                             .append(String.format("%.0f", threshold))
                             .append(" MW");
                 }
@@ -396,6 +390,35 @@ public class AlertJudgementService {
 
     /* ─── 建议文案模板 ─── */
 
+    private void appendTopologyRiskReason(StringBuilder reason,
+                                          float currentLoad,
+                                          float threshold,
+                                          float forecastPeak) {
+        if (forecastPeak > 0 && forecastPeak >= threshold && forecastPeak > currentLoad) {
+            reason.append("拓扑红色风险，预测峰值 ")
+                    .append(String.format("%.1f", forecastPeak))
+                    .append(" MW 超过节点容量 ")
+                    .append(String.format("%.0f", threshold))
+                    .append(" MW");
+            return;
+        }
+        if (currentLoad >= threshold) {
+            reason.append("拓扑红色风险，当前负荷 ")
+                    .append(String.format("%.1f", currentLoad))
+                    .append(" MW 超过节点容量 ")
+                    .append(String.format("%.0f", threshold))
+                    .append(" MW");
+            return;
+        }
+        reason.append("拓扑红色风险，但当前负荷 ")
+                .append(String.format("%.1f", currentLoad))
+                .append(" MW、预测峰值 ")
+                .append(forecastPeak > 0 ? String.format("%.1f", forecastPeak) : "--")
+                .append(" MW 均未超过节点容量 ")
+                .append(String.format("%.0f", threshold))
+                .append(" MW，建议核对告警快照和数据时效");
+    }
+
     private String buildDispatcherAdvice(String level, float load, float threshold,
                                           boolean should, boolean auto, String trend, float peak,
                                           boolean topologyRisk) {
@@ -410,6 +433,10 @@ public class AlertJudgementService {
                 sb.append("预测峰值约")
                         .append(String.format("%.0f", peak))
                         .append(" MW，存在预测越限风险。");
+            } else if (load >= threshold) {
+                sb.append("当前负荷已超过节点容量，需要核查下游负荷和转供余量。");
+            } else {
+                sb.append("当前负荷和预测峰值均未超过节点容量，建议先核对告警快照和数据时效。");
             }
         } else {
             sb.append("负荷").append(String.format("%.1f", load)).append(" MW，超阈值")

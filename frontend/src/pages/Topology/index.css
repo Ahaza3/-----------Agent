@@ -83,6 +83,17 @@
   padding: 8px;
 }
 
+.topology-graph-canvas {
+  min-height: 500px;
+  overflow: hidden;
+  border: 1px solid #223544;
+  background-color: #0d171f;
+  background-image:
+    linear-gradient(rgba(105, 139, 160, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(105, 139, 160, 0.06) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
 .topology-loading {
   min-height: 500px;
   display: grid;

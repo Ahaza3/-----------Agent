@@ -5,7 +5,7 @@
  */
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { Table, Tag, Button, Segmented, Space, message, Badge, Modal, Select, Input, Empty, Skeleton } from 'antd'
-import { BellOutlined, ExclamationCircleOutlined, FileTextOutlined } from '@ant-design/icons'
+import { BellOutlined, ExclamationCircleOutlined, FileTextOutlined, ReloadOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { acknowledgeAlert, fetchAlertEvents, fetchAlertMetrics, markAlertRead } from '../../services/alertApi'
 import { fetchTicketByAlert, createTicket, assignTicket, fetchAssignees, fetchJudgement } from '../../services/ticketApi'
@@ -16,6 +16,7 @@ import type { ColumnsType } from 'antd/es/table'
 import useDashboardStore from '../../stores/useDashboardStore'
 import useAuthStore from '../../stores/useAuthStore'
 import AlertTicketDetail from './shared/AlertTicketDetail'
+import './DispatcherAlertWorkspace.css'
 
 type LevelFilter = AlertLevel | 'ALL'
 type CreateMode = 'manual' | 'red-draft'
@@ -234,6 +235,16 @@ const DispatcherAlertWorkspace = () => {
 
   const alertColumns: ColumnsType<AlertEvent> = [
     { title: '级别', dataIndex: 'level', width: 70, render: (v: AlertLevel) => <Tag color={ALERT_LEVEL_CONFIG[v]?.color}>{ALERT_LEVEL_CONFIG[v]?.label}</Tag> },
+    {
+      title: '来源',
+      dataIndex: 'type',
+      width: 92,
+      render: (v: AlertEvent['type']) => (
+        <Tag color={v === 'TOPOLOGY_RISK' ? 'blue' : 'default'}>
+          {v === 'TOPOLOGY_RISK' ? '拓扑风险' : '实时告警'}
+        </Tag>
+      ),
+    },
     { title: '当前负荷', dataIndex: 'currentValue', width: 90, render: (v: number) => `${v?.toFixed(1)} MW` },
     { title: '阈值/容量', dataIndex: 'thresholdValue', width: 100, render: (v: number, record: AlertEvent) => `${record.type === 'TOPOLOGY_RISK' ? '容量' : '阈值'} ${v?.toFixed(0)} MW` },
     { title: '时间', dataIndex: 'triggerTime', width: 130, render: (v: string) => v ? dayjs(v).format('MM-DD HH:mm:ss') : '-' },
@@ -254,15 +265,20 @@ const DispatcherAlertWorkspace = () => {
   ]
 
   return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
-        <h1 style={{ margin: 0, fontSize: 16, fontWeight: 900, color: '#EAEAEA' }}>
+    <div className="alert-center-page">
+      <div className="alert-center-header">
+        <div>
+          <div className="alert-center-kicker">DISPATCH / ALERT DESK</div>
+          <h1>
           <BellOutlined style={{ color: '#FF2A2A', marginRight: 8 }} />告警中心
-        </h1>
+          </h1>
+          <p>按风险来源、处置状态和确认进度组织当前告警</p>
+        </div>
+        <Button icon={<ReloadOutlined />} onClick={() => fetch()} loading={loading}>刷新告警</Button>
       </div>
       <hr className="brutalist" />
 
-      <Space style={{ marginBottom: 12 }}>
+      <Space className="alert-center-toolbar" wrap>
         <Segmented value={levelFilter} onChange={(v) => { setLevelFilter(v as LevelFilter); setPage(1) }}
           options={[
             { label: '全部', value: 'ALL' },
@@ -271,18 +287,17 @@ const DispatcherAlertWorkspace = () => {
             { label: (<span style={{ color: '#FADB14' }}>提示</span>), value: 'YELLOW' },
           ]} />
         <Button type={unreadOnly ? 'primary' : 'default'} size="small" onClick={() => setUnreadOnly(!unreadOnly)}>仅未读</Button>
-        <Button size="small" onClick={() => fetch()}>刷新</Button>
       </Space>
 
       {metrics && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 8, marginBottom: 12 }}>
+        <div className="alert-center-metrics">
           {[
             ['近7天告警', metrics.total ?? 0, '#E7EDF3'],
             ['重复率', `${Number(metrics.duplicateRate ?? 0).toFixed(1)}%`, '#FAAD14'],
             ['平均确认', `${Number(metrics.averageAckMinutes ?? 0).toFixed(1)} 分钟`, '#69B1FF'],
             ['平均恢复', `${Number(metrics.averageRecoveryMinutes ?? 0).toFixed(1)} 分钟`, '#5FA777'],
           ].map(([label, value, color]) => (
-            <div key={String(label)} style={{ border: '1px solid #2A2A2A', padding: '8px 10px', background: '#0c0c0c' }}>
+            <div key={String(label)} className="alert-center-metric">
               <div style={{ color: '#888', fontSize: 10 }}>{label}</div>
               <div style={{ color: String(color), fontSize: 16, fontWeight: 700 }}>{value}</div>
             </div>
@@ -299,9 +314,14 @@ const DispatcherAlertWorkspace = () => {
           rowKey="id"
           dataSource={events}
           columns={alertColumns}
+          className="alert-center-table"
           loading={loading}
           size="small"
-          onRow={(record) => ({ onClick: () => openDetail(record), style: { cursor: 'pointer' } })}
+          onRow={(record) => ({
+            onClick: () => openDetail(record),
+            className: record.type === 'TOPOLOGY_RISK' ? 'is-topology-risk' : undefined,
+            style: { cursor: 'pointer' },
+          })}
           pagination={{ current: page, pageSize: 20, total, showSizeChanger: false, onChange: (p) => { setPage(p); fetch(p) } }}
         />
       )}

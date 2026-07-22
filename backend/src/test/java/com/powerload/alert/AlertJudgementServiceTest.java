@@ -132,6 +132,27 @@ class AlertJudgementServiceTest {
     }
 
     @Test
+    void topologyRiskBelowCapacityShouldAskForSnapshotReview() {
+        GridRiskSnapshot snapshot = new GridRiskSnapshot();
+        snapshot.setNodeId(1L);
+        snapshot.setCurrentLoadMw(950f);
+        snapshot.setForecastPeakMw(954f);
+        snapshot.setRatedCapacityMw(1600f);
+        snapshot.setRiskBasis("FORECAST_PEAK");
+        when(gridTopologyService.getRiskSnapshot()).thenReturn(List.of(snapshot));
+
+        AlertEvent alert = makeAlert("RED", 950f, 1600f);
+        alert.setType("TOPOLOGY_RISK");
+        alert.setNodeId(1L);
+
+        AlertJudgementResult result = service.judgeRuleBased(alert);
+
+        assertTrue(result.getDecisionReason().contains("均未超过节点容量"));
+        assertFalse(result.getDecisionReason().contains("当前负荷 950.0 MW 超过"));
+        assertTrue(result.getDispatcherAdvice().contains("核对告警快照"));
+    }
+
+    @Test
     void detectTrendShouldWork() {
         when(realtimeLoadService.getRecent(5)).thenReturn(List.of(
             makePoint(1000, 1000f), makePoint(2000, 1025f) // +2.5% → RISING

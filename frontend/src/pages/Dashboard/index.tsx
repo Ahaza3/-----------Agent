@@ -613,7 +613,7 @@ const Dashboard = () => {
           onClose={() => setDrawerOpen(false)}
           role={role as Role | undefined}
           userId={userId}
-          alert={{ id: selectedAlert.id, level: selectedAlert.level, currentValue: selectedAlert.currentValue, thresholdValue: selectedAlert.thresholdValue, triggerTime: selectedAlert.triggerTime, aiAnalysis: selectedAlert.aiAnalysis, suggestion: selectedAlert.suggestion }}
+          alert={{ id: selectedAlert.id, type: selectedAlert.type, level: selectedAlert.level, currentValue: selectedAlert.currentValue, thresholdValue: selectedAlert.thresholdValue, triggerTime: selectedAlert.triggerTime, aiAnalysis: selectedAlert.aiAnalysis, suggestion: selectedAlert.suggestion }}
           ticket={alertTicket}
           onTicketUpdated={setAlertTicket}
           onAssign={() => {}}

@@ -1,0 +1,324 @@
+.alert-detail-drawer .ant-drawer-content {
+  background: #0d171f;
+}
+
+.alert-detail-drawer .ant-drawer-header {
+  background: #101c25;
+}
+
+.alert-detail-drawer .ant-drawer-title {
+  color: #e7edf3;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.alert-detail-content {
+  color: #dce6ee;
+}
+
+.alert-detail-hero {
+  position: relative;
+  overflow: hidden;
+  padding: 16px;
+  border: 1px solid #294050;
+  border-left: 3px solid #7fa7c7;
+  background: #12202a;
+}
+
+.alert-detail-hero--red {
+  border-color: rgba(216, 92, 92, 0.55);
+  border-left-color: #d85c5c;
+  background: #24191b;
+}
+
+.alert-detail-hero--orange,
+.alert-detail-hero--yellow {
+  border-color: rgba(215, 164, 71, 0.55);
+  border-left-color: #d7a447;
+  background: #241f17;
+}
+
+.alert-detail-hero__topline,
+.alert-detail-hero__main,
+.alert-judgement-header,
+.alert-advice-card__topline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.alert-detail-hero__topline {
+  color: #8fa4b5;
+  font-family: 'JetBrains Mono', 'IBM Plex Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+}
+
+.alert-detail-hero__topline .ant-tag {
+  margin-inline-end: 0;
+  font-size: 11px;
+}
+
+.alert-detail-hero__main {
+  align-items: flex-end;
+  margin-top: 18px;
+}
+
+.alert-detail-hero h2 {
+  margin: 0;
+  color: #f1f6fa;
+  font-size: 21px;
+  line-height: 1.2;
+}
+
+.alert-detail-hero p {
+  max-width: 300px;
+  margin: 7px 0 0;
+  color: #9caab7;
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.alert-detail-hero__status {
+  flex: 0 0 auto;
+  color: #c4ced8;
+  font-size: 11px;
+}
+
+.alert-detail-section {
+  margin-top: 14px;
+  padding: 14px;
+  border: 1px solid #233544;
+  background: #101b24;
+}
+
+.alert-detail-section__heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.alert-detail-section__index {
+  display: inline-grid;
+  width: 26px;
+  height: 26px;
+  place-items: center;
+  flex: 0 0 26px;
+  border: 1px solid #385467;
+  color: #8fb1c9;
+  font-family: 'JetBrains Mono', 'IBM Plex Mono', monospace;
+  font-size: 10px;
+}
+
+.alert-detail-section__heading h3 {
+  margin: 0;
+  color: #e7edf3;
+  font-size: 14px;
+  line-height: 1.2;
+}
+
+.alert-detail-section__heading p {
+  margin: 3px 0 0;
+  color: #6f7d8a;
+  font-size: 10px;
+}
+
+.alert-detail-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.alert-detail-metric {
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid #263b4a;
+  background: #0d171f;
+}
+
+.alert-detail-metric span,
+.alert-detail-metric small {
+  display: block;
+  color: #8193a1;
+  font-size: 10px;
+}
+
+.alert-detail-metric strong {
+  display: block;
+  margin: 8px 0 5px;
+  overflow: hidden;
+  color: #eef4f8;
+  font-family: 'JetBrains Mono', 'IBM Plex Mono', monospace;
+  font-size: 17px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.alert-detail-metric small {
+  color: #5fa777;
+}
+
+.alert-detail-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin-top: 12px;
+  color: #8fa4b5;
+  font-size: 10px;
+}
+
+.alert-detail-meta span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.alert-detail-confirm {
+  width: 100%;
+  margin-top: 12px;
+}
+
+.alert-advice-section {
+  border-top: 2px solid #d7a447;
+}
+
+.alert-advice-card {
+  margin-top: 8px;
+  padding: 10px 11px;
+  border: 1px solid #2a3d4b;
+  background: #0d171f;
+}
+
+.alert-advice-card__topline {
+  color: #6f7d8a;
+  font-size: 10px;
+}
+
+.alert-advice-card__topline .ant-tag,
+.alert-judgement-source .ant-tag {
+  margin-inline-end: 0;
+  font-size: 10px;
+}
+
+.alert-advice-card__analysis {
+  margin-top: 9px;
+  color: #e0e8ee;
+  font-size: 12px;
+  line-height: 1.65;
+}
+
+.alert-advice-card__suggestion {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #233544;
+  color: #aebac6;
+  font-size: 11px;
+  line-height: 1.65;
+}
+
+.alert-judgement-section {
+  border-top: 2px solid #4f8fba;
+}
+
+.alert-judgement-header {
+  align-items: flex-start;
+}
+
+.alert-judgement-header .alert-detail-section__heading {
+  margin-bottom: 0;
+}
+
+.alert-judgement-facts {
+  margin-top: 12px;
+}
+
+.alert-judgement-facts .ant-descriptions-view {
+  border-color: #263b4a;
+}
+
+.alert-judgement-facts .ant-descriptions-row > th,
+.alert-judgement-facts .ant-descriptions-row > td {
+  border-color: #263b4a !important;
+  background: #0d171f !important;
+}
+
+.alert-judgement-facts .ant-descriptions-item-label {
+  width: 100px;
+  color: #8193a1 !important;
+}
+
+.alert-judgement-facts .ant-descriptions-item-content {
+  color: #e0e8ee !important;
+}
+
+.alert-judgement-facts .is-stale {
+  color: #d7a447;
+}
+
+.alert-judgement-callout {
+  margin-top: 10px;
+  padding: 11px 12px;
+  border-left: 2px solid #4f8fba;
+  background: #0d171f;
+  color: #dce6ee;
+  font-size: 11px;
+  line-height: 1.7;
+}
+
+.alert-judgement-callout--dispatch {
+  border-left-color: #d7a447;
+}
+
+.alert-judgement-callout--operator {
+  border-left-color: #6f7d8a;
+}
+
+.alert-judgement-callout__label {
+  margin-bottom: 4px;
+  color: #8fb1c9;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.alert-judgement-callout--dispatch .alert-judgement-callout__label {
+  color: #d7a447;
+}
+
+.alert-judgement-callout--operator .alert-judgement-callout__label {
+  color: #9caab7;
+}
+
+.alert-judgement-source {
+  margin-top: 10px;
+}
+
+.alert-detail-content > .ant-descriptions {
+  margin-top: 14px;
+}
+
+.alert-detail-content > .ant-descriptions .ant-descriptions-view {
+  border-color: #233544;
+}
+
+.alert-detail-content > .ant-descriptions .ant-descriptions-row > th,
+.alert-detail-content > .ant-descriptions .ant-descriptions-row > td {
+  border-color: #233544 !important;
+  background: #101b24 !important;
+}
+
+@media (max-width: 560px) {
+  .alert-detail-metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .alert-detail-hero__main {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .alert-judgement-header {
+    flex-direction: column;
+  }
+}

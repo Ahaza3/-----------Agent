@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Alert,
   Card,
@@ -61,6 +61,12 @@ const NODE_LABELS: Record<GridNodeType, string> = {
 
 function formatMw(value: number | null): string {
   return value == null ? '--' : `${value.toFixed(1)} MW`
+}
+
+const TOPOLOGY_NODE_WIDTH: Record<GridNodeType, number> = {
+  REGION: 148,
+  SUBSTATION: 132,
+  FEEDER: 112,
 }
 
 function riskTag(level: GridRiskLevel) {
@@ -150,6 +156,22 @@ const Topology = () => {
   const [scenarioTargetId, setScenarioTargetId] = useState<number>()
   const [scenarioLoading, setScenarioLoading] = useState(false)
   const [scenarioResult, setScenarioResult] = useState<GridScenarioResponse | null>(null)
+  const graphCanvasRef = useRef<HTMLDivElement>(null)
+  const [graphCanvasWidth, setGraphCanvasWidth] = useState(520)
+
+  useEffect(() => {
+    const element = graphCanvasRef.current
+    if (!element) return
+
+    const updateWidth = () => {
+      setGraphCanvasWidth(Math.max(340, Math.round(element.getBoundingClientRect().width)))
+    }
+    updateWidth()
+
+    const observer = new ResizeObserver(updateWidth)
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [])
 
   const load = async () => {
     setLoading(true)
@@ -235,19 +257,41 @@ const Topology = () => {
       SUBSTATION: 1,
       FEEDER: 2,
     }
+    const width = Math.max(340, graphCanvasWidth)
+    const positions: Record<string, { x: number; y: number }> = {
+      'REGION-DEMO': { x: width * 0.5, y: 410 },
+      'SUBSTATION-EAST': { x: width * 0.3, y: 245 },
+      'SUBSTATION-WEST': { x: width * 0.7, y: 245 },
+      'FEEDER-E-01': { x: width * 0.16, y: 82 },
+      'FEEDER-E-02': { x: width * 0.39, y: 82 },
+      'FEEDER-W-01': { x: width * 0.61, y: 82 },
+      'FEEDER-W-02': { x: width * 0.84, y: 82 },
+    }
     const graphNodes = topology.nodes.map((node) => {
       const nodeRisk = riskByCode.get(node.nodeCode)
+      const position = positions[node.nodeCode] ?? { x: width * 0.5, y: 245 }
+      const riskLevel = nodeRisk?.riskLevel ?? 'UNKNOWN'
       return {
         id: String(node.id),
         name: node.nodeName,
         nodeCode: node.nodeCode,
         nodeType: node.nodeType,
-        riskLevel: nodeRisk?.riskLevel ?? 'UNKNOWN',
+        riskLevel,
         currentLoadMw: nodeRisk?.currentLoadMw,
         forecastPeakMw: nodeRisk?.forecastPeakMw,
         category: categoryIndex[node.nodeType],
-        symbolSize: node.nodeType === 'REGION' ? 48 : node.nodeType === 'SUBSTATION' ? 36 : 26,
-        itemStyle: { color: RISK_COLORS[nodeRisk?.riskLevel ?? 'UNKNOWN'] },
+        x: position.x,
+        y: position.y,
+        fixed: true,
+        symbol: 'roundRect',
+        symbolSize: [TOPOLOGY_NODE_WIDTH[node.nodeType], node.nodeType === 'REGION' ? 52 : 46],
+        itemStyle: {
+          color: '#14222D',
+          borderColor: RISK_COLORS[riskLevel],
+          borderWidth: 2,
+          shadowBlur: 12,
+          shadowColor: `${RISK_COLORS[riskLevel]}55`,
+        },
       }
     })
     const graphLinks = topology.edges.map((edge) => ({
@@ -256,7 +300,8 @@ const Topology = () => {
     }))
 
     return {
-      animationDuration: 400,
+      animation: false,
+      animationDuration: 0,
       tooltip: {
         trigger: 'item',
         formatter: (params: any) => {
@@ -279,9 +324,9 @@ const Topology = () => {
       },
       series: [{
         type: 'graph',
-        layout: 'force',
+        layout: 'none',
         roam: true,
-        draggable: true,
+        draggable: false,
         data: graphNodes,
         links: graphLinks,
         categories: [
@@ -291,28 +336,43 @@ const Topology = () => {
         ],
         label: {
           show: true,
+          position: 'inside',
           color: '#DDEAF5',
           fontSize: 11,
-          formatter: (params: any) => params.data.name,
+          lineHeight: 16,
+          formatter: (params: any) => [
+            `{name|${params.data.name}}`,
+            `{load|${formatMw(params.data.currentLoadMw)}}`,
+          ].join('\n'),
+          rich: {
+            name: {
+              color: '#E7EDF3',
+              fontSize: 11,
+              fontWeight: 650,
+              width: 132,
+              align: 'center',
+            },
+            load: {
+              color: '#8FA4B5',
+              fontSize: 10,
+              width: 132,
+              align: 'center',
+              fontFamily: 'JetBrains Mono, IBM Plex Mono, monospace',
+            },
+          },
         },
         lineStyle: {
           color: '#4B6477',
-          width: 1.5,
-          curveness: 0.08,
+          width: 2,
+          curveness: 0,
         },
         emphasis: {
           focus: 'adjacency',
           lineStyle: { width: 3 },
         },
-        force: {
-          repulsion: 180,
-          gravity: 0.08,
-          edgeLength: [100, 150],
-          layoutAnimation: true,
-        },
       }],
     }
-  }, [risk, topology])
+  }, [graphCanvasWidth, risk, topology])
 
   return (
     <div className="topology-page">
@@ -368,7 +428,9 @@ const Topology = () => {
             {loading && !topology ? (
               <div className="topology-loading"><Spin /></div>
             ) : topology ? (
-              <ReactECharts option={graphOption} style={{ height: 500 }} notMerge lazyUpdate />
+              <div ref={graphCanvasRef} className="topology-graph-canvas">
+                <ReactECharts option={graphOption} style={{ height: 500 }} notMerge lazyUpdate />
+              </div>
             ) : (
               <Empty description="暂无拓扑数据" />
             )}
