@@ -1,6 +1,7 @@
 package com.powerload.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.powerload.common.GridTopologyConstants;
 import com.powerload.dto.response.LoadStats;
 import com.powerload.entity.LoadData;
 import com.powerload.mapper.LoadDataMapper;
@@ -26,7 +27,8 @@ public class LoadDataServiceImpl implements LoadDataService {
     @Override
     public List<LoadData> queryRange(LocalDateTime start, LocalDateTime end) {
         LambdaQueryWrapper<LoadData> wrapper = new LambdaQueryWrapper<>();
-        wrapper.ge(LoadData::getTime, start)
+        wrapper.eq(LoadData::getNodeId, GridTopologyConstants.ROOT_NODE_ID)
+               .ge(LoadData::getTime, start)
                .lt(LoadData::getTime, end)
                .orderByAsc(LoadData::getTime);
         return loadDataMapper.selectList(wrapper).stream()
@@ -39,7 +41,8 @@ public class LoadDataServiceImpl implements LoadDataService {
     @Override
     public LoadData getLatest() {
         LambdaQueryWrapper<LoadData> wrapper = new LambdaQueryWrapper<>();
-        wrapper.orderByDesc(LoadData::getTime)
+        wrapper.eq(LoadData::getNodeId, GridTopologyConstants.ROOT_NODE_ID)
+               .orderByDesc(LoadData::getTime)
                .last("LIMIT 1");
         return loadDataMapper.selectOne(wrapper);
     }
@@ -47,7 +50,8 @@ public class LoadDataServiceImpl implements LoadDataService {
     @Override
     public LoadData getLatestHourly() {
         LambdaQueryWrapper<LoadData> wrapper = new LambdaQueryWrapper<>();
-        wrapper.apply("MINUTE(time) = 0 AND SECOND(time) = 0")
+        wrapper.eq(LoadData::getNodeId, GridTopologyConstants.ROOT_NODE_ID)
+               .apply("MINUTE(time) = 0 AND SECOND(time) = 0")
                .orderByDesc(LoadData::getTime)
                .last("LIMIT 1");
         return loadDataMapper.selectOne(wrapper);

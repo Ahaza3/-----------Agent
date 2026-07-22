@@ -1,6 +1,7 @@
 package com.powerload.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.powerload.common.GridTopologyConstants;
 import com.powerload.entity.LoadData;
 import com.powerload.entity.PredictionResult;
 import com.powerload.mapper.LoadDataMapper;
@@ -31,6 +32,7 @@ public class PredictionOperationsServiceImpl implements PredictionOperationsServ
     @Override
     public Map<String, Object> quality(LocalDateTime start, LocalDateTime end) {
         LoadData latest = loadDataMapper.selectOne(new LambdaQueryWrapper<LoadData>()
+                .eq(LoadData::getNodeId, GridTopologyConstants.ROOT_NODE_ID)
                 .orderByDesc(LoadData::getTime)
                 .last("LIMIT 1"));
         if (latest == null || latest.getTime() == null) {
@@ -58,6 +60,7 @@ public class PredictionOperationsServiceImpl implements PredictionOperationsServ
         }
 
         List<LoadData> rows = loadDataMapper.selectList(new LambdaQueryWrapper<LoadData>()
+                .eq(LoadData::getNodeId, GridTopologyConstants.ROOT_NODE_ID)
                 .ge(LoadData::getTime, effectiveStart)
                 .le(LoadData::getTime, effectiveEnd)
                 .orderByAsc(LoadData::getTime));
@@ -122,6 +125,7 @@ public class PredictionOperationsServiceImpl implements PredictionOperationsServ
 
         List<PredictionResult> predictions = predictionResultMapper.selectList(
                 new LambdaQueryWrapper<PredictionResult>()
+                        .eq(PredictionResult::getNodeId, GridTopologyConstants.ROOT_NODE_ID)
                         .ge(PredictionResult::getPredictTime, effectiveStart)
                         .le(PredictionResult::getPredictTime, effectiveEnd)
                         .orderByAsc(PredictionResult::getPredictTime)
@@ -136,6 +140,7 @@ public class PredictionOperationsServiceImpl implements PredictionOperationsServ
         }
 
         List<LoadData> actualRows = loadDataMapper.selectList(new LambdaQueryWrapper<LoadData>()
+                .eq(LoadData::getNodeId, GridTopologyConstants.ROOT_NODE_ID)
                 .ge(LoadData::getTime, effectiveStart)
                 .le(LoadData::getTime, effectiveEnd)
                 .orderByAsc(LoadData::getTime));

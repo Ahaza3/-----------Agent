@@ -3,11 +3,14 @@
  */
 
 export type AlertLevel = 'RED' | 'ORANGE' | 'YELLOW'
-export type AlertType = 'THRESHOLD' | 'TREND' | 'ANOMALY'
+export type AlertType = 'THRESHOLD' | 'TREND' | 'ANOMALY' | 'TOPOLOGY_RISK'
 
 /** 告警事件 */
 export interface AlertEvent {
   id: number
+  nodeId?: number | null
+  rootEventId?: number | null
+  impactLoadMw?: number | null
   triggerTime: string
   level: AlertLevel
   type: AlertType
@@ -62,8 +65,12 @@ export interface WsAlertPayload {
   type: 'alert'
   data: {
     id: number
+    nodeId: number | null
+    rootEventId: number | null
+    impactLoadMw: number | null
     triggerTime: string
     level: AlertLevel
+    type: AlertType
     currentValue: number
     thresholdValue: number
     aiAnalysis: string
@@ -75,6 +82,8 @@ export interface WsAlertPayload {
 export interface WsPredictionPayload {
   type: 'prediction_update'
   data: {
+    nodeId?: number | null
+    source?: string
     predictions: number[]
     model: string
     forecastStartTime: string | null

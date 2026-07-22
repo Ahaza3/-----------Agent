@@ -4,7 +4,13 @@
  */
 import { useState, useEffect, useCallback } from 'react'
 import { Drawer, Descriptions, Tag, Spin, message, Empty, Button, Modal, Input } from 'antd'
-import { FileTextOutlined, CopyOutlined } from '@ant-design/icons'
+import {
+  CheckCircleOutlined,
+  ClockCircleOutlined,
+  CopyOutlined,
+  FileTextOutlined,
+  ReloadOutlined,
+} from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { ALERT_LEVEL_CONFIG } from '../../../types/alert'
 import type { AlertLevel } from '../../../types/alert'
@@ -14,8 +20,8 @@ import type { Ticket } from '../../../services/ticketApi'
 import TicketTimeline from './TicketTimeline'
 import TicketActionBar from './TicketActionBar'
 import type { TimelineEntry } from './TicketTimeline'
-import api from '../../../services/api'
 import { acknowledgeAlert } from '../../../services/alertApi'
+import './AlertTicketDetail.css'
 
 const STATUS: Record<string, { label: string; color: string }> = {
   PENDING: { label: '待处理', color: 'default' },
@@ -34,6 +40,7 @@ const PRIORITY: Record<string, { label: string; color: string }> = {
 
 interface AlertInfo {
   id: number | null
+  type?: string
   level: AlertLevel
   currentValue: number
   thresholdValue: number
@@ -131,7 +138,6 @@ const AlertTicketDetail = ({
   const [ticket, setTicket] = useState<Ticket | null>(initialTicket)
   const [actions, setActions] = useState<TimelineEntry[]>([])
   const [loading, setLoading] = useState(false)
-  const [advices, setAdvices] = useState<any[]>([])
   const ticketId = ticket?.id
 
   // 同步外部 ticket 变化
@@ -155,12 +161,6 @@ const AlertTicketDetail = ({
     }
     load()
   }, [ticketId, open])
-
-  // 加载 AI 建议
-  useEffect(() => {
-    if (!alert?.id || !open) { setAdvices([]); return }
-    (api.get(`/alert/events/${alert.id}/advice`) as Promise<any[]>).then(setAdvices).catch(() => setAdvices([]))
-  }, [alert?.id, open])
 
   // 加载智能研判
   const [judgement, setJudgement] = useState<any>(null)
@@ -205,6 +205,7 @@ const AlertTicketDetail = ({
   const st = ticket ? STATUS[ticket.status] || { label: ticket.status, color: 'default' } : null
   const pr = ticket ? PRIORITY[ticket.priority] || { label: ticket.priority, color: 'default' } : null
   const alertLevelCfg = ALERT_LEVEL_CONFIG[alert.level]
+  const limitLabel = alert.type === 'TOPOLOGY_RISK' ? '节点容量' : '阈值'
 
   const handleClaim = useCallback(async () => {
     if (!ticket) return
@@ -279,58 +280,85 @@ const AlertTicketDetail = ({
       width={fullscreen ? '100%' : 520}
       open={open}
       onClose={onClose}
+      className="alert-detail-drawer"
       styles={{
         body: { padding: 16 },
         header: { borderBottom: '1px solid #2A2A2A' },
       }}
     >
       <Spin spinning={loading}>
+        <div className="alert-detail-content">
 
-        {/* 告警/预警信息 */}
-        <Descriptions
-          size="small" bordered column={1}
-          style={{ marginBottom: 12 }}
-          labelStyle={{ color: '#888', background: '#0c0c0c', width: 90 }}
-          contentStyle={{ color: '#ccc', background: '#0e0e0e' }}
-          items={[
-            { label: ticket?.sourceType === 'PREWARNING' ? '预警级别' : '告警级别', children: alertLevelCfg ? <Tag color={alertLevelCfg.color}>{alertLevelCfg.label}</Tag> : alert.level },
-            { label: ticket?.sourceType === 'PREWARNING' ? '预测负荷' : '当前负荷', children: `${alert.currentValue?.toFixed(1)} MW` },
-            { label: '阈值', children: `${alert.thresholdValue?.toFixed(0)} MW` },
-            { label: ticket?.sourceType === 'PREWARNING' ? '预测时间' : '触发时间', children: alert.triggerTime ? dayjs(alert.triggerTime).format('MM-DD HH:mm:ss') : '-' },
-            { label: '告警状态', children: alert.status === 'RECOVERED' ? <Tag>已恢复</Tag> : alert.status === 'ACKNOWLEDGED' ? <Tag color="blue">已确认</Tag> : <Tag color="red">待确认</Tag> },
-            ...(alert.acknowledgedAt ? [{ label: '确认信息', children: `${alert.acknowledgedByName || '调度员'} · ${dayjs(alert.acknowledgedAt).format('MM-DD HH:mm:ss')}` }] : []),
-          ]}
-        />
+        <section className={`alert-detail-hero alert-detail-hero--${alert.level.toLowerCase()}`}>
+          <div className="alert-detail-hero__topline">
+            <span>{alert.type === 'TOPOLOGY_RISK' ? 'TOPOLOGY RISK' : 'LOAD ALERT'}</span>
+            <Tag color={alertLevelCfg?.color}>{alertLevelCfg?.label || alert.level}</Tag>
+          </div>
+          <div className="alert-detail-hero__main">
+            <div>
+              <h2>{alert.type === 'TOPOLOGY_RISK' ? '拓扑节点风险' : '负荷运行告警'}</h2>
+              <p>
+                {ticket?.sourceType === 'PREWARNING'
+                  ? '基于预测结果生成的提前处置线索'
+                  : '需要结合实时负荷、预测峰值和容量余量共同判断'}
+              </p>
+            </div>
+            <span className="alert-detail-hero__status">
+              {alert.status === 'RECOVERED' ? '已恢复' : alert.status === 'ACKNOWLEDGED' ? '已确认' : '待确认'}
+            </span>
+          </div>
+        </section>
+
+        <section className="alert-detail-section">
+          <div className="alert-detail-section__heading">
+            <span className="alert-detail-section__index">01</span>
+            <div>
+              <h3>运行证据</h3>
+              <p>规则判断使用的关键数据</p>
+            </div>
+          </div>
+          <div className="alert-detail-metrics">
+            <div className="alert-detail-metric">
+              <span>{ticket?.sourceType === 'PREWARNING' ? '预测负荷' : '当前负荷'}</span>
+              <strong>{`${alert.currentValue?.toFixed(1)} MW`}</strong>
+              <small>实时信号</small>
+            </div>
+            <div className="alert-detail-metric">
+              <span>{limitLabel}</span>
+              <strong>{`${alert.thresholdValue?.toFixed(0)} MW`}</strong>
+              <small>{alert.type === 'TOPOLOGY_RISK' ? '节点额定能力' : '规则基准值'}</small>
+            </div>
+            <div className="alert-detail-metric">
+              <span>预测峰值</span>
+              <strong>{judgement?.forecastPeakLoad ? `${Number(judgement.forecastPeakLoad).toFixed(0)} MW` : '--'}</strong>
+              <small>{judgement?.forecastPeakLoad ? '未来 24 小时' : '暂无可用研判'}</small>
+            </div>
+          </div>
+          <div className="alert-detail-meta">
+            <span><ClockCircleOutlined /> {ticket?.sourceType === 'PREWARNING' ? '预测时间' : '触发时间'}：{alert.triggerTime ? dayjs(alert.triggerTime).format('MM-DD HH:mm:ss') : '-'}</span>
+            {alert.acknowledgedAt && <span><CheckCircleOutlined /> {alert.acknowledgedByName || '调度员'} 已确认</span>}
+          </div>
+        </section>
         {role === 'DISPATCHER' && alert.status !== 'ACKNOWLEDGED' && alert.status !== 'RECOVERED' && (
-          <Button type="primary" size="small" loading={loading} onClick={handleAcknowledge} style={{ marginBottom: 12 }}>
+          <Button className="alert-detail-confirm" type="primary" size="small" loading={loading} onClick={handleAcknowledge}>
             确认告警
           </Button>
         )}
 
-        {/* AI 建议 — 过滤掉 JUDGEMENT 类型（由研判区域单独展示） */}
-        {advices.filter((a: any) => a.audienceRole !== 'JUDGEMENT').length > 0 && (
-          <div style={{ marginBottom: 12 }}>
-            <h4 style={{ color: '#aaa', fontSize: 12, marginBottom: 8 }}>AI 建议</h4>
-            {advices.filter((a: any) => a.audienceRole !== 'JUDGEMENT').map((a: any) => (
-              <div key={a.id} style={{ border: '1px solid #2A2A2A', padding: 8, marginBottom: 4, background: '#0c0c0c' }}>
-                <Tag color={a.status === 'SUCCESS' ? 'green' : 'gold'} style={{ fontSize: 10, marginBottom: 4 }}>
-                  {a.audienceRole === 'DISPATCHER' ? '调度员建议' : '运维建议'}
-                </Tag>
-                {a.analysis && <div style={{ color: '#ccc', fontSize: 11 }}>{a.analysis}</div>}
-                {a.suggestion && <div style={{ color: '#aaa', fontSize: 11, marginTop: 4 }}>{a.suggestion}</div>}
-              </div>
-            ))}
-          </div>
-        )}
-
         {/* 智能研判 */}
         {judgement && (
-          <div style={{ marginBottom: 12, border: '1px solid #177ddc', padding: 12, background: '#0c0c0c' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-              <h4 style={{ color: '#177ddc', fontSize: 12, margin: 0 }}>AI 智能研判</h4>
-              <Button size="small" loading={judgementLoading} onClick={handleRejudge}>重新研判</Button>
+          <section className="alert-detail-section alert-judgement-section">
+            <div className="alert-judgement-header">
+              <div className="alert-detail-section__heading">
+                <span className="alert-detail-section__index">02</span>
+                <div>
+                  <h3>AI 智能研判</h3>
+                  <p>规则负责计算，模型负责解释与建议</p>
+                </div>
+              </div>
+              <Button size="small" icon={<ReloadOutlined />} loading={judgementLoading} onClick={handleRejudge}>重新研判</Button>
             </div>
-            <Descriptions size="small" column={1} labelStyle={{ color: '#888', background: '#0c0c0c', width: 100 }} contentStyle={{ color: '#ccc', background: '#0e0e0e' }}>
+            <Descriptions className="alert-judgement-facts" size="small" column={1}>
               <Descriptions.Item label="建单建议">
                 {judgement.shouldCreateTicket
                   ? <Tag color="green">建议提交待确认工单草稿</Tag>
@@ -347,29 +375,52 @@ const AlertTicketDetail = ({
               </Descriptions.Item>
               {judgement.forecastPeakLoad != null && judgement.forecastPeakLoad > 0 && (
                 <Descriptions.Item label="预测峰值">
-                  <span style={{ color: judgement.currentLoad && judgement.forecastPeakLoad < judgement.currentLoad * 0.9 ? '#FAAD14' : '#ccc' }}>
+                    <span className={judgement.currentLoad && judgement.forecastPeakLoad < judgement.currentLoad * 0.9 ? 'is-stale' : ''}>
                     {`${judgement.forecastPeakLoad.toFixed(0)} MW`}
                     {judgement.currentLoad && judgement.forecastPeakLoad < judgement.currentLoad * 0.9 ? '（预测数据可能过期）' : ''}
                   </span>
                 </Descriptions.Item>
               )}
             </Descriptions>
-            <div style={{ marginTop: 8, padding: 8, background: '#0a0a0a', borderLeft: '2px solid #177ddc' }}>
-              <div style={{ color: '#aaa', fontSize: 10, marginBottom: 4 }}>研判原因</div>
-              <div style={{ color: '#ccc', fontSize: 11, lineHeight: 1.6 }}>{judgement.decisionReason}</div>
+            <div className="alert-judgement-callout alert-judgement-callout--reason">
+              <div className="alert-judgement-callout__label">研判结论</div>
+              <div>{judgement.decisionReason}</div>
             </div>
-            <div style={{ marginTop: 8, padding: 8, background: '#0a0a0a', borderLeft: '2px solid #FAAD14' }}>
-              <div style={{ color: '#FAAD14', fontSize: 10, marginBottom: 4 }}>调度员建议</div>
-              <div style={{ color: '#ccc', fontSize: 11, lineHeight: 1.6 }}>{judgement.dispatcherAdvice}</div>
+            <div className="alert-judgement-callout alert-judgement-callout--dispatch">
+              <div className="alert-judgement-callout__label">调度员建议</div>
+              <div>{judgement.dispatcherAdvice}</div>
             </div>
-            <div style={{ marginTop: 4, padding: 8, background: '#0a0a0a', borderLeft: '2px solid #888' }}>
-              <div style={{ color: '#888', fontSize: 10, marginBottom: 4 }}>运维建议</div>
-              <div style={{ color: '#ccc', fontSize: 11, lineHeight: 1.6 }}>{judgement.operatorAdvice}</div>
+            <div className="alert-judgement-callout alert-judgement-callout--operator">
+              <div className="alert-judgement-callout__label">运维建议</div>
+              <div>{judgement.operatorAdvice}</div>
             </div>
-            <div style={{ marginTop: 6 }}>
-              <Tag color="default" style={{ fontSize: 9 }}>来源：规则型智能 Agent</Tag>
+            <Descriptions className="alert-judgement-routing" size="small" column={1}>
+              <Descriptions.Item label="拓扑责任路由">
+                <Tag color={judgement.routingTarget === 'SUBSTATION_OPERATOR' ? 'blue' : 'gold'}>
+                  {judgement.routingTarget === 'SUBSTATION_OPERATOR' ? '变电站运维' : '调度中心'}
+                </Tag>
+                {judgement.recommendedAssigneeName
+                  ? ` ${judgement.recommendedAssigneeName}`
+                  : ' 待调度中心认领'}
+              </Descriptions.Item>
+              {judgement.ticketTitle && (
+                <Descriptions.Item label="工单草稿标题">{judgement.ticketTitle}</Descriptions.Item>
+              )}
+              {judgement.impactScope?.length > 0 && (
+                <Descriptions.Item label="影响范围">
+                  {judgement.impactScope.join('、')}
+                </Descriptions.Item>
+              )}
+              {judgement.rootCauseHints?.length > 0 && (
+                <Descriptions.Item label="候选根因">
+                  {judgement.rootCauseHints.join('；')}
+                </Descriptions.Item>
+              )}
+            </Descriptions>
+            <div className="alert-judgement-source">
+              <Tag color="default">来源：规则型智能 Agent</Tag>
             </div>
-          </div>
+          </section>
         )}
         {!judgement && !judgementLoading && (
           <div style={{ marginBottom: 12, border: '1px solid #2A2A2A', padding: 12, background: '#0c0c0c', textAlign: 'center' }}>
@@ -427,6 +478,7 @@ const AlertTicketDetail = ({
         <h4 style={{ color: '#aaa', fontSize: 12, marginTop: 16, marginBottom: 8 }}>处置时间线</h4>
         <TicketTimeline actions={actions} />
 
+        </div>
       </Spin>
     </Drawer>
   )

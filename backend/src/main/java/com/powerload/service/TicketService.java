@@ -3,12 +3,13 @@ package com.powerload.service;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.powerload.audit.AuditLog;
+import com.powerload.dto.response.GridResponsibility;
 import com.powerload.entity.*;
 import com.powerload.mapper.*;
 import com.powerload.security.SysUserPrincipal;
 import com.powerload.websocket.PushService;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,7 +23,6 @@ import java.util.stream.Collectors;
 
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class TicketService {
 
     private final AlertTicketMapper ticketMapper;
@@ -30,6 +30,30 @@ public class TicketService {
     private final AlertEventMapper alertEventMapper;
     private final SysUserMapper sysUserMapper;
     private final PushService pushService;
+    private final GridTopologyService gridTopologyService;
+
+    public TicketService(AlertTicketMapper ticketMapper,
+                         AlertTicketActionMapper actionMapper,
+                         AlertEventMapper alertEventMapper,
+                         SysUserMapper sysUserMapper,
+                         PushService pushService) {
+        this(ticketMapper, actionMapper, alertEventMapper, sysUserMapper, pushService, null);
+    }
+
+    @Autowired
+    public TicketService(AlertTicketMapper ticketMapper,
+                         AlertTicketActionMapper actionMapper,
+                         AlertEventMapper alertEventMapper,
+                         SysUserMapper sysUserMapper,
+                         PushService pushService,
+                         GridTopologyService gridTopologyService) {
+        this.ticketMapper = ticketMapper;
+        this.actionMapper = actionMapper;
+        this.alertEventMapper = alertEventMapper;
+        this.sysUserMapper = sysUserMapper;
+        this.pushService = pushService;
+        this.gridTopologyService = gridTopologyService;
+    }
 
     private static final Map<String, Set<String>> ALLOWED = Map.of(
         "PENDING",     Set.of("ASSIGNED", "IN_PROGRESS", "CANCELLED"),
@@ -93,6 +117,11 @@ public class TicketService {
     @Transactional
     @AuditLog(module = "工单管理", action = "创建工单")
     public AlertTicket create(Long alertId, String summary, SysUserPrincipal user) {
+        return create(alertId, summary, null, user);
+    }
+
+    public AlertTicket create(Long alertId, String summary, Long requestedAssigneeId,
+                              SysUserPrincipal user) {
         AlertEvent alert = alertEventMapper.selectById(alertId);
         if (alert == null) throw new IllegalArgumentException("告警不存在");
         if (ticketMapper.selectCount(new LambdaQueryWrapper<AlertTicket>()
@@ -105,13 +134,28 @@ public class TicketService {
         t.setSourceType("ALERT");
         t.setRiskLevel(alert.getLevel());
         t.setPriority(mapPriority(alert.getLevel()));
-        t.setStatus("PENDING"); t.setSummary(summary);
+        t.setSummary(summary);
         t.setCreatedBy(user.getUserId()); t.setCreatedByName(user.getUsername());
         t.setCreatedAt(LocalDateTime.now());
+
+        AssigneeRoute route = requestedAssigneeId != null
+                ? validateAssignee(requestedAssigneeId)
+                : resolveAssignee(alert);
+        if (route != null) {
+            t.setAssigneeUserId(route.userId());
+            t.setAssigneeName(route.displayName());
+            t.setAssignedAt(LocalDateTime.now());
+            t.setStatus("ASSIGNED");
+        } else {
+            t.setStatus("PENDING");
+        }
         try { ticketMapper.insert(t); }
         catch (DuplicateKeyException e) { throw new IllegalStateException("该告警已存在工单"); }
 
-        addAction(t.getId(), "CREATE", null, "PENDING", user, summary);
+        String routeNote = route == null
+                ? "待调度中心认领"
+                : "已按拓扑责任域自动分派给 " + route.displayName();
+        addAction(t.getId(), "CREATE", null, t.getStatus(), user, summary + "\n" + routeNote);
         pushUpdate(t, "ticket_created");
         return t;
     }
@@ -320,6 +364,38 @@ public class TicketService {
         return value;
     }
 
+    private AssigneeRoute resolveAssignee(AlertEvent alert) {
+        if (gridTopologyService == null || alert.getNodeId() == null) {
+            return null;
+        }
+        GridResponsibility responsibility = gridTopologyService.resolveResponsibility(alert.getNodeId());
+        if (responsibility == null || responsibility.isDispatchCenter()
+                || responsibility.getAssigneeUserId() == null) {
+            return null;
+        }
+        SysUser user = sysUserMapper.selectById(responsibility.getAssigneeUserId());
+        if (!isActiveOperator(user)) {
+            return null;
+        }
+        return new AssigneeRoute(user.getId(),
+                user.getDisplayName() != null ? user.getDisplayName() : user.getUsername());
+    }
+
+    private AssigneeRoute validateAssignee(Long assigneeId) {
+        SysUser user = sysUserMapper.selectById(assigneeId);
+        if (!isActiveOperator(user)) {
+            throw new IllegalArgumentException("只能分派给启用中的运维人员");
+        }
+        return new AssigneeRoute(user.getId(),
+                user.getDisplayName() != null ? user.getDisplayName() : user.getUsername());
+    }
+
+    private boolean isActiveOperator(SysUser user) {
+        return user != null
+                && "OPERATOR".equals(user.getRole())
+                && Integer.valueOf(1).equals(user.getIsActive());
+    }
+
     /* ─── Assignee 查询 ─── */
 
     /** 返回所有启用的 OPERATOR 用户（最小信息） */
@@ -346,5 +422,8 @@ public class TicketService {
             data.put("updatedAt", t.getUpdatedAt() != null ? t.getUpdatedAt().toString() : "");
             pushService.pushToTopic("/topic/tickets", Map.of("type", type, "data", data));
         } catch (Exception ignored) {}
+    }
+
+    private record AssigneeRoute(Long userId, String displayName) {
     }
 }

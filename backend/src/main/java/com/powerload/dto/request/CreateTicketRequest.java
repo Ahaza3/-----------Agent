@@ -8,4 +8,6 @@ import lombok.Data;
 public class CreateTicketRequest {
     @NotBlank @Size(max = 500)
     private String summary;
+
+    private Long assigneeUserId;
 }

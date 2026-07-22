@@ -14,6 +14,7 @@ import {
   HeartOutlined,
   ThunderboltOutlined,
   FileTextOutlined,
+  ApartmentOutlined,
 } from '@ant-design/icons'
 
 export type Role = 'DISPATCHER' | 'OPERATOR' | 'SYSTEM_ADMIN'
@@ -29,6 +30,7 @@ export const PROTECTED_ROUTES: Record<string, RouteDef> = {
   alerts:    { path: '/alerts',    allowedRoles: ['DISPATCHER', 'OPERATOR'] },
   agent:     { path: '/agent',     allowedRoles: ['DISPATCHER', 'OPERATOR', 'SYSTEM_ADMIN'] },
   data:      { path: '/data',      allowedRoles: ['DISPATCHER', 'OPERATOR', 'SYSTEM_ADMIN'] },
+  topology:  { path: '/topology',  allowedRoles: ['DISPATCHER', 'OPERATOR', 'SYSTEM_ADMIN'] },
   admin:     { path: '/admin',     allowedRoles: ['OPERATOR', 'SYSTEM_ADMIN'] },
 }
 
@@ -50,7 +52,7 @@ export const ROLE_CONFIG: Record<Role, RoleMeta> = {
   DISPATCHER: {
     label: '电力调度员',
     defaultRoute: '/dashboard',
-    accessibleRoutes: ['/dashboard', '/alerts', '/agent', '/data'],
+    accessibleRoutes: ['/dashboard', '/alerts', '/agent', '/data', '/topology'],
     showAlertBadge: true,
     adminTabs: [],
     ticketActions: {
@@ -66,7 +68,7 @@ export const ROLE_CONFIG: Record<Role, RoleMeta> = {
   OPERATOR: {
     label: '运维管理员',
     defaultRoute: '/dashboard',
-    accessibleRoutes: ['/dashboard', '/alerts', '/agent', '/data', '/admin'],
+    accessibleRoutes: ['/dashboard', '/alerts', '/agent', '/data', '/topology', '/admin'],
     showAlertBadge: false,
     adminTabs: ['rules', 'model', 'demo'],
     ticketActions: {
@@ -82,7 +84,7 @@ export const ROLE_CONFIG: Record<Role, RoleMeta> = {
   SYSTEM_ADMIN: {
     label: '系统管理员',
     defaultRoute: '/admin',
-    accessibleRoutes: ['/admin', '/agent', '/data'],
+    accessibleRoutes: ['/admin', '/agent', '/data', '/topology'],
     showAlertBadge: false,
     adminTabs: ['users', 'logs', 'health', 'rules', 'model'],
     ticketActions: {
@@ -135,6 +137,13 @@ export function getMenuItems(role: Role | undefined): NavMenuItem[] {
     key: '/data',
     icon: <DatabaseOutlined />,
     label: '数据查询',
+  })
+
+  // 拓扑风险 — 全部角色
+  items.push({
+    key: '/topology',
+    icon: <ApartmentOutlined />,
+    label: '拓扑风险',
   })
 
   // 系统管理 — OPERATOR, SYSTEM_ADMIN

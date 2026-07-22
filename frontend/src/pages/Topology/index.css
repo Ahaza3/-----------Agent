@@ -1,0 +1,128 @@
+.topology-page {
+  max-width: 1680px;
+  margin: 0 auto;
+}
+
+.topology-page__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 24px;
+  margin-bottom: 16px;
+}
+
+.topology-kicker {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #7fa7c7;
+  font-family: 'JetBrains Mono', 'IBM Plex Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  margin-bottom: 5px;
+}
+
+.topology-title {
+  margin: 0 0 4px !important;
+  color: #e7edf3 !important;
+  font-size: 26px !important;
+}
+
+.topology-alert {
+  margin-bottom: 12px;
+}
+
+.topology-alert.ant-alert {
+  border-radius: 6px;
+}
+
+.topology-alert.ant-alert-warning {
+  background: rgba(215, 164, 71, 0.14);
+  border-color: rgba(215, 164, 71, 0.48);
+}
+
+.topology-alert.ant-alert-warning .ant-alert-icon {
+  color: #f0c76d;
+}
+
+.topology-alert.ant-alert-warning .ant-alert-message,
+.topology-alert.ant-alert-warning .ant-alert-description {
+  color: #f2dda3;
+}
+
+.topology-alert.ant-alert-error {
+  background: rgba(216, 92, 92, 0.14);
+  border-color: rgba(216, 92, 92, 0.5);
+}
+
+.topology-alert.ant-alert-error .ant-alert-icon {
+  color: #f2a6a6;
+}
+
+.topology-alert.ant-alert-error .ant-alert-message {
+  color: #f2b8b8;
+}
+
+.topology-alert.ant-alert-error .ant-alert-description {
+  color: #e7edf3;
+}
+
+.topology-stats {
+  margin-bottom: 12px;
+}
+
+.topology-panel {
+  height: 100%;
+}
+
+.topology-panel .ant-card-body {
+  min-height: 520px;
+}
+
+.topology-graph-panel .ant-card-body {
+  padding: 8px;
+}
+
+.topology-graph-canvas {
+  min-height: 500px;
+  overflow: hidden;
+  border: 1px solid #223544;
+  background-color: #0d171f;
+  background-image:
+    linear-gradient(rgba(105, 139, 160, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(105, 139, 160, 0.06) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+.topology-loading {
+  min-height: 500px;
+  display: grid;
+  place-items: center;
+}
+
+.topology-node-name {
+  color: #e7edf3;
+  font-weight: 650;
+}
+
+.topology-node-code {
+  font-size: 10px;
+}
+
+.topology-risk-tag {
+  min-width: 68px;
+  text-align: center;
+  margin-inline-end: 0;
+}
+
+@media (max-width: 960px) {
+  .topology-page__header {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .topology-title {
+    font-size: 22px !important;
+  }
+}

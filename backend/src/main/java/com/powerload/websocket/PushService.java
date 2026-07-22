@@ -57,8 +57,12 @@ public class PushService {
         payload.put("type", "alert");
         Map<String, Object> data = new HashMap<>();
         data.put("id", event.getId());
+        data.put("nodeId", event.getNodeId());
+        data.put("rootEventId", event.getRootEventId());
+        data.put("impactLoadMw", event.getImpactLoadMw());
         data.put("triggerTime", event.getTriggerTime() != null ? event.getTriggerTime().toString() : null);
         data.put("level", event.getLevel());
+        data.put("type", event.getType());
         data.put("currentValue", event.getCurrentValue());
         data.put("thresholdValue", event.getThresholdValue());
         data.put("aiAnalysis", event.getAiAnalysis() != null ? event.getAiAnalysis() : "");
@@ -76,6 +80,8 @@ public class PushService {
         Map<String, Object> payload = new HashMap<>();
         payload.put("type", "prediction_update");
         Map<String, Object> data = new HashMap<>();
+        data.put("nodeId", forecast.getNodeId());
+        data.put("source", forecast.getSource() != null ? forecast.getSource() : "ROOT_REGION");
         data.put("predictions", forecast.getPredictions());
         data.put("model", forecast.getModel() != null ? forecast.getModel() : "");
         data.put("forecastStartTime", forecast.getForecastStartTime() != null ? forecast.getForecastStartTime().toString() : null);

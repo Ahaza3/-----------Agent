@@ -4,6 +4,7 @@ import com.powerload.alert.AlertCreatedEvent;
 import com.powerload.alert.AlertJudgementService;
 import com.powerload.alert.AlertTemplate;
 import com.powerload.alert.ThresholdDetector;
+import com.powerload.common.GridTopologyConstants;
 import com.powerload.dto.response.AlertJudgementResult;
 import com.powerload.dto.response.RealtimeLoadPoint;
 import com.powerload.entity.AlertEvent;
@@ -115,11 +116,13 @@ public class AlertScheduler {
 
                 float threshold = thresholdDetector.getThreshold(rule.getConfig());
                 AlertEvent event = new AlertEvent();
+                event.setNodeId(GridTopologyConstants.ROOT_NODE_ID);
                 event.setTriggerTime(triggerTime);
                 event.setLevel(level);
                 event.setType("THRESHOLD");
                 event.setCurrentValue(currentLoad);
                 event.setThresholdValue(threshold);
+                event.setImpactLoadMw(currentLoad);
                 event.setRuleId(rule.getId());
                 event.setAiAnalysis(alertTemplate.generateAnalysis(level, currentLoad, threshold));
                 event.setSuggestion(alertTemplate.generateSuggestion(level));

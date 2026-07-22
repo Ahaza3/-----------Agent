@@ -7,6 +7,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -28,8 +29,9 @@ public class PredictController {
      * @return 预测响应（24 个预测值 + 模型名称）
      */
     @GetMapping("/forecast")
-    public R<ForecastResponse> forecast() {
-        ForecastResponse data = predictService.forecast();
+    public R<ForecastResponse> forecast(
+            @RequestParam(required = false) Long nodeId) {
+        ForecastResponse data = predictService.forecast(nodeId);
         return R.ok(data);
     }
 }

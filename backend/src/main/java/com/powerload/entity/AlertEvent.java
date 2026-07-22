@@ -21,6 +21,15 @@ public class AlertEvent {
     @TableId(type = IdType.AUTO)
     private Long id;
 
+    /** 告警对象拓扑节点 ID */
+    private Long nodeId;
+
+    /** 同一拓扑事件的根告警 ID */
+    private Long rootEventId;
+
+    /** 预计影响负荷 (MW) */
+    private Float impactLoadMw;
+
     /** 触发时间 */
     private LocalDateTime triggerTime;
 

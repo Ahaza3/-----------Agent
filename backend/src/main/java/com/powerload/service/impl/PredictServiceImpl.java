@@ -6,6 +6,7 @@ import com.powerload.entity.LoadData;
 import com.powerload.entity.ModelVersion;
 import com.powerload.entity.PredictionResult;
 import com.powerload.entity.WeatherForecast;
+import com.powerload.common.GridTopologyConstants;
 import com.powerload.mapper.LoadDataMapper;
 import com.powerload.mapper.ModelVersionMapper;
 import com.powerload.mapper.PredictionResultMapper;
@@ -49,22 +50,33 @@ public class PredictServiceImpl implements PredictService {
     /** 上下文窗口：期望至少 168 个合法整点，最多取 200 个 */
     private static final int WINDOW_HOURS = 200;
     private static final int MIN_HOURLY_POINTS = 168;
+    private static final int NODE_CALIBRATION_WINDOW_HOURS = 24;
+    private static final double NODE_FORECAST_MIN_RATIO = 0.65;
+    private static final double NODE_FORECAST_MAX_RATIO = 1.35;
 
     @Override
     @Transactional
     public ForecastResponse forecast() {
+        return forecast(GridTopologyConstants.ROOT_NODE_ID);
+    }
+
+    @Override
+    @Transactional
+    public ForecastResponse forecast(Long nodeId) {
+        Long targetNodeId = nodeId != null ? nodeId : GridTopologyConstants.ROOT_NODE_ID;
         LocalDateTime end = LocalDateTime.now();
         LocalDateTime start = end.minusHours(WINDOW_HOURS);
 
         // 1. 只查询合法整点历史数据（minute=0, second=0），升序
         LambdaQueryWrapper<LoadData> wrapper = new LambdaQueryWrapper<>();
-        wrapper.ge(LoadData::getTime, start)
+        wrapper.eq(LoadData::getNodeId, targetNodeId)
+               .ge(LoadData::getTime, start)
                .le(LoadData::getTime, end)
                .apply("MINUTE(time) = 0 AND SECOND(time) = 0")
                .orderByAsc(LoadData::getTime);
         List<LoadData> rows = loadDataMapper.selectList(wrapper);
 
-        log.debug("预测输入: {} 条整点数据 ({} ~ {})", rows.size(),
+        log.debug("预测输入: nodeId={}, {} 条整点数据 ({} ~ {})", targetNodeId, rows.size(),
                 rows.isEmpty() ? "N/A" : rows.get(0).getTime(),
                 rows.isEmpty() ? "N/A" : rows.get(rows.size() - 1).getTime());
 
@@ -96,7 +108,8 @@ public class PredictServiceImpl implements PredictService {
         FlaskInferenceService.ForecastResult inference = futureWeather.isEmpty()
                 ? flaskInferenceService.forecast(rawData)
                 : flaskInferenceService.forecast(rawData, futureWeather);
-        List<Double> predictions = inference.predictions();
+        List<Double> predictions = calibrateNodePredictions(
+                targetNodeId, rows, inference.predictions());
         String runtimeModel = inference.model();
         ModelVersion modelVersion = resolveRuntimeModelVersion(runtimeModel);
         Long modelVersionId = modelVersion == null ? null : modelVersion.getId();
@@ -111,6 +124,7 @@ public class PredictServiceImpl implements PredictService {
         LocalDateTime batchTime = LocalDateTime.now();
         for (int i = 0; i < predictions.size(); i++) {
             PredictionResult pr = new PredictionResult();
+            pr.setNodeId(targetNodeId);
             pr.setPredictTime(forecastStart.plusHours(i));
             pr.setPredictedLoad(predictions.get(i).floatValue());
             Float lower = intervalHalfWidth > 0
@@ -129,6 +143,8 @@ public class PredictServiceImpl implements PredictService {
 
         // 6. 封装响应
         ForecastResponse response = new ForecastResponse();
+        response.setNodeId(targetNodeId);
+        response.setSource("NODE_LEVEL_SIMULATION");
         response.setPredictions(predictions);
         response.setModel(runtimeModel);
         response.setForecastStartTime(forecastStart);
@@ -148,6 +164,63 @@ public class PredictServiceImpl implements PredictService {
         log.debug("预测完成: {} 个值, 起点={}, 范围 [{}, {}]",
                 predictions.size(), forecastStart, minP, maxP);
         return response;
+    }
+
+    /**
+     * 当前模型是在根区域量级数据上训练的，直接用于馈线会把绝对值预测到根区域量级。
+     * 节点预测保留模型给出的变化形状，但按本节点最近 24 小时均值校准量级，
+     * 并限制在合理的模拟波动范围内。根区域预测保持模型原值。
+     */
+    private List<Double> calibrateNodePredictions(Long nodeId,
+                                                   List<LoadData> rows,
+                                                   List<Double> rawPredictions) {
+        if (nodeId == null
+                || GridTopologyConstants.ROOT_NODE_ID == nodeId
+                || rows == null
+                || rows.isEmpty()
+                || rawPredictions == null
+                || rawPredictions.isEmpty()) {
+            return rawPredictions;
+        }
+
+        int start = Math.max(0, rows.size() - NODE_CALIBRATION_WINDOW_HOURS);
+        double recentSum = 0;
+        int recentCount = 0;
+        for (int i = start; i < rows.size(); i++) {
+            Float load = rows.get(i).getLoadMw();
+            if (load != null && load > 0) {
+                recentSum += load;
+                recentCount++;
+            }
+        }
+        double recentMean = recentCount == 0 ? 0 : recentSum / recentCount;
+
+        double predictionSum = rawPredictions.stream()
+                .filter(java.util.Objects::nonNull)
+                .filter(value -> value > 0)
+                .mapToDouble(Double::doubleValue)
+                .sum();
+        long predictionCount = rawPredictions.stream()
+                .filter(java.util.Objects::nonNull)
+                .filter(value -> value > 0)
+                .count();
+        double predictionMean = predictionCount == 0 ? 0 : predictionSum / predictionCount;
+        if (recentMean <= 0 || predictionMean <= 0) {
+            return rawPredictions;
+        }
+
+        double scale = recentMean / predictionMean;
+        double lowerBound = recentMean * NODE_FORECAST_MIN_RATIO;
+        double upperBound = recentMean * NODE_FORECAST_MAX_RATIO;
+        return rawPredictions.stream()
+                .map(value -> {
+                    if (value == null) {
+                        return null;
+                    }
+                    double calibrated = Math.max(0, value * scale);
+                    return Math.min(upperBound, Math.max(lowerBound, calibrated));
+                })
+                .toList();
     }
 
     private ModelVersion resolveRuntimeModelVersion(String runtimeModel) {

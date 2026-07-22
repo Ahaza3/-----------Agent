@@ -1,5 +1,6 @@
 package com.powerload.alert;
 
+import cn.hutool.json.JSONArray;
 import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -7,12 +8,15 @@ import com.powerload.agent.AgentMessage;
 import com.powerload.agent.LlmClient;
 import com.powerload.dto.response.AlertJudgementResult;
 import com.powerload.dto.response.ForecastResponse;
+import com.powerload.dto.response.GridRiskSnapshot;
+import com.powerload.dto.response.GridResponsibility;
 import com.powerload.dto.response.RealtimeLoadPoint;
 import com.powerload.entity.AlertAdvice;
 import com.powerload.entity.AlertEvent;
 import com.powerload.entity.AlertTicket;
 import com.powerload.mapper.AlertAdviceMapper;
 import com.powerload.mapper.AlertTicketMapper;
+import com.powerload.service.GridTopologyService;
 import com.powerload.service.PredictService;
 import com.powerload.service.RealtimeLoadService;
 import lombok.RequiredArgsConstructor;
@@ -37,6 +41,7 @@ public class AlertJudgementService {
     private final AlertTicketMapper alertTicketMapper;
     private final RealtimeLoadService realtimeLoadService;
     private final PredictService predictService;
+    private final GridTopologyService gridTopologyService;
     private final LlmClient llmClient;
 
     private static final String SOURCE_RULE = "RULE_BASED_AGENT";
@@ -71,6 +76,36 @@ public class AlertJudgementService {
             return new float[]{peak, peakIdx};
         } catch (Exception e) {
             return new float[]{0, -1};
+        }
+    }
+
+    private float[] getTopologyForecastPeak(AlertEvent alert) {
+        if (gridTopologyService == null || alert.getNodeId() == null) {
+            return getForecastPeak();
+        }
+        try {
+            GridRiskSnapshot snapshot = findTopologySnapshot(alert);
+            if (snapshot != null && snapshot.getForecastPeakMw() != null) {
+                return new float[]{snapshot.getForecastPeakMw(), 0};
+            }
+        } catch (Exception e) {
+            log.debug("拓扑告警预测峰值读取失败: nodeId={}", alert.getNodeId(), e);
+        }
+        return getForecastPeak();
+    }
+
+    private GridRiskSnapshot findTopologySnapshot(AlertEvent alert) {
+        if (gridTopologyService == null || alert == null || alert.getNodeId() == null) {
+            return null;
+        }
+        try {
+            return gridTopologyService.getRiskSnapshot().stream()
+                    .filter(item -> alert.getNodeId().equals(item.getNodeId()))
+                    .findFirst()
+                    .orElse(null);
+        } catch (Exception e) {
+            log.debug("拓扑风险证据读取失败: nodeId={}, reason={}", alert.getNodeId(), e.getMessage());
+            return null;
         }
     }
 
@@ -122,9 +157,13 @@ public class AlertJudgementService {
 
         // 1. 聚合上下文
         String trend = detectTrend(5); // 5 分钟窗口
-        float[] peakInfo = getForecastPeak();
+        float[] peakInfo = "TOPOLOGY_RISK".equals(alert.getType())
+                ? getTopologyForecastPeak(alert)
+                : getForecastPeak();
         float forecastPeak = peakInfo[0];
         float forecastPeakIdx = peakInfo[1];
+        boolean topologyRisk = "TOPOLOGY_RISK".equals(alert.getType());
+        GridRiskSnapshot topologySnapshot = topologyRisk ? findTopologySnapshot(alert) : null;
 
         // 预测峰值明显低于当前负荷 → 预测数据可能过期，标记为不可靠
         boolean forecastReliable = true;
@@ -147,9 +186,17 @@ public class AlertJudgementService {
                 shouldCreate = true;
                 autoCreate = false;
                 priority = "URGENT";
-                reason.append("红色告警，负荷 ").append(String.format("%.1f", currentLoad))
-                      .append(" MW 超过阈值 ").append(String.format("%.0f", threshold))
-                      .append(" MW，当前无对应工单且无同类未关闭工单，建议立即创建工单处置。");
+                if (topologyRisk) {
+                    appendTopologyRiskReason(reason, currentLoad, threshold, forecastPeak);
+                } else {
+                    reason.append("红色告警，负荷 ")
+                            .append(String.format("%.1f", currentLoad))
+                            .append(" MW ")
+                            .append("超过阈值 ")
+                            .append(String.format("%.0f", threshold))
+                            .append(" MW");
+                }
+                reason.append("，当前无对应工单且无同类未关闭工单，建议立即创建工单处置。");
             } else if (hasTicket) {
                 shouldCreate = false;
                 reason.append("该告警已存在工单，无需重复创建。");
@@ -188,15 +235,30 @@ public class AlertJudgementService {
         }
 
         // 3. 生成建议文案
-        String dispAdvice = buildDispatcherAdvice(level, currentLoad, threshold, shouldCreate, autoCreate, trend, forecastPeak);
-        String operAdvice = buildOperatorAdvice(level, currentLoad, threshold, shouldCreate, autoCreate, trend);
+        String dispAdvice = buildDispatcherAdvice(
+                level, currentLoad, threshold, shouldCreate, autoCreate, trend, forecastPeak, topologyRisk);
+        String operAdvice = buildOperatorAdvice(
+                level, currentLoad, threshold, shouldCreate, autoCreate, trend, topologyRisk);
+        GridResponsibility responsibility = gridTopologyService.resolveResponsibility(alert.getNodeId());
+        DraftFields draft = buildDraftFields(alert, currentLoad, threshold, forecastPeak,
+                trend, reason.toString(), responsibility, topologySnapshot);
 
         // 4. 构建结果
         AlertJudgementResult result = AlertJudgementResult.builder()
                 .alertId(alertId)
+                .nodeId(alert.getNodeId())
+                .nodeCode(topologySnapshot != null ? topologySnapshot.getNodeCode() : null)
+                .nodeName(topologySnapshot != null ? topologySnapshot.getNodeName() : null)
+                .substationCode(responsibility != null ? responsibility.getSubstationCode() : null)
+                .substationName(responsibility != null ? responsibility.getSubstationName() : null)
                 .level(level)
                 .currentLoad(currentLoad)
                 .thresholdValue(threshold)
+                .impactLoadMw(alert.getImpactLoadMw())
+                .headroomMw(topologySnapshot != null ? topologySnapshot.getHeadroomMw() : null)
+                .riskBasis(topologySnapshot != null ? topologySnapshot.getRiskBasis() : null)
+                .riskReason(topologySnapshot != null ? topologySnapshot.getRiskReason() : null)
+                .alertRootNodeCode(topologySnapshot != null ? topologySnapshot.getAlertRootNodeCode() : null)
                 .trendDirection(trend)
                 .forecastPeakLoad(forecastPeak > 0 ? forecastPeak : null)
                 .forecastPeakTime(forecastPeak > 0 ? LocalDateTime.now().plusHours((long) forecastPeakIdx) : null)
@@ -209,6 +271,18 @@ public class AlertJudgementService {
                 .operatorAdvice(operAdvice)
                 .decisionReason(reason.toString())
                 .source(SOURCE_RULE)
+                .ticketTitle(draft.title())
+                .ticketSummary(draft.summary())
+                .rootCauseHints(draft.rootCauses())
+                .impactScope(draft.impactScope())
+                .recommendedAssigneeUserId(responsibility != null
+                        ? responsibility.getAssigneeUserId() : null)
+                .recommendedAssigneeName(responsibility != null
+                        ? responsibility.getAssigneeName() : null)
+                .routingTarget(responsibility != null && !responsibility.isDispatchCenter()
+                        ? "SUBSTATION_OPERATOR" : "DISPATCH_CENTER")
+                .routingReason(responsibility != null
+                        ? responsibility.getRouteReason() : "NO_NODE")
                 .createdAt(LocalDateTime.now())
                 .build();
 
@@ -284,6 +358,66 @@ public class AlertJudgementService {
         }
     }
 
+    private DraftFields buildDraftFields(AlertEvent alert,
+                                         Float currentLoad,
+                                         Float threshold,
+                                         float forecastPeak,
+                                         String trend,
+                                         String reason,
+                                         GridResponsibility responsibility,
+                                         GridRiskSnapshot topologySnapshot) {
+        String nodeName = responsibility != null && responsibility.getSourceNodeName() != null
+                ? responsibility.getSourceNodeName() : "根区域";
+        String substationName = responsibility != null && responsibility.getSubstationName() != null
+                ? responsibility.getSubstationName() : "调度中心";
+        String title = ("TOPOLOGY_RISK".equals(alert.getType()) ? "拓扑风险" : "负荷告警")
+                + " · " + nodeName;
+        StringBuilder summary = new StringBuilder()
+                .append(title)
+                .append("，当前负荷 ")
+                .append(formatValue(currentLoad))
+                .append(" MW，阈值/容量 ")
+                .append(formatValue(threshold))
+                .append(" MW。");
+        if (forecastPeak > 0) {
+            summary.append("预测峰值 ").append(formatValue(forecastPeak)).append(" MW。");
+        }
+        summary.append("趋势：").append(trend).append("。");
+        summary.append("责任域：").append(substationName).append("。");
+        summary.append("建议调度员确认后提交工单。");
+
+        List<String> roots = new java.util.ArrayList<>();
+        roots.add("规则判定：" + reason);
+        if ("RISING".equals(trend)) {
+            roots.add("负荷近期呈上升趋势，需核对新增负荷或运行方式变化");
+        }
+        if ("TOPOLOGY_RISK".equals(alert.getType())) {
+            roots.add("优先核对责任变电站下游馈线负荷分布和容量余量");
+            if (topologySnapshot != null && topologySnapshot.getRiskReason() != null) {
+                roots.add("拓扑计算依据：" + topologySnapshot.getRiskReason());
+            }
+        } else {
+            roots.add("核对实时采集、告警阈值及相关设备运行状态");
+        }
+
+        List<String> impact = new java.util.ArrayList<>();
+        impact.add(nodeName);
+        if (responsibility != null && responsibility.getSubstationCode() != null) {
+            impact.add(responsibility.getSubstationName() + "责任域");
+        }
+        if (alert.getImpactLoadMw() != null) {
+            impact.add("预计影响负荷 " + formatValue(alert.getImpactLoadMw()) + " MW");
+        }
+        if (topologySnapshot != null && topologySnapshot.getAlertRootNodeCode() != null) {
+            impact.add("根告警节点 " + topologySnapshot.getAlertRootNodeCode());
+        }
+        return new DraftFields(title, truncate(summary.toString(), 480), roots, impact);
+    }
+
+    private String formatValue(Float value) {
+        return value == null ? "--" : String.format("%.1f", value);
+    }
+
     private AlertJudgementResult enrichWithLlm(AlertJudgementResult base) {
         try {
             String content = callJudgementLlm(base);
@@ -291,10 +425,22 @@ public class AlertJudgementService {
             String decisionReason = firstNonBlank(json.getStr("decisionReason"), json.getStr("reason"));
             String dispatcherAdvice = firstNonBlank(json.getStr("dispatcherAdvice"), json.getStr("dispatcher"));
             String operatorAdvice = firstNonBlank(json.getStr("operatorAdvice"), json.getStr("operator"));
+            String ticketTitle = json.getStr("ticketTitle");
+            String ticketSummary = json.getStr("ticketSummary");
+            List<String> rootCauseHints = extractStringList(json, "rootCauseHints");
+            List<String> impactScope = extractStringList(json, "impactScope");
 
             if (decisionReason != null) base.setDecisionReason(truncate(decisionReason, 800));
             if (dispatcherAdvice != null) base.setDispatcherAdvice(truncate(dispatcherAdvice, 800));
             if (operatorAdvice != null) base.setOperatorAdvice(truncate(operatorAdvice, 800));
+            if (ticketTitle != null && !ticketTitle.isBlank()) {
+                base.setTicketTitle(truncate(ticketTitle, 120));
+            }
+            if (ticketSummary != null && !ticketSummary.isBlank()) {
+                base.setTicketSummary(truncate(ticketSummary, 480));
+            }
+            if (!rootCauseHints.isEmpty()) base.setRootCauseHints(rootCauseHints);
+            if (!impactScope.isEmpty()) base.setImpactScope(impactScope);
             base.setSource(SOURCE_LLM);
         } catch (Exception e) {
             log.warn("LLM alert judgement failed, using rule fallback: alertId={}, reason={}",
@@ -302,6 +448,28 @@ public class AlertJudgementService {
             base.setSource(SOURCE_FALLBACK);
         }
         return base;
+    }
+
+    private List<String> extractStringList(JSONObject json, String key) {
+        Object raw = json.get(key);
+        if (raw instanceof JSONArray array) {
+            List<String> result = new java.util.ArrayList<>();
+            for (Object item : array) {
+                if (item != null && !item.toString().isBlank()) {
+                    result.add(truncate(item.toString(), 120));
+                }
+            }
+            return result.stream().limit(6).toList();
+        }
+        String text = json.getStr(key);
+        if (text == null || text.isBlank()) {
+            return List.of();
+        }
+        try {
+            return extractStringList(JSONUtil.parseObj("{\"items\":" + text + "}"), "items");
+        } catch (Exception ignored) {
+            return List.of(truncate(text, 120));
+        }
     }
 
     private String callJudgementLlm(AlertJudgementResult base) throws Exception {
@@ -323,7 +491,11 @@ public class AlertJudgementService {
                 - 不要改变 shouldCreateTicket、autoCreateTicket、recommendedPriority 等系统决策字段。
                 - 红色告警只能建议调度员立即确认待确认工单草稿，不要声称系统已经提交正式工单。
                 - 不要编造未提供的设备故障、线路跳闸、人工处置结果。
-                - 返回 JSON：{\"decisionReason\":\"...\",\"dispatcherAdvice\":\"...\",\"operatorAdvice\":\"...\"}
+                - 返回 JSON：{\"decisionReason\":\"...\",\"dispatcherAdvice\":\"...\",\"operatorAdvice\":\"...\",
+                  \"ticketTitle\":\"...\",\"ticketSummary\":\"...\",\"rootCauseHints\":[\"...\"],\"impactScope\":[\"...\"]}
+                - ticketTitle/ticketSummary 用于生成待确认工单草稿，不能声称工单已经提交。
+                - rootCauseHints 只能写基于证据的候选原因，不能编造设备故障。
+                - impactScope 只能引用输入证据中的节点、责任域和影响负荷。
 
                 规则研判结果：
                 %s
@@ -354,16 +526,71 @@ public class AlertJudgementService {
         return value.substring(0, maxLength);
     }
 
+    private record DraftFields(String title,
+                               String summary,
+                               List<String> rootCauses,
+                               List<String> impactScope) {
+    }
+
     /* ─── 建议文案模板 ─── */
 
+    private void appendTopologyRiskReason(StringBuilder reason,
+                                          float currentLoad,
+                                          float threshold,
+                                          float forecastPeak) {
+        if (forecastPeak > 0 && forecastPeak >= threshold && forecastPeak > currentLoad) {
+            reason.append("拓扑红色风险，预测峰值 ")
+                    .append(String.format("%.1f", forecastPeak))
+                    .append(" MW 超过节点容量 ")
+                    .append(String.format("%.0f", threshold))
+                    .append(" MW");
+            return;
+        }
+        if (currentLoad >= threshold) {
+            reason.append("拓扑红色风险，当前负荷 ")
+                    .append(String.format("%.1f", currentLoad))
+                    .append(" MW 超过节点容量 ")
+                    .append(String.format("%.0f", threshold))
+                    .append(" MW");
+            return;
+        }
+        reason.append("拓扑红色风险，但当前负荷 ")
+                .append(String.format("%.1f", currentLoad))
+                .append(" MW、预测峰值 ")
+                .append(forecastPeak > 0 ? String.format("%.1f", forecastPeak) : "--")
+                .append(" MW 均未超过节点容量 ")
+                .append(String.format("%.0f", threshold))
+                .append(" MW，建议核对告警快照和数据时效");
+    }
+
     private String buildDispatcherAdvice(String level, float load, float threshold,
-                                          boolean should, boolean auto, String trend, float peak) {
+                                          boolean should, boolean auto, String trend, float peak,
+                                          boolean topologyRisk) {
         StringBuilder sb = new StringBuilder();
-        sb.append("负荷").append(String.format("%.1f", load)).append(" MW，超阈值")
-          .append(String.format("%.0f", threshold)).append(" MW。");
+        if (topologyRisk) {
+            sb.append("节点当前负荷 ")
+                    .append(String.format("%.1f", load))
+                    .append(" MW，节点容量 ")
+                    .append(String.format("%.0f", threshold))
+                    .append(" MW。");
+            if (peak > threshold && peak > load) {
+                sb.append("预测峰值约")
+                        .append(String.format("%.0f", peak))
+                        .append(" MW，存在预测越限风险。");
+            } else if (load >= threshold) {
+                sb.append("当前负荷已超过节点容量，需要核查下游负荷和转供余量。");
+            } else {
+                sb.append("当前负荷和预测峰值均未超过节点容量，建议先核对告警快照和数据时效。");
+            }
+        } else {
+            sb.append("负荷").append(String.format("%.1f", load)).append(" MW，超阈值")
+                    .append(String.format("%.0f", threshold)).append(" MW。");
+        }
         if ("RISING".equals(trend)) sb.append("当前负荷处于上升趋势，需密切关注。");
         if ("FALLING".equals(trend)) sb.append("当前负荷正在回落，但仍需监控。");
-        if (peak > 0) sb.append("预测峰值约").append(String.format("%.0f", peak)).append(" MW。");
+        if (peak > 0 && !topologyRisk) {
+            sb.append("预测峰值约").append(String.format("%.0f", peak)).append(" MW。");
+        }
         if (auto) sb.append("系统已生成待确认工单草稿，请调度员核对后提交正式工单。");
         else if (should) sb.append("建议创建工单跟踪处理。");
         else sb.append("暂不建议建单，建议持续观察负荷变化。");
@@ -372,12 +599,14 @@ public class AlertJudgementService {
     }
 
     private String buildOperatorAdvice(String level, float load, float threshold,
-                                        boolean should, boolean auto, String trend) {
+                                        boolean should, boolean auto, String trend,
+                                        boolean topologyRisk) {
         StringBuilder sb = new StringBuilder();
         if (auto) {
             sb.append("红色紧急告警已生成待确认工单草稿，请立即核查数据源和告警规则配置。");
         } else if (should) {
-            sb.append("橙色/黄色告警，建议关注负荷趋势，");
+            sb.append(topologyRisk ? "拓扑节点风险，建议核查下游馈线负荷和容量余量，"
+                    : "橙色/黄色告警，建议关注负荷趋势，");
             if ("RISING".equals(trend)) sb.append("如持续上升需准备升级响应。");
             else sb.append("核实数据采集和设备状态。");
         } else {

@@ -1,5 +1,6 @@
 package com.powerload.service;
 
+import com.powerload.dto.response.GridResponsibility;
 import com.powerload.entity.*;
 import com.powerload.mapper.*;
 import com.powerload.security.SysUserPrincipal;
@@ -20,6 +21,7 @@ class TicketServiceTest {
     private AlertTicketActionMapper actionMapper;
     private AlertEventMapper alertEventMapper;
     private SysUserMapper sysUserMapper;
+    private GridTopologyService gridTopologyService;
 
     private final SysUserPrincipal dispatcher = new SysUserPrincipal(1L, "disp", "DISPATCHER");
     private final SysUserPrincipal operator = new SysUserPrincipal(2L, "oper", "OPERATOR");
@@ -30,8 +32,10 @@ class TicketServiceTest {
         actionMapper = mock(AlertTicketActionMapper.class);
         alertEventMapper = mock(AlertEventMapper.class);
         sysUserMapper = mock(SysUserMapper.class);
+        gridTopologyService = mock(GridTopologyService.class);
         PushService push = mock(PushService.class);
-        service = new TicketService(ticketMapper, actionMapper, alertEventMapper, sysUserMapper, push);
+        service = new TicketService(ticketMapper, actionMapper, alertEventMapper, sysUserMapper, push,
+                gridTopologyService);
     }
 
     @Test
@@ -50,6 +54,33 @@ class TicketServiceTest {
         doReturn(1).when(ticketMapper).insert((AlertTicket) any());
         doReturn(1).when(actionMapper).insert((AlertTicketAction) any());
         assertEquals("URGENT", service.create(1L, "s", dispatcher).getPriority());
+    }
+
+    @Test
+    void shouldAutoRouteFeederAlertToSubstationOperator() {
+        AlertEvent e = new AlertEvent();
+        e.setId(1L);
+        e.setNodeId(4L);
+        e.setLevel("ORANGE");
+        when(alertEventMapper.selectById(1L)).thenReturn(e);
+        doReturn(0L).when(ticketMapper).selectCount(any());
+
+        SysUser eastOperator = new SysUser();
+        eastOperator.setId(20L);
+        eastOperator.setUsername("operator-east");
+        eastOperator.setDisplayName("东部运维王五");
+        eastOperator.setRole("OPERATOR");
+        eastOperator.setIsActive(1);
+        when(gridTopologyService.resolveResponsibility(4L)).thenReturn(responsibility(20L));
+        when(sysUserMapper.selectById(20L)).thenReturn(eastOperator);
+        doReturn(1).when(ticketMapper).insert((AlertTicket) any());
+        doReturn(1).when(actionMapper).insert((AlertTicketAction) any());
+
+        AlertTicket created = service.create(1L, "馈线风险", dispatcher);
+
+        assertEquals("ASSIGNED", created.getStatus());
+        assertEquals(20L, created.getAssigneeUserId());
+        assertEquals("东部运维王五", created.getAssigneeName());
     }
 
     @Test
@@ -151,5 +182,16 @@ class TicketServiceTest {
         t.setStatus("PENDING"); t.setPriority("HIGH");
         t.setCreatedBy(1L); t.setCreatedByName("disp");
         return t;
+    }
+
+    private GridResponsibility responsibility(Long userId) {
+        GridResponsibility value = new GridResponsibility();
+        value.setAssigneeUserId(userId);
+        value.setAssigneeName("东部运维王五");
+        value.setSubstationCode("SUBSTATION-EAST");
+        value.setSubstationName("东部变电站");
+        value.setDispatchCenter(false);
+        value.setRouteReason("SUBSTATION_RESPONSIBILITY");
+        return value;
     }
 }

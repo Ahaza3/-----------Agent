@@ -10,6 +10,9 @@ import com.powerload.agent.LlmException;
 import com.powerload.entity.AlertAdvice;
 import com.powerload.entity.AlertEvent;
 import com.powerload.mapper.AlertAdviceMapper;
+import com.powerload.dto.response.GridRiskSnapshot;
+import com.powerload.dto.response.GridResponsibility;
+import com.powerload.service.GridTopologyService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Async;
@@ -27,14 +30,18 @@ public class AlertAdviceService {
 
     private final AlertAdviceMapper alertAdviceMapper;
     private final LlmClient llmClient;
+    private final GridTopologyService gridTopologyService;
     private final ExecutorService executor;
 
     /** LLM 输出最大长度（字符） */
     private static final int MAX_OUTPUT_LENGTH = 3000;
 
-    public AlertAdviceService(AlertAdviceMapper alertAdviceMapper, LlmClient llmClient) {
+    public AlertAdviceService(AlertAdviceMapper alertAdviceMapper,
+                              LlmClient llmClient,
+                              GridTopologyService gridTopologyService) {
         this.alertAdviceMapper = alertAdviceMapper;
         this.llmClient = llmClient;
+        this.gridTopologyService = gridTopologyService;
         this.executor = new ThreadPoolExecutor(1, 2, 60L, TimeUnit.SECONDS,
                 new LinkedBlockingQueue<>(20),
                 r -> new Thread(r, "alert-advice"),
@@ -187,10 +194,19 @@ public class AlertAdviceService {
                 advice.setGeneratedAt(LocalDateTime.now());
 
                 if ("DISPATCHER".equals(role)) {
-                    advice.setAnalysis("负荷" + evidence.get("level") + "告警：当前 "
-                            + evidence.get("currentLoad") + " MW，超阈值 "
-                            + evidence.get("threshold") + " MW 约 "
-                            + evidence.get("overRatio") + "%。");
+                    if ("TOPOLOGY_RISK".equals(evidence.get("type"))) {
+                        advice.setAnalysis("拓扑" + evidence.get("level") + "风险：当前负荷 "
+                                + evidence.get("currentLoad") + " MW，节点容量 "
+                                + evidence.get("threshold") + " MW，有效风险负荷 "
+                                + evidence.getOrDefault("effectiveRiskLoad", evidence.get("currentLoad"))
+                                + " MW，风险依据为 "
+                                + evidence.getOrDefault("riskBasis", "拓扑规则") + "。");
+                    } else {
+                        advice.setAnalysis("负荷" + evidence.get("level") + "告警：当前 "
+                                + evidence.get("currentLoad") + " MW，超阈值 "
+                                + evidence.get("threshold") + " MW 约 "
+                                + evidence.get("overRatio") + "%。");
+                    }
                     advice.setActions(JSONUtil.toJsonStr(List.of(
                             "密切监视负荷变化趋势", "准备调峰预案",
                             "如持续上升考虑需求响应", "汇报调度主管")));
@@ -226,6 +242,60 @@ public class AlertAdviceService {
         ev.put("triggerTime", alert.getTriggerTime() != null
                 ? alert.getTriggerTime().toString() : "N/A");
         ev.put("dataSource", "MOCK_RUNTIME");
+        if (alert.getNodeId() != null) {
+            try {
+                GridResponsibility responsibility = gridTopologyService.resolveResponsibility(alert.getNodeId());
+                if (responsibility != null) {
+                    Map<String, Object> routing = new LinkedHashMap<>();
+                    routing.put("sourceNodeCode", responsibility.getSourceNodeCode());
+                    routing.put("sourceNodeName", responsibility.getSourceNodeName());
+                    routing.put("substationCode", responsibility.getSubstationCode());
+                    routing.put("substationName", responsibility.getSubstationName());
+                    routing.put("assigneeUserId", responsibility.getAssigneeUserId());
+                    routing.put("assigneeName", responsibility.getAssigneeName());
+                    routing.put("dispatchCenter", responsibility.isDispatchCenter());
+                    routing.put("routeReason", responsibility.getRouteReason());
+                    ev.put("responsibility", routing);
+                }
+                GridRiskSnapshot topologyRisk = gridTopologyService.getRiskSnapshot().stream()
+                        .filter(snapshot -> alert.getNodeId().equals(snapshot.getNodeId()))
+                        .findFirst()
+                        .orElse(null);
+                if (topologyRisk != null) {
+                    Map<String, Object> topologyEvidence = new LinkedHashMap<>();
+                    topologyEvidence.put("nodeCode", topologyRisk.getNodeCode());
+                    topologyEvidence.put("nodeName", topologyRisk.getNodeName());
+                    topologyEvidence.put("nodeType", topologyRisk.getNodeType());
+                    topologyEvidence.put("currentLoadMw", topologyRisk.getCurrentLoadMw());
+                    topologyEvidence.put("forecastPeakMw", topologyRisk.getForecastPeakMw());
+                    double effectiveRiskLoad = Math.max(
+                            topologyRisk.getCurrentLoadMw() == null ? 0 : topologyRisk.getCurrentLoadMw(),
+                            topologyRisk.getForecastPeakMw() == null ? 0 : topologyRisk.getForecastPeakMw());
+                    topologyEvidence.put("effectiveRiskLoad", effectiveRiskLoad);
+                    topologyEvidence.put("riskBasis", topologyRisk.getRiskBasis());
+                    topologyEvidence.put("ratedCapacityMw", topologyRisk.getRatedCapacityMw());
+                    topologyEvidence.put("headroomMw", topologyRisk.getHeadroomMw());
+                    topologyEvidence.put("riskLevel", topologyRisk.getRiskLevel());
+                    topologyEvidence.put("riskReason", topologyRisk.getRiskReason() != null
+                            ? topologyRisk.getRiskReason() : "");
+                    topologyEvidence.put("alertRootNodeCode", topologyRisk.getAlertRootNodeCode() != null
+                            ? topologyRisk.getAlertRootNodeCode() : "");
+                    topologyEvidence.put("alertDeduplicated", topologyRisk.isAlertDeduplicated());
+                    ev.put("topologyRisk", topologyEvidence);
+                    if ("TOPOLOGY_RISK".equals(alert.getType())
+                            && alert.getThresholdValue() != null
+                            && alert.getThresholdValue() > 0) {
+                        ev.put("effectiveRiskLoad", effectiveRiskLoad);
+                        ev.put("riskBasis", topologyRisk.getRiskBasis());
+                        ev.put("overRatio", String.format("%.1f%%",
+                                (effectiveRiskLoad - alert.getThresholdValue())
+                                        / alert.getThresholdValue() * 100));
+                    }
+                }
+            } catch (Exception e) {
+                log.debug("拓扑风险证据读取失败: nodeId={}, reason={}", alert.getNodeId(), e.getMessage());
+            }
+        }
         return ev;
     }
 
@@ -243,6 +313,9 @@ public class AlertAdviceService {
             - dispatcher.actions: 3-5条具体措施，每条15-40字
             - operator.analysis: 关注数据质量、规则配置、系统状态，50-150字
             - operator.actions: 3-5条具体措施，每条15-40字
+            - 对 TOPOLOGY_RISK 必须区分当前负荷、预测峰值和节点容量；当前负荷未超过容量时，不得表述为当前负荷已经越限
+            - 若当前负荷和预测峰值均未超过节点容量，必须明确写出“当前未越限”或“需核对告警快照”，不得使用“超过”“超限”“超过阈值”等表述
+            - 拓扑风险证据中的负余量表示仍有可用容量，不得把负百分比写成“超过容量”
             - 所有建议仅供人工决策参考
             - 数据为MOCK模拟数据，在analysis中说明
             - 不得声称已执行任何操作
