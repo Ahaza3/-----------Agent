@@ -10,7 +10,6 @@ import {
   CopyOutlined,
   FileTextOutlined,
   ReloadOutlined,
-  RobotOutlined,
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { ALERT_LEVEL_CONFIG } from '../../../types/alert'
@@ -21,7 +20,6 @@ import type { Ticket } from '../../../services/ticketApi'
 import TicketTimeline from './TicketTimeline'
 import TicketActionBar from './TicketActionBar'
 import type { TimelineEntry } from './TicketTimeline'
-import api from '../../../services/api'
 import { acknowledgeAlert } from '../../../services/alertApi'
 import './AlertTicketDetail.css'
 
@@ -140,7 +138,6 @@ const AlertTicketDetail = ({
   const [ticket, setTicket] = useState<Ticket | null>(initialTicket)
   const [actions, setActions] = useState<TimelineEntry[]>([])
   const [loading, setLoading] = useState(false)
-  const [advices, setAdvices] = useState<any[]>([])
   const ticketId = ticket?.id
 
   // 同步外部 ticket 变化
@@ -164,12 +161,6 @@ const AlertTicketDetail = ({
     }
     load()
   }, [ticketId, open])
-
-  // 加载 AI 建议
-  useEffect(() => {
-    if (!alert?.id || !open) { setAdvices([]); return }
-    (api.get(`/alert/events/${alert.id}/advice`) as Promise<any[]>).then(setAdvices).catch(() => setAdvices([]))
-  }, [alert?.id, open])
 
   // 加载智能研判
   const [judgement, setJudgement] = useState<any>(null)
@@ -352,31 +343,6 @@ const AlertTicketDetail = ({
           <Button className="alert-detail-confirm" type="primary" size="small" loading={loading} onClick={handleAcknowledge}>
             确认告警
           </Button>
-        )}
-
-        {/* AI 建议 — 过滤掉 JUDGEMENT 类型（由研判区域单独展示） */}
-        {advices.filter((a: any) => a.audienceRole !== 'JUDGEMENT').length > 0 && (
-          <section className="alert-detail-section alert-advice-section">
-            <div className="alert-detail-section__heading">
-              <span className="alert-detail-section__index"><RobotOutlined /></span>
-              <div>
-                <h3>AI 处置建议</h3>
-                <p>模型解释风险后生成的角色化建议</p>
-              </div>
-            </div>
-            {advices.filter((a: any) => a.audienceRole !== 'JUDGEMENT').map((a: any) => (
-              <div key={a.id} className="alert-advice-card">
-                <div className="alert-advice-card__topline">
-                  <Tag color={a.status === 'SUCCESS' ? 'green' : 'gold'}>
-                  {a.audienceRole === 'DISPATCHER' ? '调度员建议' : '运维建议'}
-                  </Tag>
-                  <span>{a.status === 'SUCCESS' ? '已生成' : '规则兜底'}</span>
-                </div>
-                {a.analysis && <div className="alert-advice-card__analysis">{a.analysis}</div>}
-                {a.suggestion && <div className="alert-advice-card__suggestion">{a.suggestion}</div>}
-              </div>
-            ))}
-          </section>
         )}
 
         {/* 智能研判 */}

@@ -25,6 +25,16 @@ public interface AlertEventService {
     Page<AlertEvent> query(int page, int size, String level,
                            LocalDateTime start, LocalDateTime end, boolean unreadOnly);
 
+    /**
+     * 按级别、来源、状态、关键词和时间范围分页查询告警。
+     */
+    default Page<AlertEvent> query(int page, int size, String level, String type,
+                                   String status, String keyword,
+                                   LocalDateTime start, LocalDateTime end,
+                                   boolean unreadOnly) {
+        return query(page, size, level, start, end, unreadOnly);
+    }
+
     /** 标记已读 */
     void markRead(Long id);
 

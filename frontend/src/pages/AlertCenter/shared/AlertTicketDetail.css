@@ -40,8 +40,7 @@
 
 .alert-detail-hero__topline,
 .alert-detail-hero__main,
-.alert-judgement-header,
-.alert-advice-card__topline {
+.alert-judgement-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -180,42 +179,9 @@
   margin-top: 12px;
 }
 
-.alert-advice-section {
-  border-top: 2px solid #d7a447;
-}
-
-.alert-advice-card {
-  margin-top: 8px;
-  padding: 10px 11px;
-  border: 1px solid #2a3d4b;
-  background: #0d171f;
-}
-
-.alert-advice-card__topline {
-  color: #6f7d8a;
-  font-size: 10px;
-}
-
-.alert-advice-card__topline .ant-tag,
 .alert-judgement-source .ant-tag {
   margin-inline-end: 0;
   font-size: 10px;
-}
-
-.alert-advice-card__analysis {
-  margin-top: 9px;
-  color: #e0e8ee;
-  font-size: 12px;
-  line-height: 1.65;
-}
-
-.alert-advice-card__suggestion {
-  margin-top: 8px;
-  padding-top: 8px;
-  border-top: 1px solid #233544;
-  color: #aebac6;
-  font-size: 11px;
-  line-height: 1.65;
 }
 
 .alert-judgement-section {

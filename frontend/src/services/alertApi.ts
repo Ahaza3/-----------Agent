@@ -6,6 +6,9 @@ import type { AlertEvent, AlertPageResult, AlertRule } from '../types/alert'
 
 interface QueryParams {
   level?: string
+  type?: string
+  status?: string
+  keyword?: string
   start?: string
   end?: string
   page?: number

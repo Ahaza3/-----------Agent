@@ -4,14 +4,15 @@
  * 移动端：告警列表 + 全屏详情 Drawer
  */
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Table, Tag, Button, Segmented, Space, message, Badge, Modal, Select, Input, Empty, Skeleton } from 'antd'
+import { Table, Tag, Button, Space, message, Badge, Modal, Select, Input, Empty, Skeleton, Tabs, DatePicker } from 'antd'
 import { BellOutlined, ExclamationCircleOutlined, FileTextOutlined, ReloadOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
+import type { Dayjs } from 'dayjs'
 import { acknowledgeAlert, fetchAlertEvents, fetchAlertMetrics, markAlertRead } from '../../services/alertApi'
 import { fetchTicketByAlert, createTicket, assignTicket, fetchAssignees, fetchJudgement } from '../../services/ticketApi'
 import type { AssigneeInfo, JudgementResult, Ticket } from '../../services/ticketApi'
 import { ALERT_LEVEL_CONFIG } from '../../types/alert'
-import type { AlertEvent, AlertLevel } from '../../types/alert'
+import type { AlertEvent, AlertLevel, AlertType } from '../../types/alert'
 import type { ColumnsType } from 'antd/es/table'
 import useDashboardStore from '../../stores/useDashboardStore'
 import useAuthStore from '../../stores/useAuthStore'
@@ -19,12 +20,21 @@ import AlertTicketDetail from './shared/AlertTicketDetail'
 import './DispatcherAlertWorkspace.css'
 
 type LevelFilter = AlertLevel | 'ALL'
+type TypeFilter = AlertType | 'ALL'
+type StatusFilter = 'ALL' | 'ACTIVE' | 'ACKNOWLEDGED' | 'RECOVERED'
+type AlertCategory = 'ALL' | 'TOPOLOGY_RISK' | 'ACTIVE' | 'UNREAD' | 'RECOVERED'
 type CreateMode = 'manual' | 'red-draft'
 
 const DispatcherAlertWorkspace = () => {
   const [events, setEvents] = useState<AlertEvent[]>([])
   const [levelFilter, setLevelFilter] = useState<LevelFilter>('ALL')
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>('ALL')
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL')
+  const [category, setCategory] = useState<AlertCategory>('ALL')
   const [unreadOnly, setUnreadOnly] = useState(false)
+  const [keywordInput, setKeywordInput] = useState('')
+  const [keyword, setKeyword] = useState('')
+  const [dateRange, setDateRange] = useState<[Dayjs, Dayjs] | null>(null)
   const [loading, setLoading] = useState(false)
   const [total, setTotal] = useState(0)
   const [metrics, setMetrics] = useState<Record<string, number> | null>(null)
@@ -70,14 +80,21 @@ const DispatcherAlertWorkspace = () => {
     try {
       const params: any = { page: p, size: 20 }
       if (levelFilter !== 'ALL') params.level = levelFilter
+      if (typeFilter !== 'ALL') params.type = typeFilter
+      if (statusFilter !== 'ALL') params.status = statusFilter
+      if (keyword) params.keyword = keyword
       if (unreadOnly) params.unreadOnly = true
+      if (dateRange) {
+        params.start = dateRange[0].startOf('day').format('YYYY-MM-DDTHH:mm:ss')
+        params.end = dateRange[1].endOf('day').format('YYYY-MM-DDTHH:mm:ss')
+      }
       const res: any = await fetchAlertEvents(params)
       setEvents(res.records || [])
       setTotal(res.total || 0)
       try { setMetrics(await fetchAlertMetrics()) } catch { setMetrics(null) }
     } catch { message.error('告警加载失败') }
     finally { setLoading(false) }
-  }, [levelFilter, unreadOnly, page])
+  }, [dateRange, keyword, levelFilter, page, statusFilter, typeFilter, unreadOnly])
   useEffect(() => { fetch() }, [fetch])
 
   // 批量加载工单
@@ -226,6 +243,27 @@ const DispatcherAlertWorkspace = () => {
     setDetailOpen(true)
   }
 
+  const handleCategoryChange = (key: string) => {
+    const nextCategory = key as AlertCategory
+    setCategory(nextCategory)
+    setPage(1)
+    setTypeFilter(nextCategory === 'TOPOLOGY_RISK' ? 'TOPOLOGY_RISK' : 'ALL')
+    setStatusFilter(nextCategory === 'ACTIVE' || nextCategory === 'RECOVERED' ? nextCategory : 'ALL')
+    setUnreadOnly(nextCategory === 'UNREAD')
+  }
+
+  const resetFilters = () => {
+    setCategory('ALL')
+    setLevelFilter('ALL')
+    setTypeFilter('ALL')
+    setStatusFilter('ALL')
+    setUnreadOnly(false)
+    setKeywordInput('')
+    setKeyword('')
+    setDateRange(null)
+    setPage(1)
+  }
+
   const statusTag = (alert: AlertEvent, ticket: Ticket | null | undefined) => {
     if (!ticket) return <Button size="small" type={alert.level === 'RED' ? 'primary' : 'default'} danger={alert.level === 'RED'} icon={<FileTextOutlined />} onClick={(e) => { e.stopPropagation(); openTicketDraft(alert, alert.level === 'RED' ? 'red-draft' : 'manual') }}>{alert.level === 'RED' ? '确认建单' : '发起处置'}</Button>
     const st: Record<string, any> = { PENDING: { label: '待处理', color: 'default' }, ASSIGNED: { label: '已指派', color: 'blue' }, IN_PROGRESS: { label: '处理中', color: 'processing' }, RESOLVED: { label: '已解决', color: 'green' }, CLOSED: { label: '已关闭', color: 'default' }, CANCELLED: { label: '已取消', color: 'default' } }
@@ -264,6 +302,29 @@ const DispatcherAlertWorkspace = () => {
     },
   ]
 
+  const categoryTabs = [
+    {
+      key: 'ALL',
+      label: <span>全部告警 <Badge count={metrics?.total ?? 0} showZero /></span>,
+    },
+    {
+      key: 'TOPOLOGY_RISK',
+      label: <span>拓扑风险 <Badge count={metrics?.topologyRisk ?? 0} showZero color="#4f8fba" /></span>,
+    },
+    {
+      key: 'ACTIVE',
+      label: <span>待确认 <Badge count={metrics?.active ?? 0} showZero color="#d85c5c" /></span>,
+    },
+    {
+      key: 'UNREAD',
+      label: <span>未读队列 <Badge count={metrics?.unread ?? 0} showZero color="#d7a447" /></span>,
+    },
+    {
+      key: 'RECOVERED',
+      label: <span>已恢复 <Badge count={metrics?.recovered ?? 0} showZero color="#5fa777" /></span>,
+    },
+  ]
+
   return (
     <div className="alert-center-page">
       <div className="alert-center-header">
@@ -278,16 +339,60 @@ const DispatcherAlertWorkspace = () => {
       </div>
       <hr className="brutalist" />
 
-      <Space className="alert-center-toolbar" wrap>
-        <Segmented value={levelFilter} onChange={(v) => { setLevelFilter(v as LevelFilter); setPage(1) }}
+      <Tabs
+        className="alert-category-tabs"
+        activeKey={category}
+        onChange={handleCategoryChange}
+        items={categoryTabs}
+      />
+
+      <div className="alert-center-toolbar">
+        <Input.Search
+          className="alert-search"
+          value={keywordInput}
+          onChange={(e) => setKeywordInput(e.target.value)}
+          onSearch={(value) => { setKeyword(value.trim()); setPage(1) }}
+          allowClear
+          placeholder="查找告警内容、类型或关键词"
+        />
+        <Select
+          value={typeFilter}
+          onChange={(value) => { setTypeFilter(value as TypeFilter); setCategory('ALL'); setPage(1) }}
           options={[
-            { label: '全部', value: 'ALL' },
-            { label: (<span style={{ color: '#FF2A2A' }}>紧急</span>), value: 'RED' },
-            { label: (<span style={{ color: '#FA8C16' }}>重要</span>), value: 'ORANGE' },
-            { label: (<span style={{ color: '#FADB14' }}>提示</span>), value: 'YELLOW' },
-          ]} />
-        <Button type={unreadOnly ? 'primary' : 'default'} size="small" onClick={() => setUnreadOnly(!unreadOnly)}>仅未读</Button>
-      </Space>
+            { label: '全部来源', value: 'ALL' },
+            { label: '拓扑风险', value: 'TOPOLOGY_RISK' },
+            { label: '阈值告警', value: 'THRESHOLD' },
+            { label: '趋势告警', value: 'TREND' },
+            { label: '异常告警', value: 'ANOMALY' },
+          ]}
+        />
+        <Select
+          value={levelFilter}
+          onChange={(value) => { setLevelFilter(value as LevelFilter); setCategory('ALL'); setPage(1) }}
+          options={[
+            { label: '全部级别', value: 'ALL' },
+            { label: '紧急', value: 'RED' },
+            { label: '重要', value: 'ORANGE' },
+            { label: '提示', value: 'YELLOW' },
+          ]}
+        />
+        <Select
+          value={statusFilter}
+          onChange={(value) => { setStatusFilter(value as StatusFilter); setCategory('ALL'); setPage(1) }}
+          options={[
+            { label: '全部状态', value: 'ALL' },
+            { label: '待确认', value: 'ACTIVE' },
+            { label: '已确认', value: 'ACKNOWLEDGED' },
+            { label: '已恢复', value: 'RECOVERED' },
+          ]}
+        />
+        <DatePicker.RangePicker
+          value={dateRange}
+          onChange={(dates) => { setDateRange(dates as [Dayjs, Dayjs] | null); setPage(1) }}
+          placeholder={['开始日期', '结束日期']}
+        />
+        <Button onClick={resetFilters}>重置</Button>
+      </div>
 
       {metrics && (
         <div className="alert-center-metrics">
@@ -317,6 +422,7 @@ const DispatcherAlertWorkspace = () => {
           className="alert-center-table"
           loading={loading}
           size="small"
+          scroll={{ x: 980 }}
           onRow={(record) => ({
             onClick: () => openDetail(record),
             className: record.type === 'TOPOLOGY_RISK' ? 'is-topology-risk' : undefined,

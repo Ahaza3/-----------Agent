@@ -51,6 +51,9 @@ public class AlertEventController {
      * 分页查询告警事件
      *
      * @param level      级别筛选 (RED/ORANGE/YELLOW)，不传则全部
+     * @param type       来源筛选 (TOPOLOGY_RISK/THRESHOLD/TREND/ANOMALY)
+     * @param status     处置状态筛选 (ACTIVE/ACKNOWLEDGED/RECOVERED)
+     * @param keyword    告警分析、建议或类型关键词
      * @param start      起始时间
      * @param end        结束时间
      * @param page       页码 (从 1 开始)
@@ -60,13 +63,17 @@ public class AlertEventController {
     @GetMapping("/events")
     public R<Map<String, Object>> list(
             @RequestParam(required = false) String level,
+            @RequestParam(required = false) String type,
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String keyword,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime start,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime end,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int size,
             @RequestParam(defaultValue = "false") boolean unreadOnly) {
 
-        Page<AlertEvent> result = alertEventService.query(page, size, level, start, end, unreadOnly);
+        Page<AlertEvent> result = alertEventService.query(
+                page, size, level, type, status, keyword, start, end, unreadOnly);
         return R.ok(Map.of(
                 "records", result.getRecords(),
                 "total", result.getTotal(),
