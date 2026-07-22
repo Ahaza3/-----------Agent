@@ -78,7 +78,7 @@ class AlertSchedulerTest {
     private void checkAt(float load) {
         RealtimeLoadPoint point = new RealtimeLoadPoint();
         point.setLoadMw(load);
-        when(realtimeLoadService.getLatest()).thenReturn(point);
+        when(realtimeLoadService.getLatestForAlert()).thenReturn(point);
         scheduler.checkAlerts();
     }
 }

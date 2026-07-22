@@ -31,6 +31,9 @@ public interface RealtimeLoadService {
      */
     RealtimeLoadPoint generateAndAppend();
 
+    /** 接收外部或模拟遥测点；重复返回 null，BAD 点只审计持久化且不进入主曲线。 */
+    RealtimeLoadPoint accept(RealtimeLoadPoint point);
+
     /** 更新正常模式的小时级目标负荷。 */
     void setTargetLoad(float targetLoad);
 
@@ -52,6 +55,12 @@ public interface RealtimeLoadService {
      * @return 最新点，无数据时返回 null
      */
     RealtimeLoadPoint getLatest();
+
+    /**
+     * Latest newly received GOOD point for alert evaluation. Recovered, late,
+     * estimated and bad points are intentionally excluded from this input.
+     */
+    RealtimeLoadPoint getLatestForAlert();
 
     /**
      * 查询最近 N 分钟内的实时数据点（返回防御性副本）

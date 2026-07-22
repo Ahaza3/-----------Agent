@@ -1,0 +1,20 @@
+CREATE TABLE realtime_telemetry (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    node_id BIGINT NOT NULL,
+    observed_at DATETIME(3) NOT NULL,
+    received_at DATETIME(3) NOT NULL,
+    source_instance_id VARCHAR(64) NOT NULL,
+    sequence BIGINT NOT NULL,
+    load_mw DECIMAL(12,3) NULL,
+    temperature DECIMAL(8,3) NULL,
+    humidity DECIMAL(8,3) NULL,
+    quality_code VARCHAR(16) NOT NULL,
+    data_source VARCHAR(32) NOT NULL,
+    estimated TINYINT(1) NOT NULL DEFAULT 0,
+    persistence_status VARCHAR(32) NOT NULL DEFAULT 'PERSISTED',
+    quality_reason VARCHAR(128) NULL,
+    created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    UNIQUE INDEX uk_realtime_telemetry_source_sequence (data_source, source_instance_id, sequence),
+    INDEX idx_realtime_telemetry_node_observed (node_id, observed_at),
+    INDEX idx_realtime_telemetry_received (received_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='秒级模拟实时遥测，不写入小时级 load_data';

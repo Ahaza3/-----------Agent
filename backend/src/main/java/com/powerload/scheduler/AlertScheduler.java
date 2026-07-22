@@ -66,7 +66,7 @@ public class AlertScheduler {
     @Scheduled(fixedRate = 1_000) // 每秒检查
     public void checkAlerts() {
         try {
-            RealtimeLoadPoint latest = realtimeLoadService.getLatest();
+            RealtimeLoadPoint latest = realtimeLoadService.getLatestForAlert();
             if (latest == null) return;
 
             float currentLoad = latest.getLoadMw();

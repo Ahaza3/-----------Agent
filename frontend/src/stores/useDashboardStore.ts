@@ -119,61 +119,62 @@ const useDashboardStore = create<DashboardState>((set) => ({
 
   appendRealtimeLoad: (point) =>
     set((state) => {
-      // sequence 会在后端重启后归零，时间戳才是跨会话的稳定顺序依据。
-      const lastTimestamp = state.realtimeLoads.length > 0
-        ? state.realtimeLoads[state.realtimeLoads.length - 1].timestamp
-        : -1
-      if (point.timestamp <= lastTimestamp) return state
-
-      const next = [...state.realtimeLoads, point]
-      if (next.length > MAX_REALTIME_POINTS) {
-        next.splice(0, next.length - MAX_REALTIME_POINTS)
-      }
-
-      // liveLoad 同步更新为最后一个实时点
-      const latest = next[next.length - 1]
-      const liveLoad = latest ? realtimePointToLiveLoad(latest) : state.liveLoad
-
-      return {
-        realtimeLoads: next,
-        liveLoad,
-        lastRealtimeAt: Date.now(),
-      }
+      const normalized = normalizeRealtimePoint(point)
+      if (normalized.qualityCode === 'BAD') return state
+      const keys = new Set(state.realtimeLoads.map(realtimeDedupKey))
+      if (keys.has(realtimeDedupKey(normalized))) return state
+      return toRealtimeState(state, [...state.realtimeLoads, normalized])
     }),
 
   mergeRealtimeLoads: (points) =>
     set((state) => {
       if (points.length === 0) return state
-
-      // 后端重启后 sequence 会重复，使用采样时间去重并按时间排序。
-      const existingTimestamps = new Set(state.realtimeLoads.map((p) => p.timestamp))
+      const existingKeys = new Set(state.realtimeLoads.map(realtimeDedupKey))
       const merged = [...state.realtimeLoads]
-      for (const p of points) {
-        if (!existingTimestamps.has(p.timestamp)) {
-          merged.push(p)
-          existingTimestamps.add(p.timestamp)
+      for (const rawPoint of points) {
+        const point = normalizeRealtimePoint(rawPoint)
+        if (point.qualityCode !== 'BAD' && !existingKeys.has(realtimeDedupKey(point))) {
+          merged.push(point)
+          existingKeys.add(realtimeDedupKey(point))
         }
       }
-
-      merged.sort((a, b) => a.timestamp - b.timestamp || a.sequence - b.sequence)
-
-      // 溢出淘汰
-      if (merged.length > MAX_REALTIME_POINTS) {
-        merged.splice(0, merged.length - MAX_REALTIME_POINTS)
-      }
-
-      const latest = merged[merged.length - 1]
-      const liveLoad = latest ? realtimePointToLiveLoad(latest) : state.liveLoad
-
-      return {
-        realtimeLoads: merged,
-        liveLoad,
-        lastRealtimeAt: Date.now(),
-      }
+      return toRealtimeState(state, merged)
     }),
 
   reset: () => set(initialState),
 }))
+
+export function normalizeRealtimePoint(point: RealtimeLoadPoint): RealtimeLoadPoint {
+  const legacy = !point.dataSource || !point.sourceInstanceId || !point.qualityCode
+  return {
+    ...point,
+    dataSource: point.dataSource ?? 'LEGACY',
+    sourceInstanceId: point.sourceInstanceId ?? `legacy-${point.timestamp}`,
+    qualityCode: point.qualityCode ?? 'LEGACY_UNKNOWN',
+    freshnessStatus: point.freshnessStatus ?? 'LEGACY_UNKNOWN',
+    estimated: point.estimated ?? false,
+    qualityReason: point.qualityReason ?? null,
+    persistenceStatus: point.persistenceStatus ?? null,
+    source: point.source || (legacy ? 'LEGACY' : 'MOCK'),
+  }
+}
+
+export function realtimeDedupKey(point: RealtimeLoadPoint): string {
+  const normalized = normalizeRealtimePoint(point)
+  return `${normalized.dataSource}|${normalized.sourceInstanceId}|${normalized.sequence}`
+}
+
+function toRealtimeState(state: DashboardState, points: RealtimeLoadPoint[]) {
+  const sorted = points
+    .sort((a, b) => a.timestamp - b.timestamp || a.sequence - b.sequence)
+    .slice(-MAX_REALTIME_POINTS)
+  const latest = sorted[sorted.length - 1]
+  return {
+    realtimeLoads: sorted,
+    liveLoad: latest ? realtimePointToLiveLoad(latest) : state.liveLoad,
+    lastRealtimeAt: Date.now(),
+  }
+}
 
 /** 将 RealtimeLoadPoint 转为兼容旧 UI 的 LoadData 格式 */
 function realtimePointToLiveLoad(p: RealtimeLoadPoint): LoadData {

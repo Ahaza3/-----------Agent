@@ -44,6 +44,16 @@ public class PushService {
         data.put("temperature", point.getTemperature());
         data.put("humidity", point.getHumidity());
         data.put("source", point.getSource());
+        data.put("nodeId", point.getNodeId());
+        data.put("observedAt", point.getObservedAt() != null ? point.getObservedAt().toString() : null);
+        data.put("receivedAt", point.getReceivedAt() != null ? point.getReceivedAt().toString() : null);
+        data.put("sourceInstanceId", point.getSourceInstanceId());
+        data.put("qualityCode", point.getQualityCode());
+        data.put("qualityReason", point.getQualityReason());
+        data.put("dataSource", point.getDataSource());
+        data.put("estimated", point.isEstimated());
+        data.put("freshnessStatus", point.getFreshnessStatus());
+        data.put("persistenceStatus", point.getPersistenceStatus());
         payload.put("data", data);
         messagingTemplate.convertAndSend("/topic/load", payload);
     }
