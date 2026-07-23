@@ -2,6 +2,7 @@ package com.powerload.service;
 
 import com.powerload.mapper.AlertEventMapper;
 import com.powerload.mapper.PredictionResultMapper;
+import com.powerload.mapper.ModelVersionMapper;
 import com.powerload.ml.FlaskInferenceService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
@@ -37,7 +38,8 @@ class SystemHealthServiceTest {
                 redisProvider,
                 flaskService,
                 mock(PredictionResultMapper.class),
-                mock(AlertEventMapper.class));
+                mock(AlertEventMapper.class),
+                mock(ModelVersionMapper.class));
         ReflectionTestUtils.setField(service, "redisHost", "localhost");
         ReflectionTestUtils.setField(service, "llmApiKey", "");
         ReflectionTestUtils.setField(service, "llmModel", "deepseek-chat");

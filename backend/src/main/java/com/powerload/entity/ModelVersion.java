@@ -34,6 +34,18 @@ public class ModelVersion {
     /** 模型文件路径 */
     private String filePath;
 
+    private String artifactDir;
+
+    private String artifactChecksum;
+
+    private String runtimeStatus;
+
+    private LocalDateTime deployedAt;
+
+    private String lastLoadError;
+
+    private LocalDateTime lastHealthCheckedAt;
+
     /** 超参数 (JSON) */
     private String hyperparams;
 

@@ -1,9 +1,15 @@
 """训练 LSTM 负荷预测模型并导出 TorchScript 模型文件。"""
 
 import argparse
+import hashlib
+import json
 import os
 import pickle
+import shutil
 import sys
+import tempfile
+from datetime import datetime, timezone
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -190,6 +196,7 @@ def main():
     parser.add_argument("--epochs", type=int, default=80, help="最大训练轮数")
     parser.add_argument("--lr", type=float, default=0.001, help="学习率")
     parser.add_argument("--no-export", action="store_true", help="跳过 TorchScript 导出")
+    parser.add_argument("--output-root", default="models", help="不可变模型版本目录根路径")
     args = parser.parse_args()
 
     if not os.path.exists(args.input):
@@ -262,8 +269,14 @@ def main():
         f"24 小时={hourly_mape[23]:.2f}%"
     )
 
-    os.makedirs("models", exist_ok=True)
-    torch.save(model.state_dict(), "models/lstm_model.pt")
+    version = "train-" + datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
+    root = Path(args.output_root).resolve()
+    root.mkdir(parents=True, exist_ok=True)
+    final_dir = root / version
+    if final_dir.exists():
+        raise RuntimeError(f"模型版本目录已存在: {version}")
+    temp_dir = Path(tempfile.mkdtemp(prefix=f".{version}.", dir=root))
+    torch.save(model.state_dict(), temp_dir / "lstm_model.pt")
     torch.save(
         {
             "input_size": input_size,
@@ -274,27 +287,40 @@ def main():
             "future_weather_features": future_weather_features,
             "future_weather_feature_names": ["temperature", "humidity"],
         },
-        "models/lstm_meta.pt",
+        temp_dir / "meta.pt",
     )
 
-    with open("models/lstm_scaler.pkl", "wb") as f:
+    with open(temp_dir / "scaler_y.pkl", "wb") as f:
         pickle.dump(scaler_y, f)
-    with open("models/lstm_scaler_x.pkl", "wb") as f:
+    with open(temp_dir / "scaler_x.pkl", "wb") as f:
         pickle.dump(scaler_x, f)
-    with open("models/lstm_weather_scaler.pkl", "wb") as f:
+    with open(temp_dir / "weather_scaler.pkl", "wb") as f:
         pickle.dump(weather_scaler, f)
-    with open("models/lstm_feature_cols.pkl", "wb") as f:
+    with open(temp_dir / "feature_cols.pkl", "wb") as f:
         pickle.dump(feature_cols, f)
 
-    if not args.no_export:
-        export_torchscript(
-            model,
-            input_size,
-            args.seq_length,
-            args.horizon,
-            future_weather_features,
-            save_path="models/lstm_scripted.pt",
-        )
+    if args.no_export:
+        shutil.rmtree(temp_dir)
+        raise RuntimeError("版本化产物必须导出 TorchScript")
+    export_torchscript(model, input_size, args.seq_length, args.horizon,
+                       future_weather_features, save_path=str(temp_dir / "model.pt"))
+    files = []
+    for path in sorted(temp_dir.rglob("*")):
+        if path.is_file() and path.name != "manifest.json":
+            relative = path.relative_to(temp_dir).as_posix()
+            files.append({"path": relative, "sha256": hashlib.sha256(path.read_bytes()).hexdigest()})
+    checksum_source = "".join(f"{entry['path']}\n{entry['sha256']}\n" for entry in files)
+    manifest = {
+        "modelVersion": version,
+        "modelType": "LSTM",
+        "createdAt": datetime.now(timezone.utc).isoformat(),
+        "framework": {"runtime": "torch", "torchVersion": torch.__version__},
+        "files": files,
+        "artifactChecksum": hashlib.sha256(checksum_source.encode("utf-8")).hexdigest(),
+    }
+    (temp_dir / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+    os.replace(temp_dir, final_dir)
+    print(f"MODEL_ARTIFACT_DIR={version}")
 
 
 if __name__ == "__main__":
