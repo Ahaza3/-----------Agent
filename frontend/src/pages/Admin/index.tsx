@@ -514,12 +514,12 @@ const ModelPanel = () => {
     }
   }
 
-  const startRetrain = async (modelName: 'LSTM' | 'PROPHET') => {
+  const startRetrain = async (modelName: 'LSTM') => {
     setRetraining(modelName)
     try {
       const data = await api.post('/model/retrain', { modelName })
       setTrainingStatus(data)
-      message.success(`${modelName === 'PROPHET' ? 'Prophet' : 'LSTM'} 重训练已启动`)
+      message.success('LSTM 重训练已启动')
     } catch (e: any) {
       message.error(e?.response?.data?.message || e.message || '重训练启动失败')
     } finally {
@@ -614,15 +614,17 @@ const ModelPanel = () => {
             title: '操作',
             key: 'actions',
             render: (_: any, row: any) => row.isActive === 1 ? <Tag color="green">已激活</Tag> : (
-              <Popconfirm
-                title="确认切换模型版本？"
-                description="系统会校验产物、原子加载 Flask 并进行健康检查；失败时保留旧运行模型。"
-                onConfirm={() => activateVersion(row.id)}
-                okText="确认"
-                cancelText="取消"
-              >
-                <Button size="small" icon={<RollbackOutlined />} loading={activating === row.id}>发布/回滚</Button>
-              </Popconfirm>
+              String(row.modelName || '').toUpperCase() === 'PROPHET' ? <Tag>历史兼容，只读</Tag> : (
+                <Popconfirm
+                  title="确认切换模型版本？"
+                  description="系统会校验产物、原子加载 Flask 并进行健康检查；失败时保留旧运行模型。"
+                  onConfirm={() => activateVersion(row.id)}
+                  okText="确认"
+                  cancelText="取消"
+                >
+                  <Button size="small" icon={<RollbackOutlined />} loading={activating === row.id}>发布/回滚</Button>
+                </Popconfirm>
+              )
             ),
           },
         ]}

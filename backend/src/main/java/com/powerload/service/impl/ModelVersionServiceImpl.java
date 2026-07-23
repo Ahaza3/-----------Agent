@@ -77,6 +77,9 @@ public class ModelVersionServiceImpl implements ModelVersionService {
         if (target == null) {
             throw new IllegalArgumentException("模型版本不存在: " + id);
         }
+        if ("PROPHET".equalsIgnoreCase(target.getModelName())) {
+            throw new IllegalStateException("Prophet 仅保留历史兼容，不支持新的产品训练或发布");
+        }
         if (target.getArtifactDir() == null || target.getArtifactChecksum() == null) {
             throw new IllegalStateException("LEGACY_UNVERIFIED: target has no verified immutable artifact");
         }
@@ -319,7 +322,7 @@ public class ModelVersionServiceImpl implements ModelVersionService {
     }
 
     private void runRetrain(String modelName, Long taskId) {
-        String script = "PROPHET".equals(modelName) ? "train_prophet.py" : "train_lstm.py";
+        String script = "train_lstm.py";
         Path workDir = resolveWorkDir();
         String pythonCommand = resolvePythonCommand(workDir);
         StringBuilder output = new StringBuilder();
@@ -330,11 +333,9 @@ public class ModelVersionServiceImpl implements ModelVersionService {
                 task.setDataEnd(data.end());
                 task.setSampleCount(data.sampleCount());
             });
-            List<String> trainingCommand = new java.util.ArrayList<>(List.of(pythonCommand, script, "--input", "featured_load_data.csv"));
-            if (!"PROPHET".equals(modelName)) {
-                trainingCommand.add("--output-root");
-                trainingCommand.add(resolveModelDir().toString());
-            }
+            List<String> trainingCommand = new java.util.ArrayList<>(
+                    List.of(pythonCommand, script, "--input", "featured_load_data.csv",
+                            "--output-root", resolveModelDir().toString()));
             ProcessBuilder pb = new ProcessBuilder(trainingCommand);
             pb.directory(workDir.toFile());
             pb.redirectErrorStream(true);
@@ -354,7 +355,7 @@ public class ModelVersionServiceImpl implements ModelVersionService {
                 return;
             }
             Map<String, String> artifacts = validateArtifacts(modelName, output.toString());
-            insertRetrainedVersion(modelName, output.toString());
+            insertRetrainedVersion(output.toString());
             finishTrainingTask(taskId, "SUCCESS", "训练完成，新版本已登记", output, artifacts);
             retrainJob.set(retrainJob.get().finish("SUCCESS", "训练完成，新版本已登记", tail(output)));
         } catch (Exception e) {
@@ -433,8 +434,7 @@ public class ModelVersionServiceImpl implements ModelVersionService {
         }
     }
 
-    private void insertRetrainedVersion(String normalizedModelName, String output) {
-        String displayName = "PROPHET".equals(normalizedModelName) ? "Prophet" : "LSTM";
+    private void insertRetrainedVersion(String output) {
         String artifactDir = artifactDirectoryFromOutput(output);
         ModelArtifactVerifier.ArtifactManifest verified = ModelArtifactVerifier.verify(resolveModelDir(), artifactDir);
         Path artifact = verified.directory().resolve("model.pt");
@@ -443,7 +443,7 @@ public class ModelVersionServiceImpl implements ModelVersionService {
                 new LambdaQueryWrapper<ModelVersion>().eq(ModelVersion::getIsActive, 1)) > 0;
 
         ModelVersion version = new ModelVersion();
-        version.setModelName(displayName);
+        version.setModelName("LSTM");
         version.setVersion(verified.modelVersion());
         version.setMape(extractMetric(output, MAPE_PATTERN));
         version.setRmse(extractMetric(output, RMSE_PATTERN));
@@ -452,7 +452,7 @@ public class ModelVersionServiceImpl implements ModelVersionService {
         version.setArtifactChecksum(verified.artifactChecksum());
         version.setRuntimeStatus("CANDIDATE");
         version.setHyperparams("{\"source\":\"MANUAL_RETRAIN\",\"script\":\""
-                + ("PROPHET".equals(normalizedModelName) ? "train_prophet.py" : "train_lstm.py") + "\"}");
+                + "train_lstm.py\"}");
         version.setIsActive(hasActive ? 0 : 1);
         version.setTrainedAt(now);
         version.setCreatedAt(now);
@@ -462,7 +462,7 @@ public class ModelVersionServiceImpl implements ModelVersionService {
     private Long createTrainingTask(String modelName, LocalDateTime startedAt) {
         if (trainingTaskMapper == null) return null;
         ModelTrainingTask task = new ModelTrainingTask();
-        task.setModelName("PROPHET".equals(modelName) ? "Prophet" : "LSTM");
+        task.setModelName("LSTM");
         task.setStatus("RUNNING");
         task.setStartedAt(startedAt);
         task.setCreatedAt(startedAt);
@@ -521,7 +521,7 @@ public class ModelVersionServiceImpl implements ModelVersionService {
         if ("LSTM".equals(normalized)) {
             return normalized;
         }
-        throw new IllegalArgumentException("modelName 仅支持 LSTM；Prophet 仅保留历史只读兼容");
+        throw new IllegalArgumentException("Prophet 仅保留历史兼容，不支持新的产品训练");
     }
 
     private boolean matchesRuntime(String modelName, String runtimeModel) {

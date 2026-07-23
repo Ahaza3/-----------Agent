@@ -89,6 +89,32 @@ class ModelVersionServiceImplTest {
     }
 
     @Test
+    void shouldRejectNewProphetTrainingWithExplicitCompatibilityMessage() {
+        IllegalArgumentException error = assertThrows(
+                IllegalArgumentException.class,
+                () -> service.startRetrain("PROPHET"));
+
+        assertEquals("Prophet 仅保留历史兼容，不支持新的产品训练", error.getMessage());
+        verifyNoInteractions(mapper, loadDataMapper, flaskInferenceService);
+    }
+
+    @Test
+    void shouldKeepHistoricalProphetVersionReadOnly() {
+        ModelVersion target = new ModelVersion();
+        target.setId(3L);
+        target.setModelName("Prophet");
+        when(mapper.selectById(3L)).thenReturn(target);
+
+        IllegalStateException error = assertThrows(
+                IllegalStateException.class,
+                () -> service.activate(3L, "request-1"));
+
+        assertEquals("Prophet 仅保留历史兼容，不支持新的产品训练或发布", error.getMessage());
+        verifyNoInteractions(flaskInferenceService);
+        verify(mapper, never()).updateById(any(ModelVersion.class));
+    }
+
+    @Test
     void shouldPreferUnixPythonInDockerEvenIfWindowsVenvExists() throws Exception {
         Path workDir = Files.createTempDirectory("ml-workdir");
         Path windowsVenv = workDir.resolve(".venv").resolve("Scripts");
