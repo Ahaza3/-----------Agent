@@ -12,6 +12,7 @@ spring:
 ml:
   service:
     url: ${ML_SERVICE_URL:http://ml-inference:5000}
+    internal-token: ${ML_INTERNAL_TOKEN:}
   model-dir: ${ML_MODEL_DIR:/app/ml/models}
   work-dir: ${ML_WORK_DIR:/app/ml}
 

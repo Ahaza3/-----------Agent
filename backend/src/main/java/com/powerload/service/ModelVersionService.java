@@ -13,7 +13,7 @@ public interface ModelVersionService {
 
     List<ModelVersion> listVersions();
 
-    ModelVersion activate(Long id);
+    Map<String, Object> activate(Long id, String requestId);
 
     List<ModelVersion> syncLocalArtifacts();
 

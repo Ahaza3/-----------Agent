@@ -440,25 +440,27 @@ const ModelPanel = () => {
   }, [refresh, trainingStatus?.status])
 
   const activeVersion = versions.find((item) => item.isActive === 1)
-  const runtimeModel = health?.flaskModel === 'torchscript'
+  const runtimeModel = health?.flaskRuntimeVersion || (health?.flaskModel === 'torchscript'
     ? 'LSTM (TorchScript)'
     : health?.flaskModel === 'prophet'
       ? 'Prophet'
       : health?.flaskModel && health.flaskModel !== 'UNKNOWN'
         ? health.flaskModel
-        : forecast?.model || ''
+        : forecast?.model || '')
   const runtimeModelType = health?.flaskModel === 'torchscript'
     ? 'LSTM'
     : health?.flaskModel === 'prophet'
       ? 'Prophet'
       : ''
+  const runtimeChecksumMismatch = Boolean(activeVersion?.artifactChecksum && health?.flaskRuntimeChecksum
+    && activeVersion.artifactChecksum !== health.flaskRuntimeChecksum)
   const runtimeTypeMismatch = Boolean(activeVersion && runtimeModelType && String(activeVersion.modelName).toUpperCase() !== runtimeModelType.toUpperCase())
   const runtimeEffectStatus = !activeVersion
     ? { color: 'default', label: '未发布' }
     : health?.flask !== 'UP'
       ? { color: 'red', label: '推理服务异常' }
-      : (activationNotice || runtimeTypeMismatch)
-        ? { color: 'gold', label: '待重启' }
+      : (activationNotice || runtimeTypeMismatch || runtimeChecksumMismatch)
+        ? { color: runtimeChecksumMismatch ? 'red' : 'gold', label: runtimeChecksumMismatch ? '校验失败' : '待切换' }
         : { color: 'green', label: '已生效' }
   const reviewChartOption = useMemo<EChartsOption>(() => {
     const points = Array.isArray(review?.series) ? review.series : []
@@ -485,17 +487,12 @@ const ModelPanel = () => {
   const activateVersion = async (id: number) => {
     setActivating(id)
     try {
-      const activated = await api.put(`/model/versions/${id}/activate`) as any
+      const activated = await api.put(`/model/versions/${id}/activate`, null, { headers: { 'X-Request-Id': crypto.randomUUID() } }) as any
       const activatedLabel = activated?.version
         ? `${activated.modelName} ${activated.version}`
         : '目标模型版本'
-      setActivationNotice(`数据库已切换为 ${activatedLabel}，Flask 尚未重载`)
-      message.success('数据库模型版本已切换')
-      Modal.warning({
-        title: '模型版本已切换，需要重启 Flask',
-        content: '当前切换已写入模型版本表，但 Flask 不会自动热加载模型文件。重启 Flask 前，实际推理仍使用进程启动时加载的模型。',
-        okText: '知道了',
-      })
+      setActivationNotice(null)
+      message.success(`${activatedLabel} 已验证、加载并生效`)
       await refresh()
     } catch (e: any) {
       message.error(e?.response?.data?.message || e.message || '模型版本切换失败')
@@ -537,7 +534,6 @@ const ModelPanel = () => {
           <Button icon={<HeartOutlined />} onClick={() => refresh()}>刷新</Button>
           <Button loading={syncing} onClick={syncVersions}>同步本地模型</Button>
           <Button loading={retraining === 'LSTM'} disabled={trainingStatus?.status === 'RUNNING'} onClick={() => startRetrain('LSTM')}>重训练 LSTM</Button>
-          <Button loading={retraining === 'PROPHET'} disabled={trainingStatus?.status === 'RUNNING'} onClick={() => startRetrain('PROPHET')}>重训练 Prophet</Button>
           <Button type="primary" icon={<RobotOutlined />} loading={triggering} onClick={async () => {
             setTriggering(true)
             try { await api.get('/predict/forecast'); message.success('预测已触发'); refresh() }
@@ -546,12 +542,12 @@ const ModelPanel = () => {
           }}>触发预测</Button>
         </Space>
       </div>
-      {(activationNotice || runtimeTypeMismatch) && (
+      {(activationNotice || runtimeTypeMismatch || runtimeChecksumMismatch) && (
         <Alert
           type="warning"
           showIcon
-          message={<span style={{ color: '#f6d365', fontWeight: 600 }}>{activationNotice || '数据库发布版本与 Flask 实际模型类型不一致'}</span>}
-          description={<span style={{ color: '#d9c99a' }}>表格中的“当前使用”表示数据库发布版本；上方“Flask 实际推理模型”表示当前进程内存中的模型。发布或回滚不会自动重载 Flask，完成切换后请重启 Flask 服务。</span>}
+          message={<span style={{ color: '#f6d365', fontWeight: 600 }}>{activationNotice || (runtimeChecksumMismatch ? '数据库与 Flask 校验和不一致' : '数据库发布版本与 Flask 实际模型不一致')}</span>}
+          description={<span style={{ color: '#d9c99a' }}>当前发布仅在 Flask 版本和产物校验和完全一致时显示为已生效。失败时旧运行模型保持服务。</span>}
           style={{ marginBottom: 12, background: '#2b2617', borderColor: '#75602b' }}
         />
       )}
@@ -559,6 +555,7 @@ const ModelPanel = () => {
         items={[
           { label: '数据库发布版本', children: activeVersion ? `${activeVersion.modelName} ${activeVersion.version}` : '未发布' },
           { label: 'Flask 实际推理模型', children: runtimeModel || '未获取' },
+          { label: 'Flask 校验和', children: health?.flaskRuntimeChecksum || 'LEGACY_UNVERIFIED' },
           { label: '模型生效状态', children: <Tag color={runtimeEffectStatus.color}>{runtimeEffectStatus.label}</Tag> },
           { label: '推理服务', children: <Tag color={health?.flask === 'UP' ? 'green' : 'red'}>{health?.flask === 'UP' ? '正常' : '异常'}</Tag> },
           { label: '训练 MAPE', children: activeVersion?.mape != null ? `${Number(activeVersion.mape).toFixed(2)}%` : 'N/A' },
@@ -609,7 +606,7 @@ const ModelPanel = () => {
         columns={[
           { title: '模型', dataIndex: 'modelName', key: 'modelName' },
           { title: '版本', dataIndex: 'version', key: 'version' },
-          { title: '状态', dataIndex: 'isActive', key: 'isActive', render: (v: number) => <Tag color={v === 1 ? 'green' : 'default'}>{v === 1 ? '当前使用' : '历史版本'}</Tag> },
+          { title: '状态', key: 'status', render: (_: any, row: any) => <Tag color={row.runtimeStatus === 'ACTIVE' ? 'green' : row.runtimeStatus === 'LEGACY_UNVERIFIED' ? 'default' : 'gold'}>{row.runtimeStatus || 'LEGACY_UNVERIFIED'}</Tag> },
           { title: 'MAPE', dataIndex: 'mape', key: 'mape', render: (v: number | null) => v == null ? 'N/A' : `${Number(v).toFixed(2)}%` },
           { title: 'RMSE', dataIndex: 'rmse', key: 'rmse', render: (v: number | null) => v == null ? 'N/A' : `${Number(v).toFixed(2)} MW` },
           { title: '训练时间', dataIndex: 'trainedAt', key: 'trainedAt', render: (v: string) => v ? dayjs(v).format('YYYY-MM-DD HH:mm') : 'N/A' },
@@ -619,7 +616,7 @@ const ModelPanel = () => {
             render: (_: any, row: any) => row.isActive === 1 ? <Tag color="green">已激活</Tag> : (
               <Popconfirm
                 title="确认切换模型版本？"
-                description="该操作只切换数据库发布版本，不会自动重载 Flask；确认后需要重启 Flask 服务。"
+                description="系统会校验产物、原子加载 Flask 并进行健康检查；失败时保留旧运行模型。"
                 onConfirm={() => activateVersion(row.id)}
                 okText="确认"
                 cancelText="取消"
