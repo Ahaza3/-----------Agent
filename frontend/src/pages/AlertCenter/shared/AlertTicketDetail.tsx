@@ -3,7 +3,7 @@
  * 展示：告警信息、阈值、AI 分析、工单状态、时间线、操作栏
  */
 import { useState, useEffect, useCallback } from 'react'
-import { Drawer, Descriptions, Tag, Spin, message, Empty, Button, Modal, Input } from 'antd'
+import { Drawer, Descriptions, Tag, Spin, message, Empty, Button, Modal, Input, Select, InputNumber } from 'antd'
 import {
   CheckCircleOutlined,
   ClockCircleOutlined,
@@ -16,11 +16,19 @@ import { ALERT_LEVEL_CONFIG } from '../../../types/alert'
 import type { AlertLevel } from '../../../types/alert'
 import type { Role } from '../../../config/roles'
 import * as ticketApi from '../../../services/ticketApi'
-import type { Ticket } from '../../../services/ticketApi'
+import type {
+  AlertClassification,
+  FeedbackEffectiveness,
+  RootCauseCode,
+  Ticket,
+  TicketFeedback,
+  TicketFeedbackPayload,
+} from '../../../services/ticketApi'
 import TicketTimeline from './TicketTimeline'
 import TicketActionBar from './TicketActionBar'
 import type { TimelineEntry } from './TicketTimeline'
 import { acknowledgeAlert } from '../../../services/alertApi'
+import { validateTicketFeedbackPayload } from '../../../utils/ticketFeedback'
 import './AlertTicketDetail.css'
 
 const STATUS: Record<string, { label: string; color: string }> = {
@@ -52,6 +60,41 @@ interface AlertInfo {
   aiAnalysis?: string
   suggestion?: string
 }
+
+const createEmptyFeedback = (): TicketFeedbackPayload => ({
+  alertClassification: 'TRUE_ALERT',
+  rootCauseCode: 'UNKNOWN',
+  rootCauseDetail: '',
+  actionsTaken: [],
+  actionDetail: '',
+  impactLoadMw: 0,
+  effectiveness: 'NOT_APPLICABLE',
+})
+
+const CLASSIFICATION_OPTIONS: { label: string; value: AlertClassification }[] = [
+  { label: '真实告警', value: 'TRUE_ALERT' },
+  { label: '误报', value: 'FALSE_POSITIVE' },
+  { label: '重复告警', value: 'DUPLICATE' },
+  { label: '测试告警', value: 'TEST' },
+  { label: '无法判断', value: 'INCONCLUSIVE' },
+]
+
+const ROOT_CAUSE_OPTIONS: { label: string; value: RootCauseCode }[] = [
+  { label: '设备', value: 'EQUIPMENT' },
+  { label: '数据质量', value: 'DATA_QUALITY' },
+  { label: '天气', value: 'WEATHER' },
+  { label: '负荷变化', value: 'LOAD_CHANGE' },
+  { label: '规则配置', value: 'RULE_CONFIG' },
+  { label: '拓扑模拟', value: 'TOPOLOGY_SIMULATION' },
+  { label: '未知', value: 'UNKNOWN' },
+]
+
+const EFFECTIVENESS_OPTIONS: { label: string; value: FeedbackEffectiveness }[] = [
+  { label: '有效', value: 'EFFECTIVE' },
+  { label: '部分有效', value: 'PARTIAL' },
+  { label: '无效', value: 'INEFFECTIVE' },
+  { label: '不适用', value: 'NOT_APPLICABLE' },
+]
 
 /** 工单报告生成器 */
 const ReportGenerator = ({ ticketId, currentResolution }: { ticketId: number; currentResolution?: string }) => {
@@ -139,12 +182,17 @@ const AlertTicketDetail = ({
   const [ticket, setTicket] = useState<Ticket | null>(initialTicket)
   const [actions, setActions] = useState<TimelineEntry[]>([])
   const [loading, setLoading] = useState(false)
+  const [feedback, setFeedback] = useState<TicketFeedback | null>(null)
+  const [feedbackModalOpen, setFeedbackModalOpen] = useState(false)
+  const [feedbackLoading, setFeedbackLoading] = useState(false)
+  const [feedbackForm, setFeedbackForm] = useState<TicketFeedbackPayload>(createEmptyFeedback)
   const ticketId = ticket?.id
 
   // 同步外部 ticket 变化
   useEffect(() => {
     setTicket(initialTicket)
     setActions([])
+    setFeedback(null)
   }, [initialTicket])
 
   // 加载工单操作时间线
@@ -161,6 +209,16 @@ const AlertTicketDetail = ({
       } catch { setActions([]) }
     }
     load()
+  }, [ticketId, open])
+
+  useEffect(() => {
+    if (!ticketId || !open) {
+      setFeedback(null)
+      return
+    }
+    ticketApi.fetchTicketFeedback(ticketId)
+      .then(setFeedback)
+      .catch(() => setFeedback(null))
   }, [ticketId, open])
 
   // 加载智能研判
@@ -239,15 +297,49 @@ const AlertTicketDetail = ({
 
   const handleClose = useCallback(async () => {
     if (!ticket) return
-    setLoading(true)
+    const current = feedback && feedback.feedbackStatus === 'COMPLETED'
+      ? {
+          alertClassification: feedback.alertClassification || 'TRUE_ALERT',
+          rootCauseCode: feedback.rootCauseCode || 'UNKNOWN',
+          rootCauseDetail: feedback.rootCauseDetail || '',
+          actionsTaken: feedback.actionsTaken || [],
+          actionDetail: feedback.actionDetail || '',
+          impactLoadMw: feedback.impactLoadMw ?? 0,
+          effectiveness: feedback.effectiveness || 'NOT_APPLICABLE',
+        }
+      : createEmptyFeedback()
+    setFeedbackForm(current)
+    setFeedbackModalOpen(true)
+  }, [feedback, ticket])
+
+  const handleFeedbackAndClose = async () => {
+    if (!ticket) return
+    const form = feedbackForm
+    const validationError = validateTicketFeedbackPayload(form)
+    if (validationError) {
+      message.warning(validationError)
+      return
+    }
+
+    setFeedbackLoading(true)
     try {
-      const updated = await ticketApi.closeTicket(ticket.id)
-      setTicket(updated)
-      onTicketUpdated(updated)
-      message.success('工单已关闭')
-    } catch (e: any) { message.error(e?.response?.data?.message || '操作失败') }
-    finally { setLoading(false) }
-  }, [ticket, onTicketUpdated])
+      const saved = await ticketApi.saveTicketFeedback(ticket.id, form)
+      setFeedback(saved)
+      try {
+        const updated = await ticketApi.closeTicket(ticket.id)
+        setTicket(updated)
+        onTicketUpdated(updated)
+        setFeedbackModalOpen(false)
+        message.success('反馈已保存，工单已关闭')
+      } catch (e: any) {
+        message.error(e?.response?.data?.message || '反馈已保存，但工单关闭失败，请重试')
+      }
+    } catch (e: any) {
+      message.error(e?.response?.data?.message || '反馈保存失败')
+    } finally {
+      setFeedbackLoading(false)
+    }
+  }
 
   const handleCancel = useCallback(async () => {
     if (!ticket) return
@@ -451,6 +543,37 @@ const AlertTicketDetail = ({
               ]}
             />
 
+            <section style={{ marginBottom: 12, padding: 12, border: '1px solid #2A2A2A', background: '#0c0c0c' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <strong style={{ color: '#ddd', fontSize: 12 }}>结构化处置反馈</strong>
+                {feedback?.feedbackStatus === 'LEGACY_MISSING'
+                  ? <Tag color="gold">LEGACY_MISSING</Tag>
+                  : feedback?.feedbackStatus === 'COMPLETED'
+                    ? <Tag color="green">已提交</Tag>
+                    : <Tag>待补充</Tag>}
+              </div>
+              {feedback?.feedbackStatus === 'COMPLETED' ? (
+                <Descriptions size="small" column={1}>
+                  <Descriptions.Item label="告警分类">{feedback.alertClassification}</Descriptions.Item>
+                  <Descriptions.Item label="根因分类">
+                    {feedback.rootCauseCode}{feedback.rootCauseDetail ? `：${feedback.rootCauseDetail}` : ''}
+                  </Descriptions.Item>
+                  <Descriptions.Item label="处置措施">{feedback.actionsTaken.join('、')}</Descriptions.Item>
+                  <Descriptions.Item label="影响负荷">{feedback.impactLoadMw ?? 0} MW</Descriptions.Item>
+                  <Descriptions.Item label="处置效果">{feedback.effectiveness}</Descriptions.Item>
+                  <Descriptions.Item label="处理人/复核人">
+                    {feedback.operatorName || '--'} / {feedback.reviewerName || '待复核'}
+                  </Descriptions.Item>
+                </Descriptions>
+              ) : ticket.status === 'RESOLVED' ? (
+                <div style={{ color: '#FAAD14', fontSize: 12 }}>关闭前必须补充完整反馈，提交后由调度员复核关闭。</div>
+              ) : ticket.status === 'CLOSED' ? (
+                <div style={{ color: '#999', fontSize: 12 }}>历史关闭工单没有结构化反馈，不要求补填。</div>
+              ) : (
+                <div style={{ color: '#999', fontSize: 12 }}>工单解决后填写反馈。</div>
+              )}
+            </section>
+
             {/* 操作栏 */}
             <TicketActionBar
               role={role}
@@ -468,6 +591,67 @@ const AlertTicketDetail = ({
             {(role === 'OPERATOR' || role === 'SYSTEM_ADMIN') && (
               <ReportGenerator ticketId={ticket.id} currentResolution={ticket.resolution} />
             )}
+
+            <Modal
+              title="关闭前填写结构化反馈"
+              open={feedbackModalOpen}
+              onCancel={() => setFeedbackModalOpen(false)}
+              onOk={handleFeedbackAndClose}
+              okText="保存反馈并关闭"
+              confirmLoading={feedbackLoading}
+              width={560}
+            >
+              <div style={{ display: 'grid', gap: 12 }}>
+                <Select
+                  value={feedbackForm.alertClassification}
+                  options={CLASSIFICATION_OPTIONS}
+                  onChange={(value) => setFeedbackForm((prev) => ({ ...prev, alertClassification: value }))}
+                  placeholder="告警分类"
+                />
+                <Select
+                  value={feedbackForm.rootCauseCode}
+                  options={ROOT_CAUSE_OPTIONS}
+                  onChange={(value) => setFeedbackForm((prev) => ({ ...prev, rootCauseCode: value }))}
+                  placeholder="根因分类"
+                />
+                <Input
+                  value={feedbackForm.rootCauseDetail}
+                  onChange={(e) => setFeedbackForm((prev) => ({ ...prev, rootCauseDetail: e.target.value }))}
+                  placeholder="根因说明；选择“未知”时必填"
+                  maxLength={1000}
+                />
+                <Select
+                  mode="tags"
+                  value={feedbackForm.actionsTaken}
+                  onChange={(value) => setFeedbackForm((prev) => ({ ...prev, actionsTaken: value.slice(0, 20) }))}
+                  placeholder="输入结构化处置措施后回车，至少一项"
+                  tokenSeparators={[',', '，']}
+                  maxTagCount={6}
+                />
+                <Input.TextArea
+                  value={feedbackForm.actionDetail}
+                  onChange={(e) => setFeedbackForm((prev) => ({ ...prev, actionDetail: e.target.value }))}
+                  placeholder="处置说明；影响负荷为0时必须写明“无影响”"
+                  maxLength={2000}
+                  rows={3}
+                />
+                <InputNumber
+                  style={{ width: '100%' }}
+                  min={0}
+                  precision={3}
+                  value={feedbackForm.impactLoadMw}
+                  onChange={(value) => setFeedbackForm((prev) => ({ ...prev, impactLoadMw: value ?? 0 }))}
+                  addonAfter="MW"
+                  placeholder="影响负荷"
+                />
+                <Select
+                  value={feedbackForm.effectiveness}
+                  options={EFFECTIVENESS_OPTIONS}
+                  onChange={(value) => setFeedbackForm((prev) => ({ ...prev, effectiveness: value }))}
+                  placeholder="处置效果"
+                />
+              </div>
+            </Modal>
           </>
         )}
 

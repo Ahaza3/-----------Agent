@@ -5,12 +5,17 @@ import com.powerload.common.R;
 import com.powerload.dto.request.CreateTicketRequest;
 import com.powerload.dto.request.CreatePrewarningTicketRequest;
 import com.powerload.dto.request.TicketAssignRequest;
+import com.powerload.dto.request.TicketFeedbackMetricsFilter;
+import com.powerload.dto.request.TicketFeedbackRequest;
 import com.powerload.dto.request.TicketResolveRequest;
 import com.powerload.dto.response.AssigneeInfo;
+import com.powerload.dto.response.TicketFeedbackMetricsResponse;
+import com.powerload.dto.response.TicketFeedbackResponse;
 import com.powerload.entity.AlertTicket;
 import com.powerload.entity.AlertTicketAction;
 import com.powerload.security.SysUserPrincipal;
 import com.powerload.service.TicketService;
+import com.powerload.service.TicketFeedbackService;
 import com.powerload.ticket.TicketReportService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -27,6 +32,7 @@ import java.util.Map;
 public class TicketController {
 
     private final TicketService ticketService;
+    private final TicketFeedbackService ticketFeedbackService;
     private final TicketReportService ticketReportService;
 
     /* ─── Query ─── */
@@ -58,6 +64,25 @@ public class TicketController {
     @GetMapping("/tickets/{id}/actions")
     public R<List<AlertTicketAction>> actions(@PathVariable Long id) {
         return R.ok(ticketService.getActions(id));
+    }
+
+    @GetMapping("/tickets/{id}/feedback")
+    public R<TicketFeedbackResponse> feedback(@PathVariable Long id) {
+        return R.ok(ticketFeedbackService.getFeedback(id));
+    }
+
+    @PutMapping("/tickets/{id}/feedback")
+    @PreAuthorize("hasAnyRole('OPERATOR','SYSTEM_ADMIN')")
+    public R<TicketFeedbackResponse> saveFeedback(@PathVariable Long id,
+                                                   @Valid @RequestBody TicketFeedbackRequest request,
+                                                   @AuthenticationPrincipal SysUserPrincipal user) {
+        return R.ok(ticketFeedbackService.save(id, request, user));
+    }
+
+    @GetMapping("/tickets/feedback/metrics")
+    public R<TicketFeedbackMetricsResponse> feedbackMetrics(
+            @ModelAttribute TicketFeedbackMetricsFilter filter) {
+        return R.ok(ticketFeedbackService.metrics(filter));
     }
 
     /* ─── Write ─── */

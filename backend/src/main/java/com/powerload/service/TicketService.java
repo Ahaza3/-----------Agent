@@ -31,13 +31,24 @@ public class TicketService {
     private final SysUserMapper sysUserMapper;
     private final PushService pushService;
     private final GridTopologyService gridTopologyService;
+    private final TicketFeedbackService ticketFeedbackService;
 
     public TicketService(AlertTicketMapper ticketMapper,
                          AlertTicketActionMapper actionMapper,
                          AlertEventMapper alertEventMapper,
                          SysUserMapper sysUserMapper,
                          PushService pushService) {
-        this(ticketMapper, actionMapper, alertEventMapper, sysUserMapper, pushService, null);
+        this(ticketMapper, actionMapper, alertEventMapper, sysUserMapper, pushService, null, null);
+    }
+
+    public TicketService(AlertTicketMapper ticketMapper,
+                         AlertTicketActionMapper actionMapper,
+                         AlertEventMapper alertEventMapper,
+                         SysUserMapper sysUserMapper,
+                         PushService pushService,
+                         GridTopologyService gridTopologyService) {
+        this(ticketMapper, actionMapper, alertEventMapper, sysUserMapper, pushService,
+                gridTopologyService, null);
     }
 
     @Autowired
@@ -46,13 +57,15 @@ public class TicketService {
                          AlertEventMapper alertEventMapper,
                          SysUserMapper sysUserMapper,
                          PushService pushService,
-                         GridTopologyService gridTopologyService) {
+                         GridTopologyService gridTopologyService,
+                         TicketFeedbackService ticketFeedbackService) {
         this.ticketMapper = ticketMapper;
         this.actionMapper = actionMapper;
         this.alertEventMapper = alertEventMapper;
         this.sysUserMapper = sysUserMapper;
         this.pushService = pushService;
         this.gridTopologyService = gridTopologyService;
+        this.ticketFeedbackService = ticketFeedbackService;
     }
 
     private static final Map<String, Set<String>> ALLOWED = Map.of(
@@ -277,11 +290,30 @@ public class TicketService {
     @Transactional
     @AuditLog(module = "工单管理", action = "关闭工单")
     public AlertTicket close(Long ticketId, SysUserPrincipal user) {
-        AlertTicket t = validate(ticketId, "CLOSED", user);
+        if (user == null || !Set.of("DISPATCHER", "SYSTEM_ADMIN").contains(user.getRole())) {
+            throw new IllegalStateException("只有调度员或系统管理员可以关闭工单");
+        }
+        AlertTicket t = ticketMapper.selectById(ticketId);
+        if (t == null) throw new IllegalArgumentException("工单不存在");
+        if ("CLOSED".equals(t.getStatus())) {
+            return t;
+        }
+        if ("CANCELLED".equals(t.getStatus())) {
+            throw new IllegalStateException("工单已取消，不可关闭");
+        }
+        if (!"RESOLVED".equals(t.getStatus())) {
+            throw new IllegalStateException("只有已解决工单可以关闭");
+        }
+        if (ticketFeedbackService != null) {
+            TicketFeedback feedback = ticketFeedbackService.requireCompleteForClose(t, user);
+            ticketFeedbackService.markReviewed(feedback, user);
+        }
         String from = t.getStatus();
         t.setClosedAt(LocalDateTime.now()); t.setStatus("CLOSED");
-        ticketMapper.updateById(t);
-        addAction(ticketId, "CLOSE", from, "CLOSED", user, "确认处置完成并关闭");
+        if (ticketMapper.updateById(t) != 1) {
+            throw new IllegalStateException("工单已被其他用户更新，请刷新后重试");
+        }
+        addAction(ticketId, "CLOSE", from, "CLOSED", user, "复核反馈完整并确认处置完成");
         pushUpdate(t, "ticket_closed");
         return t;
     }

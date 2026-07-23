@@ -1,0 +1,26 @@
+CREATE TABLE ticket_feedback (
+    id                    BIGINT PRIMARY KEY AUTO_INCREMENT,
+    ticket_id             BIGINT NOT NULL COMMENT '工单ID，一对一',
+    alert_id              BIGINT NULL COMMENT '真实告警ID；预警工单为空',
+    source_type           VARCHAR(20) NOT NULL COMMENT 'ALERT/PREWARNING/MANUAL/SYSTEM',
+    alert_classification  VARCHAR(24) NOT NULL COMMENT 'TRUE_ALERT/FALSE_POSITIVE/DUPLICATE/TEST/INCONCLUSIVE',
+    root_cause_code       VARCHAR(32) NOT NULL COMMENT 'EQUIPMENT/DATA_QUALITY/WEATHER/LOAD_CHANGE/RULE_CONFIG/TOPOLOGY_SIMULATION/UNKNOWN',
+    root_cause_detail     VARCHAR(1000) NULL,
+    actions_taken         JSON NOT NULL COMMENT '结构化处置措施数组',
+    action_detail         VARCHAR(2000) NULL,
+    impact_load_mw        DECIMAL(12,3) NOT NULL COMMENT '影响负荷，非负；无影响使用0',
+    effectiveness         VARCHAR(24) NOT NULL COMMENT 'EFFECTIVE/PARTIAL/INEFFECTIVE/NOT_APPLICABLE',
+    operator_user_id      BIGINT NOT NULL,
+    operator_name         VARCHAR(100) NOT NULL,
+    reviewer_user_id      BIGINT NULL,
+    reviewer_name         VARCHAR(100) NULL,
+    reviewed_at           DATETIME NULL,
+    created_at            DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at            DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+    UNIQUE INDEX uk_ticket_feedback_ticket (ticket_id),
+    INDEX idx_ticket_feedback_alert (alert_id),
+    INDEX idx_ticket_feedback_classification (alert_classification),
+    INDEX idx_ticket_feedback_root_cause (root_cause_code),
+    INDEX idx_ticket_feedback_reviewer (reviewer_user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='工单关闭前结构化处置反馈';

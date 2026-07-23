@@ -51,6 +51,42 @@ export interface TicketAction {
   createdAt: string
 }
 
+export type AlertClassification = 'TRUE_ALERT' | 'FALSE_POSITIVE' | 'DUPLICATE' | 'TEST' | 'INCONCLUSIVE'
+export type RootCauseCode = 'EQUIPMENT' | 'DATA_QUALITY' | 'WEATHER' | 'LOAD_CHANGE' | 'RULE_CONFIG' | 'TOPOLOGY_SIMULATION' | 'UNKNOWN'
+export type FeedbackEffectiveness = 'EFFECTIVE' | 'PARTIAL' | 'INEFFECTIVE' | 'NOT_APPLICABLE'
+
+export interface TicketFeedback {
+  ticketId: number
+  alertId: number | null
+  sourceType: string
+  feedbackStatus: 'MISSING' | 'COMPLETED' | 'LEGACY_MISSING'
+  alertClassification: AlertClassification | null
+  rootCauseCode: RootCauseCode | null
+  rootCauseDetail: string | null
+  actionsTaken: string[]
+  actionDetail: string | null
+  impactLoadMw: number | null
+  effectiveness: FeedbackEffectiveness | null
+  operatorUserId: number | null
+  operatorName: string | null
+  reviewerUserId: number | null
+  reviewerName: string | null
+  reviewedAt: string | null
+  createdAt: string | null
+  updatedAt: string | null
+  alertEvidence?: Record<string, unknown>
+}
+
+export interface TicketFeedbackPayload {
+  alertClassification: AlertClassification
+  rootCauseCode: RootCauseCode
+  rootCauseDetail?: string
+  actionsTaken: string[]
+  actionDetail?: string
+  impactLoadMw: number
+  effectiveness: FeedbackEffectiveness
+}
+
 export interface TicketListParams {
   status?: string
   priority?: string
@@ -83,6 +119,14 @@ export function fetchTicketDetail(id: number): Promise<Ticket> {
 /* ─── 工单操作记录 ─── */
 export function fetchTicketActions(id: number): Promise<TicketAction[]> {
   return api.get(`/tickets/${id}/actions`)
+}
+
+export function fetchTicketFeedback(id: number): Promise<TicketFeedback> {
+  return api.get(`/tickets/${id}/feedback`)
+}
+
+export function saveTicketFeedback(id: number, payload: TicketFeedbackPayload): Promise<TicketFeedback> {
+  return api.put(`/tickets/${id}/feedback`, payload)
 }
 
 /* ─── 通过告警 ID 获取工单 ─── */
