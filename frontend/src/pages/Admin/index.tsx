@@ -13,7 +13,7 @@ import type { EChartsOption } from 'echarts'
 import ReactECharts from 'echarts-for-react'
 import api from '../../services/api'
 import { Popconfirm } from 'antd'
-import { fetchAlertRules } from '../../services/alertApi'
+import { fetchAlertDeliveryMetrics, fetchAlertRules, type AlertDeliveryMetrics } from '../../services/alertApi'
 import useAuthStore from '../../stores/useAuthStore'
 import { getAdminTabs } from '../../config/roles'
 import type { Role } from '../../config/roles'
@@ -734,22 +734,25 @@ const OverviewPanel = () => {
   const [users, setUsers] = useState<any[]>([])
   const [forecast, setForecast] = useState<any>(null)
   const [logs, setLogs] = useState<any[]>([])
+  const [deliveryMetrics, setDeliveryMetrics] = useState<AlertDeliveryMetrics | null>(null)
   const [error, setError] = useState('')
 
   const refresh = useCallback(async () => {
     setLoading(true)
     setError('')
     try {
-      const [h, u, f, l] = await Promise.allSettled([
+      const [h, u, f, l, d] = await Promise.allSettled([
         api.get('/system/health'),
         api.get('/system/users'),
         api.get('/predict/forecast'),
         api.get('/system/logs', { params: { page: 1, size: 5, result: 'FAILURE' } }),
+        fetchAlertDeliveryMetrics(),
       ])
       setHealth(h.status === 'fulfilled' ? h.value : null)
       setUsers(u.status === 'fulfilled' ? (u.value as any) : [])
       setForecast(f.status === 'fulfilled' ? f.value : null)
       setLogs(l.status === 'fulfilled' ? (l.value as any)?.records || [] : [])
+      setDeliveryMetrics(d.status === 'fulfilled' ? d.value : null)
     } catch {
       setError('加载失败')
     } finally { setLoading(false) }
@@ -795,6 +798,21 @@ const OverviewPanel = () => {
           </>
         )}
         {!health && <Tag color="default">服务状态不可用</Tag>}
+      </div>
+
+      <h4 style={{ color: '#888', fontSize: 11, marginBottom: 8 }}>告警呈现延迟</h4>
+      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 16 }}>
+        {deliveryMetrics?.deliverySamples ? (
+          <>
+            <span style={{ color: '#888' }}>样本: <b style={{ color: WHITE }}>{deliveryMetrics.deliverySamples}</b></span>
+            <span style={{ color: '#888' }}>P50: <b style={{ color: '#69B1FF' }}>{deliveryMetrics.p50LatencyMs} ms</b></span>
+            <span style={{ color: '#888' }}>P95: <b style={{ color: '#FAAD14' }}>{deliveryMetrics.p95LatencyMs} ms</b></span>
+            <span style={{ color: '#888' }}>最大: <b style={{ color: '#D85C5C' }}>{deliveryMetrics.maxLatencyMs} ms</b></span>
+            <span style={{ color: '#666' }}>排除旧数据 {deliveryMetrics.excludedLegacyCount}，异常 {deliveryMetrics.excludedInvalidCount}</span>
+          </>
+        ) : (
+          <span style={{ color: '#666', fontSize: 12 }}>暂无呈现确认样本</span>
+        )}
       </div>
 
       {/* 用户统计 */}

@@ -1,15 +1,13 @@
 package com.powerload.scheduler;
 
 import com.powerload.alert.AlertJudgementService;
-import com.powerload.alert.AlertTemplate;
-import com.powerload.alert.ThresholdDetector;
+import com.powerload.alert.AlertRuntimeResult;
+import com.powerload.alert.AlertRuntimeStateService;
 import com.powerload.dto.response.RealtimeLoadPoint;
 import com.powerload.entity.AlertEvent;
 import com.powerload.entity.AlertRule;
-import com.powerload.service.AlertEventService;
 import com.powerload.service.AlertRuleService;
 import com.powerload.service.RealtimeLoadService;
-import com.powerload.service.TicketService;
 import com.powerload.websocket.PushService;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.context.ApplicationEventPublisher;
@@ -25,7 +23,6 @@ import static org.mockito.Mockito.*;
 class AlertSchedulerTest {
 
     private RealtimeLoadService realtimeLoadService;
-    private AlertEventService alertEventService;
     private PushService pushService;
     private AlertScheduler scheduler;
 
@@ -33,7 +30,7 @@ class AlertSchedulerTest {
     void setUp() {
         realtimeLoadService = mock(RealtimeLoadService.class);
         AlertRuleService alertRuleService = mock(AlertRuleService.class);
-        alertEventService = mock(AlertEventService.class);
+        AlertRuntimeStateService runtimeStateService = mock(AlertRuntimeStateService.class);
         pushService = mock(PushService.class);
 
         AlertRule rule = new AlertRule();
@@ -41,20 +38,22 @@ class AlertSchedulerTest {
         rule.setConfig("{\"threshold\":1100,\"yellowRatio\":0.9,\"orangeRatio\":1.0,"
                 + "\"redRatio\":1.1,\"coolingTime\":0}");
         when(alertRuleService.listActive()).thenReturn(List.of(rule));
-        when(alertEventService.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(runtimeStateService.evaluate(any(), any())).thenAnswer(invocation -> {
+            RealtimeLoadPoint point = invocation.getArgument(1);
+            if (point.getLoadMw() < 1000) return AlertRuntimeResult.unchanged();
+            AlertEvent event = new AlertEvent();
+            event.setLevel(point.getLoadMw() >= 1200 ? "RED" : point.getLoadMw() >= 1100 ? "ORANGE" : "YELLOW");
+            return new AlertRuntimeResult(event);
+        });
 
         ApplicationEventPublisher eventPublisher = mock(ApplicationEventPublisher.class);
         AlertJudgementService judgementService = mock(AlertJudgementService.class);
-        TicketService ticketService = mock(TicketService.class);
         scheduler = new AlertScheduler(
                 realtimeLoadService,
                 alertRuleService,
-                alertEventService,
-                new ThresholdDetector(),
-                new AlertTemplate(),
+                runtimeStateService,
                 pushService,
                 judgementService,
-                ticketService,
                 eventPublisher);
     }
 
@@ -69,9 +68,8 @@ class AlertSchedulerTest {
         checkAt(1020); // new cycle: yellow again
 
         ArgumentCaptor<AlertEvent> events = ArgumentCaptor.forClass(AlertEvent.class);
-        verify(alertEventService, times(4)).save(events.capture());
-        verify(pushService, times(4)).pushAlert(any(AlertEvent.class));
-        assertEquals(List.of("YELLOW", "ORANGE", "RED", "YELLOW"),
+        verify(pushService, times(5)).pushAlert(events.capture());
+        assertEquals(List.of("YELLOW", "ORANGE", "RED", "ORANGE", "YELLOW"),
                 events.getAllValues().stream().map(AlertEvent::getLevel).toList());
     }
 

@@ -3,13 +3,18 @@ package com.powerload.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.powerload.entity.AlertEvent;
+import com.powerload.entity.AlertDeliveryMetric;
+import com.powerload.dto.request.AlertDeliveryAckRequest;
+import com.powerload.dto.response.AlertDeliveryMetricsResponse;
 import com.powerload.mapper.AlertEventMapper;
+import com.powerload.mapper.AlertDeliveryMetricMapper;
 import com.powerload.security.SysUserPrincipal;
 import com.powerload.service.AlertEventService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.dao.DuplicateKeyException;
 
 import java.time.LocalDateTime;
 import java.time.Duration;
@@ -25,6 +30,7 @@ import java.util.Map;
 public class AlertEventServiceImpl implements AlertEventService {
 
     private final AlertEventMapper alertEventMapper;
+    private final AlertDeliveryMetricMapper alertDeliveryMetricMapper;
 
     @Override
     public Page<AlertEvent> query(int page, int size, String level,
@@ -46,7 +52,11 @@ public class AlertEventServiceImpl implements AlertEventService {
             wrapper.eq(AlertEvent::getType, type);
         }
         if (status != null && !status.isEmpty()) {
-            wrapper.eq(AlertEvent::getStatus, status);
+            if ("RECOVERED".equals(status)) {
+                wrapper.isNotNull(AlertEvent::getRecoveredAt);
+            } else {
+                wrapper.eq(AlertEvent::getStatus, status);
+            }
         }
         if (keyword != null && !keyword.isBlank()) {
             String normalizedKeyword = keyword.trim();
@@ -220,6 +230,67 @@ public class AlertEventServiceImpl implements AlertEventService {
         result.put("averageAckMinutes", ackMinutes);
         result.put("averageRecoveryMinutes", recoveryMinutes);
         return result;
+    }
+
+    @Override
+    @Transactional
+    public AlertDeliveryMetric acknowledgeDelivery(Long alertId, SysUserPrincipal user, AlertDeliveryAckRequest request) {
+        if (user == null || user.getUserId() == null) throw new IllegalStateException("authentication required");
+        AlertEvent alert = alertEventMapper.selectById(alertId);
+        if (alert == null) throw new IllegalArgumentException("告警不存在: " + alertId);
+        AlertDeliveryMetric existing = alertDeliveryMetricMapper.selectOne(new LambdaQueryWrapper<AlertDeliveryMetric>()
+                .eq(AlertDeliveryMetric::getAlertId, alertId).eq(AlertDeliveryMetric::getUserId, user.getUserId()));
+        if (existing != null) return existing;
+
+        LocalDateTime receivedAt = LocalDateTime.now();
+        AlertDeliveryMetric metric = new AlertDeliveryMetric();
+        metric.setAlertId(alertId); metric.setUserId(user.getUserId()); metric.setUsername(user.getUsername()); metric.setRole(user.getRole());
+        metric.setClientSessionId(request == null ? null : request.getClientSessionId());
+        metric.setClientRenderedAt(request == null ? null : request.getClientRenderedAt());
+        metric.setAckReceivedAt(receivedAt); metric.setCreatedAt(receivedAt);
+        if (alert.getSourceObservedAt() == null) {
+            metric.setInvalidReason("LEGACY_EVIDENCE_MISSING");
+        } else {
+            long latency = Duration.between(alert.getSourceObservedAt(), receivedAt).toMillis();
+            if (latency < 0) metric.setInvalidReason("CLOCK_SKEW"); else metric.setLatencyMs(latency);
+        }
+        try {
+            alertDeliveryMetricMapper.insert(metric);
+            return metric;
+        } catch (DuplicateKeyException e) {
+            return alertDeliveryMetricMapper.selectOne(new LambdaQueryWrapper<AlertDeliveryMetric>()
+                    .eq(AlertDeliveryMetric::getAlertId, alertId).eq(AlertDeliveryMetric::getUserId, user.getUserId()));
+        }
+    }
+
+    @Override
+    public AlertDeliveryMetricsResponse deliveryMetrics(LocalDateTime start, LocalDateTime end, Long nodeId) {
+        List<AlertDeliveryMetric> rows = alertDeliveryMetricMapper.selectList(new LambdaQueryWrapper<AlertDeliveryMetric>()
+                .ge(start != null, AlertDeliveryMetric::getAckReceivedAt, start)
+                .lt(end != null, AlertDeliveryMetric::getAckReceivedAt, end)
+                .orderByAsc(AlertDeliveryMetric::getLatencyMs));
+        List<Long> valid = new ArrayList<>();
+        long legacy = 0, invalid = 0;
+        for (AlertDeliveryMetric row : rows) {
+            AlertEvent event = alertEventMapper.selectById(row.getAlertId());
+            if (event == null || (nodeId != null && !nodeId.equals(event.getNodeId()))) continue;
+            if (row.getLatencyMs() != null && row.getLatencyMs() >= 0) valid.add(row.getLatencyMs());
+            else if ("LEGACY_EVIDENCE_MISSING".equals(row.getInvalidReason())) legacy++;
+            else invalid++;
+        }
+        valid.sort(Long::compareTo);
+        AlertDeliveryMetricsResponse result = new AlertDeliveryMetricsResponse();
+        result.setStartTime(start); result.setEndTime(end); result.setNodeId(nodeId); result.setDeliverySamples(valid.size());
+        result.setExcludedLegacyCount(legacy); result.setExcludedInvalidCount(invalid);
+        if (!valid.isEmpty()) {
+            result.setP50LatencyMs(nearestRank(valid, .50)); result.setP95LatencyMs(nearestRank(valid, .95));
+            result.setMaxLatencyMs(valid.get(valid.size() - 1));
+        }
+        return result;
+    }
+
+    private long nearestRank(List<Long> sorted, double percentile) {
+        return sorted.get((int) Math.ceil(percentile * sorted.size()) - 1);
     }
 
     private long countLevel(List<AlertEvent> events, String level) {

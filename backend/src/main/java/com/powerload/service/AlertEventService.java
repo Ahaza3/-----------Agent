@@ -3,6 +3,9 @@ package com.powerload.service;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.powerload.entity.AlertEvent;
 import com.powerload.security.SysUserPrincipal;
+import com.powerload.dto.request.AlertDeliveryAckRequest;
+import com.powerload.dto.response.AlertDeliveryMetricsResponse;
+import com.powerload.entity.AlertDeliveryMetric;
 
 import java.time.LocalDateTime;
 import java.util.Map;
@@ -62,4 +65,8 @@ public interface AlertEventService {
 
     /** 查询指定时间范围内的告警运营指标 */
     Map<String, Object> metrics(LocalDateTime start, LocalDateTime end);
+
+    AlertDeliveryMetric acknowledgeDelivery(Long alertId, SysUserPrincipal user, AlertDeliveryAckRequest request);
+
+    AlertDeliveryMetricsResponse deliveryMetrics(LocalDateTime start, LocalDateTime end, Long nodeId);
 }

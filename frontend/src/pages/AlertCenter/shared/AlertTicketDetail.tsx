@@ -46,6 +46,7 @@ interface AlertInfo {
   thresholdValue: number
   triggerTime: string
   status?: 'ACTIVE' | 'ACKNOWLEDGED' | 'RECOVERED'
+  recoveredAt?: string | null
   acknowledgedAt?: string | null
   acknowledgedByName?: string | null
   aiAnalysis?: string
@@ -304,7 +305,7 @@ const AlertTicketDetail = ({
               </p>
             </div>
             <span className="alert-detail-hero__status">
-              {alert.status === 'RECOVERED' ? '已恢复' : alert.status === 'ACKNOWLEDGED' ? '已确认' : '待确认'}
+              {alert.recoveredAt ? '已恢复' : alert.status === 'ACKNOWLEDGED' ? '已确认' : '待确认'}
             </span>
           </div>
         </section>

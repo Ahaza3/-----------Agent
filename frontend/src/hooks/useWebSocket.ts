@@ -13,6 +13,7 @@ import useSystemStatusStore from '../stores/useSystemStatusStore'
 import { fetchRealtimeRecent } from '../services/dataApi'
 import type { WsLoadPayload, WsAlertPayload, WsPredictionPayload } from '../types/alert'
 import { showAlertNotification } from '../utils/browserNotification'
+import { acknowledgeAlertDelivery } from '../services/alertApi'
 
 const WS_BASE = `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}/ws/dashboard`
 
@@ -26,6 +27,7 @@ export function useWebSocket() {
   const clientRef = useRef<Client | null>(null)
   const ticketCacheRef = useRef<Map<number, any>>(new Map())
   const adviceCacheRef = useRef<Map<number, any>>(new Map())
+  const deliveryAckedRef = useRef<Set<number>>(new Set())
 
   const appendRealtime = useDashboardStore((s) => s.appendRealtimeLoad)
   const appendAlert = useDashboardStore((s) => s.appendAlert)
@@ -113,7 +115,7 @@ export function useWebSocket() {
             showAlertNotification(p.data)
             appendAlert({
               id: p.data.id,
-              type: 'THRESHOLD',
+              type: p.data.type,
               triggerTime: p.data.triggerTime,
               level: p.data.level,
               currentValue: p.data.currentValue,
@@ -123,8 +125,27 @@ export function useWebSocket() {
               aiAnalysis: p.data.aiAnalysis,
               suggestion: p.data.suggestion,
               isRead: 0,
+              occurrenceNo: p.data.occurrenceNo ?? null,
+              ruleVersion: p.data.ruleVersion ?? null,
+              dataSource: p.data.dataSource ?? null,
+              sourceObservedAt: p.data.sourceObservedAt ?? null,
+              topologyVersion: p.data.topologyVersion ?? null,
+              topologySimulated: p.data.topologySimulated ?? null,
               createdAt: new Date().toISOString(),
             })
+            // Delay until Zustand has received the event and the browser has had a render turn.
+            if (!deliveryAckedRef.current.has(p.data.id)) {
+              deliveryAckedRef.current.add(p.data.id)
+              const acknowledge = async () => {
+                try {
+                  await acknowledgeAlertDelivery(p.data.id, { clientRenderedAt: new Date().toISOString() })
+                } catch {
+                  try { await acknowledgeAlertDelivery(p.data.id, { clientRenderedAt: new Date().toISOString() }) } catch { /* one bounded retry */ }
+                }
+              }
+              if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => { void acknowledge() })
+              else setTimeout(() => { void acknowledge() }, 0)
+            }
           }
         } catch (err) {
           console.error('[WS] /topic/alerts 解析失败', err, msg.body)

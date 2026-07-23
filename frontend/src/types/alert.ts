@@ -24,6 +24,15 @@ export interface AlertEvent {
   status?: 'ACTIVE' | 'ACKNOWLEDGED' | 'RECOVERED'
   acknowledgedAt?: string | null
   acknowledgedByName?: string | null
+  occurrenceNo?: number | null
+  stateKey?: string | null
+  ruleVersion?: string | null
+  dataSource?: string | null
+  sourceObservedAt?: string | null
+  sourceReceivedAt?: string | null
+  recoveredAt?: string | null
+  topologyVersion?: string | null
+  topologySimulated?: boolean | null
   createdAt: string
 }
 
@@ -85,6 +94,13 @@ export interface WsAlertPayload {
     thresholdValue: number
     aiAnalysis: string
     suggestion: string
+    occurrenceNo?: number | null
+    ruleVersion?: string | null
+    dataSource?: string | null
+    sourceObservedAt?: string | null
+    qualityCode?: string | null
+    topologyVersion?: string | null
+    topologySimulated?: boolean | null
   }
 }
 
