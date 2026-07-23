@@ -70,7 +70,7 @@ const TicketActionBar = ({
 
   const isAssignee = userId != null && userId === ticket.assigneeUserId
   const canAssign = actions.assign && (ticket.status === 'PENDING' || ticket.status === 'ASSIGNED')
-  const canClaim = actions.claim && (ticket.status === 'PENDING' || (ticket.status === 'ASSIGNED' && isAssignee))
+  const canClaim = actions.claim && ticket.status === 'PENDING'
   const canStart = actions.start && ticket.status === 'ASSIGNED' && isAssignee
   const canResolve = actions.resolve && ticket.status === 'IN_PROGRESS' && isAssignee
   const canClose = actions.close && ticket.status === 'RESOLVED'

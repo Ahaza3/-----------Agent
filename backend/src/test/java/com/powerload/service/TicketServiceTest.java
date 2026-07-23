@@ -136,6 +136,32 @@ class TicketServiceTest {
     }
 
     @Test
+    void shouldRejectClaimWhenAlreadyAssignedToCurrentUser() {
+        AlertTicket t = pendingTicket(); t.setStatus("ASSIGNED"); t.setAssigneeUserId(operator.getUserId());
+        when(ticketMapper.selectById(1L)).thenReturn(t);
+
+        IllegalStateException error = assertThrows(IllegalStateException.class,
+                () -> service.claim(1L, operator));
+
+        assertEquals("工单已指派，请直接开始处理", error.getMessage());
+        verify(ticketMapper, never()).updateById(any(AlertTicket.class));
+    }
+
+    @Test
+    void shouldStartAssignedTicketForAssignee() {
+        AlertTicket t = pendingTicket(); t.setStatus("ASSIGNED"); t.setAssigneeUserId(operator.getUserId());
+        when(ticketMapper.selectById(1L)).thenReturn(t);
+        doReturn(1).when(ticketMapper).updateById(any(AlertTicket.class));
+        doReturn(1).when(actionMapper).insert(any(AlertTicketAction.class));
+
+        AlertTicket started = service.start(1L, operator);
+
+        assertEquals("IN_PROGRESS", started.getStatus());
+        assertNotNull(started.getStartedAt());
+        verify(ticketMapper).updateById(t);
+    }
+
+    @Test
     void shouldRejectResolveWithoutText() {
         AlertTicket t = pendingTicket(); t.setStatus("IN_PROGRESS"); t.setAssigneeUserId(2L);
         when(ticketMapper.selectById(1L)).thenReturn(t);

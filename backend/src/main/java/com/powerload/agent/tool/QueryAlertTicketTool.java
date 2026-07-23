@@ -5,6 +5,7 @@ import com.powerload.agent.Tool;
 import com.powerload.agent.ToolResult;
 import com.powerload.entity.*;
 import com.powerload.service.TicketService;
+import com.powerload.service.TicketFeedbackService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
@@ -15,9 +16,14 @@ import java.util.*;
 public class QueryAlertTicketTool implements Tool {
 
     private final TicketService ticketService;
+    private final TicketFeedbackService ticketFeedbackService;
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
-    public QueryAlertTicketTool(TicketService ticketService) { this.ticketService = ticketService; }
+    public QueryAlertTicketTool(TicketService ticketService,
+                                TicketFeedbackService ticketFeedbackService) {
+        this.ticketService = ticketService;
+        this.ticketFeedbackService = ticketFeedbackService;
+    }
 
     @Override public String name() { return "query_alert_ticket"; }
 
@@ -71,6 +77,10 @@ public class QueryAlertTicketTool implements Tool {
             data.put("assignee", ticket.getAssigneeName() != null ? ticket.getAssigneeName() : "未分配");
             data.put("createdBy", ticket.getCreatedByName());
             data.put("resolution", ticket.getResolution()); data.put("timeline", timeline);
+            Map<String, Object> feedback = ticketFeedbackService.readOnlySummary(ticket.getId());
+            feedback.remove("alertEvidence");
+            feedback.remove("rootCauseDetail");
+            data.put("feedback", feedback);
             data.put("source", "MOCK_SYSTEM");
 
             String desc = String.format("工单 %s 当前状态: %s, 优先级: %s, 处理人: %s",
