@@ -41,8 +41,9 @@ public class ModelVersionController {
     @PutMapping("/versions/{id}/activate")
     @PreAuthorize("hasAnyRole('OPERATOR', 'SYSTEM_ADMIN')")
     @AuditLog(module = "模型管理", action = "发布或回滚模型版本")
-    public R<ModelVersion> activate(@PathVariable Long id) {
-        return R.ok(modelVersionService.activate(id));
+    public R<Map<String, Object>> activate(@PathVariable Long id,
+                                            @RequestHeader(value = "X-Request-Id", required = false) String requestId) {
+        return R.ok(modelVersionService.activate(id, requestId));
     }
 
     @PostMapping("/retrain")

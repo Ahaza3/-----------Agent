@@ -46,36 +46,45 @@ class ModelVersionServiceImplTest {
     }
 
     @Test
-    void shouldCleanInactiveMetriclessVersionsOnlyWhenSyncing() {
+    void shouldNotDeleteLegacyVersionsWhenSyncing() {
         when(mapper.selectCount(any())).thenReturn(1L);
         when(mapper.selectList(any())).thenReturn(List.of());
 
         service.syncLocalArtifacts();
 
-        verify(mapper).delete(any());
+        verify(mapper, never()).delete(any());
     }
 
     @Test
-    void shouldActivateOnlySelectedVersion() {
+    void shouldTreatMatchingRuntimeAsIdempotentActivation() throws Exception {
         ModelVersion target = new ModelVersion();
         target.setId(2L);
-        target.setIsActive(0);
+        target.setVersion("train-20260723");
+        target.setArtifactDir("train-20260723");
+        target.setArtifactChecksum("a".repeat(64));
+        ReflectionTestUtils.setField(service, "modelDir", Files.createTempDirectory("models").toString());
+        Path directory = Path.of((String) ReflectionTestUtils.getField(service, "modelDir")).resolve("train-20260723");
+        Files.createDirectories(directory);
+        Files.writeString(directory.resolve("model.pt"), "model");
+        String fileChecksum = java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest("model".getBytes()));
+        String checksum = java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(("model.pt\n" + fileChecksum + "\n").getBytes()));
+        target.setArtifactChecksum(checksum);
+        Files.writeString(directory.resolve("manifest.json"), "{\"modelVersion\":\"train-20260723\",\"modelType\":\"LSTM\",\"artifactChecksum\":\"" + checksum + "\",\"files\":[{\"path\":\"model.pt\",\"sha256\":\"" + fileChecksum + "\"}]}");
         when(mapper.selectById(2L)).thenReturn(target);
-        when(mapper.selectById(2L)).thenReturn(target);
+        when(mapper.selectOne(any())).thenReturn(target);
+        when(flaskInferenceService.getHealth()).thenReturn(Map.of("healthy", true, "modelVersion", target.getVersion(), "artifactChecksum", checksum));
 
-        ModelVersion result = service.activate(2L);
+        Map<String, Object> result = service.activate(2L, "request-1");
 
-        assertSame(target, result);
-        assertEquals(1, target.getIsActive());
-        verify(mapper).update(isNull(), any());
-        verify(mapper).updateById(any(ModelVersion.class));
+        assertEquals("CONSISTENT", result.get("consistency"));
+        verify(mapper, never()).updateById(any(ModelVersion.class));
     }
 
     @Test
     void shouldRejectUnknownVersion() {
         when(mapper.selectById(99L)).thenReturn(null);
 
-        assertThrows(IllegalArgumentException.class, () -> service.activate(99L));
+        assertThrows(IllegalArgumentException.class, () -> service.activate(99L, "request-1"));
         verify(mapper, never()).updateById(any(ModelVersion.class));
     }
 

@@ -4,8 +4,10 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.powerload.common.GridTopologyConstants;
 import com.powerload.entity.AlertEvent;
 import com.powerload.entity.PredictionResult;
+import com.powerload.entity.ModelVersion;
 import com.powerload.mapper.AlertEventMapper;
 import com.powerload.mapper.PredictionResultMapper;
+import com.powerload.mapper.ModelVersionMapper;
 import com.powerload.ml.FlaskInferenceService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.ObjectProvider;
@@ -29,6 +31,7 @@ public class SystemHealthService {
     private final FlaskInferenceService flaskService;
     private final PredictionResultMapper predictionResultMapper;
     private final AlertEventMapper alertEventMapper;
+    private final ModelVersionMapper modelVersionMapper;
 
     @Value("${llm.api.key:}")
     private String llmApiKey;
@@ -58,6 +61,22 @@ public class SystemHealthService {
         Map<String, Object> flaskHealth = flaskService.getHealth();
         health.put("flask", Boolean.TRUE.equals(flaskHealth.get("healthy")) ? "UP" : "DOWN");
         health.put("flaskModel", flaskHealth.getOrDefault("model_type", "UNKNOWN"));
+        ModelVersion published = modelVersionMapper.selectOne(new LambdaQueryWrapper<ModelVersion>()
+                .eq(ModelVersion::getIsActive, 1).last("LIMIT 1"));
+        health.put("databasePublishedVersion", published == null ? null : published.getVersion());
+        health.put("databasePublishedChecksum", published == null ? null : published.getArtifactChecksum());
+        health.put("flaskRuntimeVersion", flaskHealth.get("modelVersion"));
+        health.put("flaskRuntimeChecksum", flaskHealth.get("artifactChecksum"));
+        health.put("lastCheckedAt", LocalDateTime.now().toString());
+        health.put("lastActivationError", published == null ? null : published.getLastLoadError());
+        String consistency = "FLASK_UNAVAILABLE";
+        if (Boolean.TRUE.equals(flaskHealth.get("healthy"))) {
+            if (published == null || published.getArtifactChecksum() == null) consistency = "LEGACY_UNVERIFIED";
+            else if (published.getVersion().equals(String.valueOf(flaskHealth.get("modelVersion")))
+                    && published.getArtifactChecksum().equalsIgnoreCase(String.valueOf(flaskHealth.get("artifactChecksum")))) consistency = "CONSISTENT";
+            else consistency = "INCONSISTENT";
+        }
+        health.put("consistency", consistency);
 
         // LLM
         health.put("llm", Map.of(

@@ -24,11 +24,14 @@ public class FlaskInferenceService {
     private final OkHttpClient client;
     private final ObjectMapper objectMapper;
     private final String baseUrl;
+    private final String internalToken;
 
     public FlaskInferenceService(
             @Value("${ml.service.url:http://localhost:5000}") String baseUrl,
+            @Value("${ml.service.internal-token:${ML_INTERNAL_TOKEN:}}") String internalToken,
             ObjectMapper objectMapper) {
         this.baseUrl = baseUrl;
+        this.internalToken = internalToken;
         this.objectMapper = objectMapper;
         this.client = new OkHttpClient.Builder()
                 .connectTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
@@ -123,6 +126,37 @@ public class FlaskInferenceService {
             }
         } catch (Exception e) {
             return Map.of("healthy", false);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> reloadModel(String modelVersion, String artifactDir, String artifactChecksum, String requestId) {
+        if (internalToken == null || internalToken.isBlank()) {
+            throw new IllegalStateException("Flask internal token is not configured");
+        }
+        try {
+            String json = objectMapper.writeValueAsString(Map.of(
+                    "modelVersion", modelVersion,
+                    "artifactDir", artifactDir,
+                    "artifactChecksum", artifactChecksum,
+                    "requestId", requestId));
+            Request request = new Request.Builder()
+                    .url(baseUrl + "/internal/models/reload")
+                    .header("X-Internal-Token", internalToken)
+                    .post(RequestBody.create(json, MediaType.parse("application/json")))
+                    .build();
+            try (Response response = client.newCall(request).execute()) {
+                String body = response.body() == null ? "{}" : response.body().string();
+                Map<String, Object> result = objectMapper.readValue(body, Map.class);
+                if (!response.isSuccessful() || !Boolean.TRUE.equals(result.get("success"))) {
+                    throw new IllegalStateException("Flask reload failed at "
+                            + result.getOrDefault("stage", "UNKNOWN") + ": "
+                            + result.getOrDefault("message", "reload rejected"));
+                }
+                return result;
+            }
+        } catch (IOException e) {
+            throw new IllegalStateException("Flask reload unavailable", e);
         }
     }
 }
