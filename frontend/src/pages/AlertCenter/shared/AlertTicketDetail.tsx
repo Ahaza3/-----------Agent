@@ -357,7 +357,7 @@ const AlertTicketDetail = ({
     if (!ticket) return '等待创建工单'
     switch (ticket.status) {
       case 'PENDING': return '等待指派人或认领'
-      case 'ASSIGNED': return ticket.assigneeUserId === userId ? '等待认领或开始处理' : '等待被指派人认领'
+      case 'ASSIGNED': return ticket.assigneeUserId === userId ? '请被指派人开始处理' : '等待被指派人开始处理'
       case 'IN_PROGRESS': return ticket.assigneeUserId === userId ? '等待标记解决' : '等待处理人标记解决'
       case 'RESOLVED': return '等待调度员确认关闭'
       case 'CLOSED': return '已完结'

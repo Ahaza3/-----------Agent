@@ -234,13 +234,14 @@ public class TicketService {
         if (t == null) throw new IllegalArgumentException("工单不存在");
         if (FINAL_STATUS.contains(t.getStatus()))
             throw new IllegalStateException("工单已终态，不可认领");
-        if ("ASSIGNED".equals(t.getStatus()) && !user.getUserId().equals(t.getAssigneeUserId()))
-            throw new IllegalStateException("该工单已指派给其他人");
+        if ("ASSIGNED".equals(t.getStatus()))
+            throw new IllegalStateException("工单已指派，请直接开始处理");
 
         String from = t.getStatus();
         t.setAssigneeUserId(user.getUserId()); t.setAssigneeName(user.getUsername());
         t.setStartedAt(LocalDateTime.now()); t.setStatus("IN_PROGRESS");
-        ticketMapper.updateById(t);
+        if (ticketMapper.updateById(t) != 1)
+            throw new IllegalStateException("工单已被其他用户更新，请刷新后重试");
         addAction(ticketId, "CLAIM", from, "IN_PROGRESS", user, "认领并开始处理");
         pushUpdate(t, "ticket_claimed");
         return t;
@@ -256,7 +257,8 @@ public class TicketService {
             throw new IllegalStateException("只有指定处理人可以开始处理");
         String from = t.getStatus();
         t.setStartedAt(LocalDateTime.now()); t.setStatus("IN_PROGRESS");
-        ticketMapper.updateById(t);
+        if (ticketMapper.updateById(t) != 1)
+            throw new IllegalStateException("工单已被其他用户更新，请刷新后重试");
         addAction(ticketId, "START", from, "IN_PROGRESS", user, "开始处理");
         pushUpdate(t, "ticket_started");
         return t;
