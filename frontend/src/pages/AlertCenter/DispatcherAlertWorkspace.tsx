@@ -8,7 +8,7 @@ import { Table, Tag, Button, Space, message, Badge, Modal, Select, Input, Empty,
 import { ApartmentOutlined, BellOutlined, ExclamationCircleOutlined, FileTextOutlined, ReloadOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import type { Dayjs } from 'dayjs'
-import { acknowledgeAlert, fetchAlertEvents, fetchAlertMetrics, markAlertRead } from '../../services/alertApi'
+import { acknowledgeAlert, fetchAlertDeliveryMetrics, fetchAlertEvents, fetchAlertMetrics, markAlertRead } from '../../services/alertApi'
 import { fetchTicketByAlert, createTicket, assignTicket, fetchAssignees, rejudge } from '../../services/ticketApi'
 import type { AssigneeInfo, JudgementResult, Ticket } from '../../services/ticketApi'
 import { ALERT_LEVEL_CONFIG } from '../../types/alert'
@@ -38,6 +38,7 @@ const DispatcherAlertWorkspace = () => {
   const [loading, setLoading] = useState(false)
   const [total, setTotal] = useState(0)
   const [metrics, setMetrics] = useState<Record<string, number> | null>(null)
+  const [deliveryMetrics, setDeliveryMetrics] = useState<{ deliverySamples: number; p50LatencyMs: number | null; p95LatencyMs: number | null; maxLatencyMs: number | null } | null>(null)
   const [page, setPage] = useState(1)
   const [ticketMap, setTicketMap] = useState<Record<number, Ticket | null>>({})
   const [selectedAlert, setSelectedAlert] = useState<AlertEvent | null>(null)
@@ -92,9 +93,12 @@ const DispatcherAlertWorkspace = () => {
       setEvents(res.records || [])
       setTotal(res.total || 0)
       try { setMetrics(await fetchAlertMetrics()) } catch { setMetrics(null) }
+      if (user?.role === 'SYSTEM_ADMIN') {
+        try { setDeliveryMetrics(await fetchAlertDeliveryMetrics()) } catch { setDeliveryMetrics(null) }
+      }
     } catch { message.error('告警加载失败') }
     finally { setLoading(false) }
-  }, [dateRange, keyword, levelFilter, page, statusFilter, typeFilter, unreadOnly])
+  }, [dateRange, keyword, levelFilter, page, statusFilter, typeFilter, unreadOnly, user?.role])
   useEffect(() => { fetch() }, [fetch])
 
   // 批量加载工单
@@ -409,6 +413,11 @@ const DispatcherAlertWorkspace = () => {
             ['重复率', `${Number(metrics.duplicateRate ?? 0).toFixed(1)}%`, '#FAAD14'],
             ['平均确认', `${Number(metrics.averageAckMinutes ?? 0).toFixed(1)} 分钟`, '#69B1FF'],
             ['平均恢复', `${Number(metrics.averageRecoveryMinutes ?? 0).toFixed(1)} 分钟`, '#5FA777'],
+            ...(user?.role === 'SYSTEM_ADMIN' ? [
+              ['呈现样本', deliveryMetrics?.deliverySamples ?? 0, '#E7EDF3'],
+              ['P50 / P95', deliveryMetrics?.deliverySamples ? `${deliveryMetrics.p50LatencyMs} / ${deliveryMetrics.p95LatencyMs} ms` : '暂无呈现确认样本', '#69B1FF'],
+              ['最大延迟', deliveryMetrics?.deliverySamples ? `${deliveryMetrics.maxLatencyMs} ms` : '--', '#FAAD14'],
+            ] : []),
           ].map(([label, value, color]) => (
             <div key={String(label)} className="alert-center-metric">
               <div style={{ color: '#888', fontSize: 10 }}>{label}</div>
@@ -459,6 +468,7 @@ const DispatcherAlertWorkspace = () => {
             acknowledgedByName: selectedAlert.acknowledgedByName,
             aiAnalysis: selectedAlert.aiAnalysis,
             suggestion: selectedAlert.suggestion,
+            recoveredAt: selectedAlert.recoveredAt,
           }}
           ticket={ticketMap[selectedAlert.id] || null}
           onTicketUpdated={handleTicketUpdate}

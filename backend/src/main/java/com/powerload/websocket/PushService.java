@@ -77,6 +77,13 @@ public class PushService {
         data.put("thresholdValue", event.getThresholdValue());
         data.put("aiAnalysis", event.getAiAnalysis() != null ? event.getAiAnalysis() : "");
         data.put("suggestion", event.getSuggestion() != null ? event.getSuggestion() : "");
+        data.put("occurrenceNo", event.getOccurrenceNo());
+        data.put("ruleVersion", event.getRuleVersion());
+        data.put("dataSource", event.getDataSource());
+        data.put("sourceObservedAt", event.getSourceObservedAt() != null ? event.getSourceObservedAt().toString() : null);
+        data.put("qualityCode", event.getEvidenceSnapshot() == null ? "LEGACY" : "SNAPSHOT_AVAILABLE");
+        data.put("topologyVersion", event.getTopologyVersion());
+        data.put("topologySimulated", event.getTopologySimulated());
         payload.put("data", data);
         messagingTemplate.convertAndSend("/topic/alerts", payload);
         log.info("告警推送: level={}, current={}MW", event.getLevel(), event.getCurrentValue());

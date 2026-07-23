@@ -5,6 +5,10 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.powerload.alert.AlertJudgementService;
 import com.powerload.common.R;
 import com.powerload.dto.response.AlertJudgementResult;
+import com.powerload.dto.request.AlertDeliveryAckRequest;
+import com.powerload.dto.response.AlertDeliveryMetricsResponse;
+import com.powerload.entity.AlertDeliveryMetric;
+import jakarta.validation.Valid;
 import com.powerload.entity.AlertAdvice;
 import com.powerload.entity.AlertEvent;
 import com.powerload.mapper.AlertAdviceMapper;
@@ -84,12 +88,27 @@ public class AlertEventController {
     }
 
     @GetMapping("/events/metrics")
-    public R<Map<String, Object>> metrics(
+    public R<?> metrics(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime start,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime end) {
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime end,
+            @RequestParam(required = false) Long nodeId,
+            @RequestParam(defaultValue = "false") boolean deliveryOnly,
+            @AuthenticationPrincipal SysUserPrincipal user) {
         LocalDateTime effectiveEnd = end != null ? end : LocalDateTime.now();
         LocalDateTime effectiveStart = start != null ? start : effectiveEnd.minusDays(7);
+        if (deliveryOnly) {
+            if (user == null || !"SYSTEM_ADMIN".equals(user.getRole())) throw new SecurityException("仅系统管理员可查看送达指标");
+            return R.ok(alertEventService.deliveryMetrics(effectiveStart, effectiveEnd, nodeId));
+        }
         return R.ok(alertEventService.metrics(effectiveStart, effectiveEnd));
+    }
+
+    @PostMapping("/events/{id}/delivery-ack")
+    @PreAuthorize("isAuthenticated()")
+    public R<AlertDeliveryMetric> deliveryAck(@PathVariable Long id,
+                                              @Valid @RequestBody(required = false) AlertDeliveryAckRequest request,
+                                              @AuthenticationPrincipal SysUserPrincipal user) {
+        return R.ok(alertEventService.acknowledgeDelivery(id, user, request));
     }
 
     /** 标记告警已读 */

@@ -69,5 +69,23 @@ public class AlertEvent {
 
     private String acknowledgedByName;
 
+    private Integer occurrenceNo;
+    private String stateKey;
+    private String ruleVersion;
+    private String ruleSnapshot;
+    private String evidenceSnapshot;
+    private String dataSource;
+    private String sourceInstanceId;
+    private Long sourceSequence;
+    private LocalDateTime sourceObservedAt;
+    private LocalDateTime sourceReceivedAt;
+    private LocalDateTime detectedAt;
+    private LocalDateTime persistedAt;
+    private LocalDateTime pushedAt;
+    private String topologyVersion;
+    private Boolean topologySimulated;
+    private LocalDateTime recoveredAt;
+    private Long previousAlertId;
+
     private LocalDateTime createdAt;
 }
