@@ -60,13 +60,21 @@ public class AlertRuntimeStateService {
         }
         state.setMaintenanceSuppressed(false);
         String level = thresholdDetector.detect(point.getLoadMw(), rule.getConfig());
-        if (level == null || ("ACTIVE".equals(state.getLifecycleState())
-                && thresholdDetector.canRecover(point.getLoadMw(), rule.getConfig()))) {
+        boolean active = "ACTIVE".equals(state.getLifecycleState());
+        if (active) {
+            // 已激活告警：只有负荷跌破恢复死区（threshold×yellowRatio − hysteresis）才恢复，
+            // 防止负荷在 yellow 阈值附近抖动导致反复 ACTIVE→RECOVERED→再触发。
+            if (thresholdDetector.canRecover(point.getLoadMw(), rule.getConfig())) {
+                return recoverOrNormalize(state, now);
+            }
+            // 仍在死区内（已低于 yellow 阈值但未跌破死区）：维持 ACTIVE，不恢复也不升级。
+            if (level == null) {
+                persist(state);
+                return AlertRuntimeResult.unchanged();
+            }
+        } else if (level == null) {
+            // 未激活且负荷回到安全区：归一。
             return recoverOrNormalize(state, now);
-        }
-        if (level == null) {
-            persist(state);
-            return AlertRuntimeResult.unchanged();
         }
 
         if (!"ACTIVE".equals(state.getLifecycleState())) {
@@ -97,6 +105,9 @@ public class AlertRuntimeStateService {
                 eventMapper.updateById(current);
             }
             state.setCurrentLevel(level);
+            persist(state);
+            // 级别升高（如橙升红）是最需即时通知的场景：返回升级事件以触发推送与重新研判
+            return current != null ? new AlertRuntimeResult(current) : AlertRuntimeResult.unchanged();
         }
         persist(state);
         return AlertRuntimeResult.unchanged();
@@ -116,7 +127,9 @@ public class AlertRuntimeStateService {
         if ("ACTIVE".equals(state.getLifecycleState())) {
             AlertEvent event = eventMapper.selectById(state.getActiveAlertId());
             if (event != null) { event.setLevel(snapshot.getRiskLevel()); eventMapper.updateById(event); }
-            state.setCurrentLevel(snapshot.getRiskLevel()); persist(state); return AlertRuntimeResult.unchanged();
+            state.setCurrentLevel(snapshot.getRiskLevel()); persist(state);
+            // 拓扑风险升级同样需要即时推送
+            return event != null ? new AlertRuntimeResult(event) : AlertRuntimeResult.unchanged();
         }
         int occurrence = (state.getOccurrenceNo() == null ? 0 : state.getOccurrenceNo()) + 1;
         AlertEvent previous = eventMapper.selectOne(new LambdaQueryWrapper<AlertEvent>().eq(AlertEvent::getStateKey, stateKey)

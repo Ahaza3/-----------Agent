@@ -61,7 +61,7 @@ public class AuthService {
         }
         Long userId = jwtUtils.getUserId(claims);
         SysUser user = sysUserMapper.selectById(userId);
-        if (user == null || user.getIsActive() == 0) {
+        if (user == null || !Integer.valueOf(1).equals(user.getIsActive())) {
             throw new DisabledException("账户不可用");
         }
         String newAccess = jwtUtils.generateAccessToken(user.getId(), user.getUsername(), user.getRole());
@@ -73,7 +73,7 @@ public class AuthService {
 
     public UserInfo me(Long userId) {
         SysUser user = sysUserMapper.selectById(userId);
-        if (user == null) throw new RuntimeException("用户不存在");
+        if (user == null) throw new IllegalArgumentException("用户不存在");
         return new UserInfo(user.getId(), user.getUsername(),
                 user.getDisplayName(), user.getRole(), user.getEmail());
     }
