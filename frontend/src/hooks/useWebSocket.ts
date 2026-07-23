@@ -86,6 +86,16 @@ export function useWebSocket() {
               temperature: p.data.temperature ?? null,
               humidity: p.data.humidity ?? null,
               source: p.data.source,
+              nodeId: p.data.nodeId,
+              observedAt: p.data.observedAt ?? null,
+              receivedAt: p.data.receivedAt ?? null,
+              sourceInstanceId: p.data.sourceInstanceId ?? null,
+              qualityCode: p.data.qualityCode,
+              qualityReason: p.data.qualityReason ?? null,
+              dataSource: p.data.dataSource ?? null,
+              estimated: p.data.estimated ?? false,
+              freshnessStatus: p.data.freshnessStatus,
+              persistenceStatus: p.data.persistenceStatus ?? null,
             })
             setLastRealtimeAt(Date.now())
             setDataSource(p.data.source || 'ws')

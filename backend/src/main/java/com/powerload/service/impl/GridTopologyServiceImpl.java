@@ -553,7 +553,7 @@ public class GridTopologyServiceImpl implements GridTopologyService {
     }
 
     private double currentRootLoad() {
-        RealtimeLoadPoint realtime = realtimeLoadService.getLatest();
+        RealtimeLoadPoint realtime = realtimeLoadService.getLatestForAlert();
         if (realtime != null) {
             return Math.max(0, realtime.getLoadMw());
         }

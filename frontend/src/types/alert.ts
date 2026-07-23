@@ -57,6 +57,16 @@ export interface WsLoadPayload {
     temperature: number | null
     humidity: number | null
     source: string
+    nodeId?: number
+    observedAt?: string | null
+    receivedAt?: string | null
+    sourceInstanceId?: string | null
+    qualityCode?: 'GOOD' | 'ESTIMATED' | 'LATE' | 'BAD'
+    qualityReason?: string | null
+    dataSource?: string | null
+    estimated?: boolean
+    freshnessStatus?: 'FRESH' | 'STALE'
+    persistenceStatus?: 'PERSISTED' | 'PERSISTENCE_DEGRADED'
   }
 }
 

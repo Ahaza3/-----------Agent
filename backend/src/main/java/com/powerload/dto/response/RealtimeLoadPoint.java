@@ -2,6 +2,8 @@ package com.powerload.dto.response;
 
 import lombok.Data;
 
+import java.time.LocalDateTime;
+
 /**
  * 实时负荷数据点（秒级）
  *
@@ -20,7 +22,7 @@ public class RealtimeLoadPoint {
     private long sequence;
 
     /** 实时负荷 (MW) */
-    private float loadMw;
+    private Float loadMw;
 
     /** 温度 (°C)，可为 null */
     private Float temperature;
@@ -30,4 +32,15 @@ public class RealtimeLoadPoint {
 
     /** 数据来源：MOCK / METER / 等 */
     private String source;
+
+    private Long nodeId;
+    private LocalDateTime observedAt;
+    private LocalDateTime receivedAt;
+    private String sourceInstanceId;
+    private String qualityCode;
+    private String qualityReason;
+    private String dataSource;
+    private boolean estimated;
+    private String freshnessStatus;
+    private String persistenceStatus;
 }

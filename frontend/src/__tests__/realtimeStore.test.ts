@@ -38,15 +38,15 @@ describe('RealtimeLoadPoint Store', () => {
     expect(useDashboardStore.getState().realtimeLoads).toHaveLength(2)
   })
 
-  it('3. 倒序消息被拒绝', () => {
+  it('3. 倒序消息按观测时间合并，不覆盖最新点', () => {
     const store = useDashboardStore.getState()
 
     store.appendRealtimeLoad(makePoint(5, 5000))
     store.appendRealtimeLoad(makePoint(3, 3000)) // seq 3 < 5，应拒绝
 
     const pts = useDashboardStore.getState().realtimeLoads
-    expect(pts).toHaveLength(1)
-    expect(pts[0].sequence).toBe(5)
+    expect(pts).toHaveLength(2)
+    expect(pts.map((point) => point.sequence)).toEqual([3, 5])
   })
 
   it('4. 超过 3600 点正确截断', () => {

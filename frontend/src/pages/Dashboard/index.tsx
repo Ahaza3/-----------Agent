@@ -101,6 +101,7 @@ const Dashboard = () => {
   const [prewarningSummary, setPrewarningSummary] = useState('')
   const [creatingPrewarning, setCreatingPrewarning] = useState(false)
   const [notificationState, setNotificationState] = useState<BrowserNotificationState>(getBrowserNotificationState)
+  const [freshnessClock, setFreshnessClock] = useState(Date.now())
   const chartRef = useRef<ReactECharts>(null)
   const connectedRef = useRef(true)
 
@@ -115,6 +116,17 @@ const Dashboard = () => {
   const rangeEnd = customRange ? customRange[1] : quickToRange(quickRange)[1]
   const isLive = isRangeCoveringNow(rangeEnd)
   const hourlyLoadData = useMemo(() => loadData.filter((p) => isHourlyHistoryPoint(p.time)), [loadData])
+  const latestRealtime = realtimeLoads[realtimeLoads.length - 1]
+  const latestReceivedAt = latestRealtime?.receivedAt
+    ? new Date(latestRealtime.receivedAt).getTime()
+    : latestRealtime?.timestamp
+  const realtimeFreshness = latestRealtime?.freshnessStatus === 'STALE'
+    || (latestReceivedAt != null && freshnessClock - latestReceivedAt > 15_000) ? 'STALE' : 'FRESH'
+  const realtimeQuality = latestRealtime?.qualityCode ?? 'LEGACY_UNKNOWN'
+  useEffect(() => {
+    const timer = window.setInterval(() => setFreshnessClock(Date.now()), 1_000)
+    return () => window.clearInterval(timer)
+  }, [])
   const handleEnableNotifications = useCallback(async () => {
     const state = await enableBrowserNotifications()
     setNotificationState(state)
@@ -527,6 +539,7 @@ const Dashboard = () => {
           <span>当前负荷</span>
           <strong className="font-mono">{fmtMw(liveLoad?.loadMw)} <small>MW</small></strong>
           <em>{liveLoad?.time ? dayjs(liveLoad.time).format('HH:mm:ss') : '等待实时数据'}</em>
+          <em>模拟数据源 · {realtimeQuality} · {realtimeFreshness === 'STALE' ? '数据陈旧' : '数据新鲜'}</em>
         </div>
 
         <div className="dashboard-metric-card">
@@ -548,7 +561,7 @@ const Dashboard = () => {
         <div className="dashboard-metric-card">
           <span>数据延迟</span>
           <strong className="font-mono">{lastRealtimeAt > 0 ? relativeTime(lastRealtimeAt) : '--'}</strong>
-          <em>{wsConnected ? '实时链路正常' : '实时链路中断'}</em>
+          <em>{realtimeFreshness === 'STALE' ? '最后有效观测数据已陈旧' : (wsConnected ? '模拟实时链路正常' : '模拟实时链路中断')}</em>
         </div>
       </section>
 

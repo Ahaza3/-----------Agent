@@ -57,7 +57,7 @@ class GridTopologyServiceImplTest {
 
         RealtimeLoadPoint latest = new RealtimeLoadPoint();
         latest.setLoadMw(1300f);
-        when(realtimeLoadService.getLatest()).thenReturn(latest);
+        when(realtimeLoadService.getLatestForAlert()).thenReturn(latest);
 
         PredictionResult marker = new PredictionResult();
         marker.setCreatedAt(LocalDateTime.of(2026, 7, 22, 18, 0));
@@ -101,7 +101,7 @@ class GridTopologyServiceImplTest {
             return row;
         });
         when(predictionResultMapper.selectOne(any())).thenReturn(null);
-        when(realtimeLoadService.getLatest()).thenAnswer(invocation -> {
+        when(realtimeLoadService.getLatestForAlert()).thenAnswer(invocation -> {
             RealtimeLoadPoint latest = new RealtimeLoadPoint();
             latest.setLoadMw(1800f);
             return latest;
