@@ -49,7 +49,7 @@ public class GlobalExceptionHandler {
     @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
     public R<Void> handleRuntime(RuntimeException e) {
         log.error("运行时异常: {}", e.getMessage(), e);
-        return R.fail(500, "服务器内部错误：" + e.getMessage());
+        return R.fail(500, "服务器内部错误");
     }
 
     @ExceptionHandler(Exception.class)

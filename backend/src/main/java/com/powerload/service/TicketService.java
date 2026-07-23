@@ -127,12 +127,12 @@ public class TicketService {
 
     /* ─── Create ─── */
 
-    @Transactional
-    @AuditLog(module = "工单管理", action = "创建工单")
     public AlertTicket create(Long alertId, String summary, SysUserPrincipal user) {
         return create(alertId, summary, null, user);
     }
 
+    @Transactional
+    @AuditLog(module = "工单管理", action = "创建工单")
     public AlertTicket create(Long alertId, String summary, Long requestedAssigneeId,
                               SysUserPrincipal user) {
         AlertEvent alert = alertEventMapper.selectById(alertId);
