@@ -3,6 +3,8 @@
  * 对应后端 ForecastResponse DTO — GET /api/v1/predict/forecast
  */
 export interface ForecastResponse {
+  nodeId?: number | null
+  source?: string | null
   /** 24 小时预测值 (MW)，从 forecastStartTime 起每小时一个 */
   predictions: number[]
   /** 模型名称: LSTM / Prophet */
@@ -17,6 +19,14 @@ export interface ForecastResponse {
   weatherSource?: string | null
   futureWeatherApplied?: boolean
   futureWeatherFallback?: boolean
+  runId?: string | null
+  issuedAt?: string | null
+  dataCutoff?: string | null
+  forecastHorizonHours?: number | null
+  modelVersion?: string | null
+  artifactChecksum?: string | null
+  weatherIssuedAt?: string | null
+  traceabilityStatus?: 'TRACEABLE' | 'UNTRACEABLE' | string | null
 }
 
 /**
@@ -51,22 +61,20 @@ export interface PredictionResult {
  * 对应后端 model_version 表
  */
 export interface ModelVersion {
-  /** 主键 */
   id: number
-  /** 模型名称 */
-  modelName: string
-  /** 版本号 */
+  modelName: 'LSTM' | 'Prophet' | string
   version: string
-  /** 模型文件路径 */
-  filePath: string
-  /** 训练数据集描述 */
-  trainDataset: string
-  /** 训练 MAPE */
-  trainMape: number
-  /** 是否当前激活版本 */
-  active: boolean
-  /** 部署时间 */
-  deployTime: string
-  /** 创建时间 */
-  createTime: string
+  mape?: number | null
+  rmse?: number | null
+  filePath?: string | null
+  artifactDir?: string | null
+  artifactChecksum?: string | null
+  runtimeStatus?: string | null
+  deployedAt?: string | null
+  lastLoadError?: string | null
+  lastHealthCheckedAt?: string | null
+  hyperparams?: string | null
+  isActive: number
+  trainedAt?: string | null
+  createdAt?: string | null
 }
