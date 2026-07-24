@@ -2,30 +2,30 @@
  * AgentMarkdown 单元测试 — 渲染正确性与 XSS 安全
  */
 import { describe, it, expect } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render } from '@testing-library/react'
 import AgentMarkdown from '../pages/AgentChat/AgentMarkdown'
 
 describe('AgentMarkdown — Markdown 渲染', () => {
 
   it('应该渲染 bold 文本（不暴露星号）', () => {
-    render(<AgentMarkdown content="当前负荷 **940.2 MW**" />)
-    const strong = screen.getByText('940.2 MW')
+    const { getByText } = render(<AgentMarkdown content="当前负荷 **940.2 MW**" />)
+    const strong = getByText('940.2 MW')
     expect(strong.tagName).toBe('STRONG')
     expect(document.querySelector('.agent-markdown')!.textContent).not.toContain('**')
   })
 
   it('应该渲染 GFM 表格', () => {
     const md = '| 时间 | 负荷 |\n|------|------|\n| 08:00 | 850 MW |\n| 12:00 | 980 MW |'
-    render(<AgentMarkdown content={md} />)
+    const { getByText } = render(<AgentMarkdown content={md} />)
     expect(document.querySelector('table')).toBeTruthy()
     expect(document.querySelector('th')).toBeTruthy()
-    expect(screen.getByText('850 MW')).toBeTruthy()
+    expect(getByText('850 MW')).toBeTruthy()
   })
 
   it('应该渲染标题（h2）', () => {
     const md = '## 负荷分析\n\n下面是具体数据。'
-    render(<AgentMarkdown content={md} />)
-    const h2 = screen.getByText(/负荷分析/)
+    const { getByText } = render(<AgentMarkdown content={md} />)
+    const h2 = getByText(/负荷分析/)
     expect(h2.tagName).toBe('H2')
   })
 
@@ -37,14 +37,14 @@ describe('AgentMarkdown — Markdown 渲染', () => {
   })
 
   it('应该渲染引用块', () => {
-    render(<AgentMarkdown content="> 这是数据说明" />)
+    const { getByText } = render(<AgentMarkdown content="> 这是数据说明" />)
     expect(document.querySelector('blockquote')).toBeTruthy()
-    expect(screen.getByText('这是数据说明')).toBeTruthy()
+    expect(getByText('这是数据说明')).toBeTruthy()
   })
 
   it('应该渲染行内代码', () => {
-    render(<AgentMarkdown content="模型 `LSTM_v2` 运行中" />)
-    const code = screen.getByText('LSTM_v2')
+    const { getByText } = render(<AgentMarkdown content="模型 `LSTM_v2` 运行中" />)
+    const code = getByText('LSTM_v2')
     expect(code.tagName).toBe('CODE')
   })
 

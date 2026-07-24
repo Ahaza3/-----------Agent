@@ -1,6 +1,7 @@
 package com.powerload.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.powerload.common.GridTopologyConstants;
 import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.powerload.entity.LoadData;
@@ -10,6 +11,7 @@ import com.powerload.mapper.LoadDataMapper;
 import com.powerload.mapper.ModelVersionMapper;
 import com.powerload.mapper.ModelTrainingTaskMapper;
 import com.powerload.ml.FlaskInferenceService;
+import com.powerload.ml.ModelArtifactVerifier;
 import com.powerload.service.ModelVersionService;
 import org.springframework.beans.factory.annotation.Autowired;
 import lombok.RequiredArgsConstructor;
@@ -37,6 +39,7 @@ import java.util.LinkedHashMap;
 import java.util.function.Consumer;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Pattern;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -60,6 +63,7 @@ public class ModelVersionServiceImpl implements ModelVersionService {
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private static final Pattern MAPE_PATTERN = Pattern.compile("MAPE\\s*=\\s*([0-9]+(?:\\.[0-9]+)?)");
     private static final Pattern RMSE_PATTERN = Pattern.compile("RMSE\\s*=\\s*([0-9]+(?:\\.[0-9]+)?)");
+    private static final Pattern ARTIFACT_DIR_PATTERN = Pattern.compile("MODEL_ARTIFACT_DIR=([A-Za-z0-9._-]+)");
     private final AtomicReference<RetrainJob> retrainJob = new AtomicReference<>(RetrainJob.idle());
 
     @Override
@@ -68,34 +72,63 @@ public class ModelVersionServiceImpl implements ModelVersionService {
     }
 
     @Override
-    @Transactional
-    public ModelVersion activate(Long id) {
+    public Map<String, Object> activate(Long id, String requestId) {
         ModelVersion target = modelVersionMapper.selectById(id);
         if (target == null) {
             throw new IllegalArgumentException("模型版本不存在: " + id);
         }
-
-        modelVersionMapper.update(null,
-                new UpdateWrapper<ModelVersion>()
-                        .set("is_active", 0)
-                        .eq("is_active", 1));
-
-        target.setIsActive(1);
-        modelVersionMapper.updateById(target);
-        return modelVersionMapper.selectById(id);
+        if (target.getArtifactDir() == null || target.getArtifactChecksum() == null) {
+            throw new IllegalStateException("LEGACY_UNVERIFIED: target has no verified immutable artifact");
+        }
+        ModelArtifactVerifier.ArtifactManifest artifact = ModelArtifactVerifier.verify(
+                resolveModelDir(), target.getArtifactDir());
+        if (!artifact.artifactChecksum().equalsIgnoreCase(target.getArtifactChecksum())) {
+            throw new IllegalStateException("CHECKSUM_VERIFY: database artifact checksum mismatch");
+        }
+        String effectiveRequestId = requestId == null || requestId.isBlank() ? UUID.randomUUID().toString() : requestId;
+        Map<String, Object> runtime = flaskInferenceService.getHealth();
+        if (matchesRuntime(runtime, target)) {
+            return publish(target, activeVersion(), runtime, true);
+        }
+        ModelVersion previous = activeVersion();
+        Map<String, Object> reload = flaskInferenceService.reloadModel(target.getVersion(), target.getArtifactDir(),
+                target.getArtifactChecksum(), effectiveRequestId);
+        if (!matchesReload(reload, target)) {
+            markLoadFailure(target, "Flask returned a different version or checksum");
+            throw new IllegalStateException("ATOMIC_SWAP: Flask returned inconsistent runtime metadata");
+        }
+        try {
+            Map<String, Object> published = publish(target, previous, flaskInferenceService.getHealth(), false);
+            if (!"CONSISTENT".equals(published.get("consistency"))) {
+                throw new IllegalStateException("health verification is inconsistent");
+            }
+            return published;
+        } catch (RuntimeException publishFailure) {
+            rollbackRuntime(previous, effectiveRequestId);
+            markLoadFailure(target, "database publish failed; rollback requested");
+            throw new IllegalStateException("DATABASE_PUBLISH: model activation rolled back", publishFailure);
+        }
     }
 
     @Override
     @Transactional
     public List<ModelVersion> syncLocalArtifacts() {
         Path models = resolveModelDir();
+        if (!Files.isDirectory(models)) {
+            return listStoredVersions();
+        }
         boolean hasActive = modelVersionMapper.selectCount(
                 new LambdaQueryWrapper<ModelVersion>().eq(ModelVersion::getIsActive, 1)) > 0;
         String runtimeModel = String.valueOf(flaskInferenceService.getHealth().getOrDefault("model_type", ""));
 
-        hasActive = registerArtifact(models.resolve("lstm_scripted.pt"), "LSTM", runtimeModel, hasActive);
-        registerArtifact(models.resolve("prophet_model.pkl"), "Prophet", runtimeModel, hasActive);
-        removeMetriclessInactiveVersions();
+        try (var directories = Files.list(models)) {
+            for (Path directory : directories.filter(Files::isDirectory).toList()) {
+                registerVerifiedArtifact(directory, runtimeModel, hasActive);
+            }
+        } catch (IOException e) {
+            throw new IllegalStateException("cannot scan model artifacts", e);
+        }
+        registerLegacyArtifacts(models, runtimeModel, hasActive);
         return listStoredVersions();
     }
 
@@ -192,15 +225,103 @@ public class ModelVersionServiceImpl implements ModelVersionService {
         versionRow.setIsActive(shouldActivate ? 1 : 0);
         versionRow.setTrainedAt(trainedAt);
         versionRow.setCreatedAt(LocalDateTime.now());
+        versionRow.setRuntimeStatus("LEGACY_UNVERIFIED");
         modelVersionMapper.insert(versionRow);
         return hasActive || shouldActivate;
+    }
+
+    private void registerVerifiedArtifact(Path directory, String runtimeModel, boolean hasActive) {
+        ModelArtifactVerifier.ArtifactManifest artifact;
+        try {
+            artifact = ModelArtifactVerifier.verify(resolveModelDir(), directory.getFileName().toString());
+        } catch (IllegalArgumentException ignored) {
+            return;
+        }
+        Long count = modelVersionMapper.selectCount(new LambdaQueryWrapper<ModelVersion>()
+                .eq(ModelVersion::getVersion, artifact.modelVersion())
+                .eq(ModelVersion::getArtifactChecksum, artifact.artifactChecksum()));
+        if (count != null && count > 0) return;
+        ModelVersion row = new ModelVersion();
+        row.setModelName(artifact.modelType().isBlank() ? "LSTM" : artifact.modelType());
+        row.setVersion(artifact.modelVersion());
+        row.setFilePath(directory.resolve("model.pt").toString());
+        row.setArtifactDir(artifact.modelVersion());
+        row.setArtifactChecksum(artifact.artifactChecksum());
+        row.setRuntimeStatus(matchesRuntime(flaskInferenceService.getHealth(), artifact) ? "ACTIVE" : "CANDIDATE");
+        row.setIsActive(0);
+        row.setTrainedAt(lastModified(directory.resolve("manifest.json")));
+        row.setCreatedAt(LocalDateTime.now());
+        modelVersionMapper.insert(row);
+    }
+
+    private void registerLegacyArtifacts(Path models, String runtimeModel, boolean hasActive) {
+        registerArtifact(models.resolve("lstm_scripted.pt"), "LSTM", runtimeModel, hasActive);
+        registerArtifact(models.resolve("prophet_model.pkl"), "Prophet", runtimeModel, hasActive);
+    }
+
+    private ModelVersion activeVersion() {
+        return modelVersionMapper.selectOne(new LambdaQueryWrapper<ModelVersion>()
+                .eq(ModelVersion::getIsActive, 1).last("LIMIT 1"));
+    }
+
+    private Map<String, Object> publish(ModelVersion target, ModelVersion previous, Map<String, Object> health, boolean idempotent) {
+        if (!matchesRuntime(health, target)) {
+            throw new IllegalStateException("HEALTH_VERIFY: Flask runtime does not match target artifact");
+        }
+        LocalDateTime now = LocalDateTime.now();
+        if (!idempotent) {
+            if (modelVersionMapper.publishAtomically(target.getId(), now) < 1) {
+                throw new IllegalStateException("database version update failed");
+            }
+        }
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("modelVersion", target.getVersion());
+        result.put("artifactChecksum", target.getArtifactChecksum());
+        result.put("consistency", matchesRuntime(flaskInferenceService.getHealth(), target) ? "CONSISTENT" : "INCONSISTENT");
+        result.put("idempotent", idempotent);
+        result.put("modelVersionRow", modelVersionMapper.selectById(target.getId()));
+        return result;
+    }
+
+    private void rollbackRuntime(ModelVersion previous, String requestId) {
+        if (previous == null || previous.getArtifactDir() == null || previous.getArtifactChecksum() == null) return;
+        try {
+            flaskInferenceService.reloadModel(previous.getVersion(), previous.getArtifactDir(), previous.getArtifactChecksum(),
+                    requestId + "-rollback");
+        } catch (RuntimeException rollbackFailure) {
+            previous.setRuntimeStatus("ROLLBACK_REQUIRED");
+            previous.setLastLoadError("rollback failed");
+            modelVersionMapper.updateById(previous);
+        }
+    }
+
+    private void markLoadFailure(ModelVersion target, String message) {
+        target.setRuntimeStatus("LOAD_FAILED");
+        target.setLastLoadError(message);
+        target.setLastHealthCheckedAt(LocalDateTime.now());
+        modelVersionMapper.updateById(target);
+    }
+
+    private boolean matchesRuntime(Map<String, Object> health, ModelVersion version) {
+        return version != null && version.getVersion() != null && version.getArtifactChecksum() != null
+                && version.getVersion().equals(String.valueOf(health.get("modelVersion")))
+                && version.getArtifactChecksum().equalsIgnoreCase(String.valueOf(health.get("artifactChecksum")));
+    }
+
+    private boolean matchesRuntime(Map<String, Object> health, ModelArtifactVerifier.ArtifactManifest artifact) {
+        return artifact.modelVersion().equals(String.valueOf(health.get("modelVersion")))
+                && artifact.artifactChecksum().equalsIgnoreCase(String.valueOf(health.get("artifactChecksum")));
+    }
+
+    private boolean matchesReload(Map<String, Object> reload, ModelVersion target) {
+        return target.getVersion().equals(String.valueOf(reload.get("modelVersion")))
+                && target.getArtifactChecksum().equalsIgnoreCase(String.valueOf(reload.get("artifactChecksum")));
     }
 
     private void runRetrain(String modelName, Long taskId) {
         String script = "PROPHET".equals(modelName) ? "train_prophet.py" : "train_lstm.py";
         Path workDir = resolveWorkDir();
-        Path python = workDir.resolve(".venv").resolve("Scripts").resolve("python.exe");
-        String pythonCommand = Files.exists(python) ? python.toString() : "python";
+        String pythonCommand = resolvePythonCommand(workDir);
         StringBuilder output = new StringBuilder();
         try {
             TrainingDataSummary data = prepareTrainingData(workDir, pythonCommand, output);
@@ -209,7 +330,12 @@ public class ModelVersionServiceImpl implements ModelVersionService {
                 task.setDataEnd(data.end());
                 task.setSampleCount(data.sampleCount());
             });
-            ProcessBuilder pb = new ProcessBuilder(pythonCommand, script, "--input", "featured_load_data.csv");
+            List<String> trainingCommand = new java.util.ArrayList<>(List.of(pythonCommand, script, "--input", "featured_load_data.csv"));
+            if (!"PROPHET".equals(modelName)) {
+                trainingCommand.add("--output-root");
+                trainingCommand.add(resolveModelDir().toString());
+            }
+            ProcessBuilder pb = new ProcessBuilder(trainingCommand);
             pb.directory(workDir.toFile());
             pb.redirectErrorStream(true);
             pb.environment().put("PYTHONIOENCODING", "utf-8");
@@ -227,7 +353,7 @@ public class ModelVersionServiceImpl implements ModelVersionService {
                 retrainJob.set(retrainJob.get().finish("FAILED", "训练脚本退出码: " + exitCode, tail(output)));
                 return;
             }
-            Map<String, String> artifacts = validateArtifacts(modelName);
+            Map<String, String> artifacts = validateArtifacts(modelName, output.toString());
             insertRetrainedVersion(modelName, output.toString());
             finishTrainingTask(taskId, "SUCCESS", "训练完成，新版本已登记", output, artifacts);
             retrainJob.set(retrainJob.get().finish("SUCCESS", "训练完成，新版本已登记", tail(output)));
@@ -241,6 +367,7 @@ public class ModelVersionServiceImpl implements ModelVersionService {
             throws IOException, InterruptedException {
         List<LoadData> rows = loadDataMapper.selectList(
                 new LambdaQueryWrapper<LoadData>()
+                        .eq(LoadData::getNodeId, GridTopologyConstants.ROOT_NODE_ID)
                         .apply("MINUTE(time) = 0 AND SECOND(time) = 0")
                         .isNotNull(LoadData::getTime)
                         .isNotNull(LoadData::getLoadMw)
@@ -308,18 +435,22 @@ public class ModelVersionServiceImpl implements ModelVersionService {
 
     private void insertRetrainedVersion(String normalizedModelName, String output) {
         String displayName = "PROPHET".equals(normalizedModelName) ? "Prophet" : "LSTM";
-        Path artifact = resolveModelDir()
-                .resolve("PROPHET".equals(normalizedModelName) ? "prophet_model.pkl" : "lstm_scripted.pt");
+        String artifactDir = artifactDirectoryFromOutput(output);
+        ModelArtifactVerifier.ArtifactManifest verified = ModelArtifactVerifier.verify(resolveModelDir(), artifactDir);
+        Path artifact = verified.directory().resolve("model.pt");
         LocalDateTime now = LocalDateTime.now();
         boolean hasActive = modelVersionMapper.selectCount(
                 new LambdaQueryWrapper<ModelVersion>().eq(ModelVersion::getIsActive, 1)) > 0;
 
         ModelVersion version = new ModelVersion();
         version.setModelName(displayName);
-        version.setVersion("train-" + VERSION_TIME.format(now));
+        version.setVersion(verified.modelVersion());
         version.setMape(extractMetric(output, MAPE_PATTERN));
         version.setRmse(extractMetric(output, RMSE_PATTERN));
         version.setFilePath(artifact.toString());
+        version.setArtifactDir(verified.modelVersion());
+        version.setArtifactChecksum(verified.artifactChecksum());
+        version.setRuntimeStatus("CANDIDATE");
         version.setHyperparams("{\"source\":\"MANUAL_RETRAIN\",\"script\":\""
                 + ("PROPHET".equals(normalizedModelName) ? "train_prophet.py" : "train_lstm.py") + "\"}");
         version.setIsActive(hasActive ? 0 : 1);
@@ -368,35 +499,29 @@ public class ModelVersionServiceImpl implements ModelVersionService {
         });
     }
 
-    private Map<String, String> validateArtifacts(String modelName) {
-        Path models = resolveModelDir();
-        List<String> required = "PROPHET".equals(modelName)
-                ? List.of("prophet_model.pkl")
-                : List.of("lstm_model.pt", "lstm_meta.pt", "lstm_scripted.pt",
-                "lstm_scaler.pkl", "lstm_scaler_x.pkl", "lstm_weather_scaler.pkl",
-                "lstm_feature_cols.pkl");
+    private Map<String, String> validateArtifacts(String modelName, String output) {
+        ModelArtifactVerifier.ArtifactManifest verified = ModelArtifactVerifier.verify(
+                resolveModelDir(), artifactDirectoryFromOutput(output));
         Map<String, String> manifest = new LinkedHashMap<>();
-        List<String> missing = new java.util.ArrayList<>();
-        for (String file : required) {
-            Path path = models.resolve(file);
-            if (!Files.isRegularFile(path) || path.toFile().length() == 0) {
-                missing.add(file);
-            } else {
-                manifest.put(file, path.toString());
-            }
-        }
-        if (!missing.isEmpty()) {
-            throw new IllegalStateException("训练产物不完整，缺少: " + String.join(", ", missing));
-        }
+        verified.files().forEach(file -> manifest.put(file.path(), file.sha256()));
+        manifest.put("artifactChecksum", verified.artifactChecksum());
         return manifest;
+    }
+
+    private String artifactDirectoryFromOutput(String output) {
+        var matcher = ARTIFACT_DIR_PATTERN.matcher(output == null ? "" : output);
+        String artifactDir = null;
+        while (matcher.find()) artifactDir = matcher.group(1);
+        if (artifactDir == null) throw new IllegalStateException("training did not report immutable artifact directory");
+        return artifactDir;
     }
 
     private String normalizeModelName(String modelName) {
         String normalized = modelName == null ? "LSTM" : modelName.trim().toUpperCase(Locale.ROOT);
-        if ("PROPHET".equals(normalized) || "LSTM".equals(normalized)) {
+        if ("LSTM".equals(normalized)) {
             return normalized;
         }
-        throw new IllegalArgumentException("modelName 仅支持 LSTM 或 PROPHET");
+        throw new IllegalArgumentException("modelName 仅支持 LSTM；Prophet 仅保留历史只读兼容");
     }
 
     private boolean matchesRuntime(String modelName, String runtimeModel) {
@@ -434,6 +559,28 @@ public class ModelVersionServiceImpl implements ModelVersionService {
             return projectRootPath.toAbsolutePath().normalize();
         }
         return Paths.get("../ml").toAbsolutePath().normalize();
+    }
+
+    String resolvePythonCommand(Path workDir) {
+        String osName = System.getProperty("os.name", "");
+        return resolvePythonCommand(workDir, osName);
+    }
+
+    String resolvePythonCommand(Path workDir, String osName) {
+        String normalizedOs = osName == null ? "" : osName.toLowerCase(Locale.ROOT);
+        if (normalizedOs.contains("win")) {
+            Path windowsVenv = workDir.resolve(".venv").resolve("Scripts").resolve("python.exe");
+            if (Files.isRegularFile(windowsVenv)) {
+                return windowsVenv.toString();
+            }
+            return "python";
+        }
+
+        Path unixVenv = workDir.resolve(".venv").resolve("bin").resolve("python");
+        if (Files.isRegularFile(unixVenv) && Files.isExecutable(unixVenv)) {
+            return unixVenv.toString();
+        }
+        return "python3";
     }
 
     private boolean isDefaultPath(String value, String... defaults) {

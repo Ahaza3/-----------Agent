@@ -1,0 +1,6 @@
+--index-url https://pypi.tuna.tsinghua.edu.cn/simple
+
+flask>=3.0
+pandas>=2.0
+numpy>=1.26
+scikit-learn>=1.5

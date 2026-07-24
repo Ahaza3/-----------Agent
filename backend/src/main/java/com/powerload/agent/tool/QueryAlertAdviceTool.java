@@ -27,6 +27,10 @@ public class QueryAlertAdviceTool implements Tool {
 
     @Override public String name() { return "query_alert_advice"; }
 
+    @Override public java.util.Set<String> allowedRoles() {
+        return java.util.Set.of("DISPATCHER", "OPERATOR", "SYSTEM_ADMIN");
+    }
+
     @Override public String description() {
         return "查询某条告警的 AI 建议，包含分析结论和措施列表。可按角色(DISPATCHER/OPERATOR)筛选。";
     }

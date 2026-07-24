@@ -21,6 +21,15 @@ public class AlertEvent {
     @TableId(type = IdType.AUTO)
     private Long id;
 
+    /** 告警对象拓扑节点 ID */
+    private Long nodeId;
+
+    /** 同一拓扑事件的根告警 ID */
+    private Long rootEventId;
+
+    /** 预计影响负荷 (MW) */
+    private Float impactLoadMw;
+
     /** 触发时间 */
     private LocalDateTime triggerTime;
 
@@ -59,6 +68,24 @@ public class AlertEvent {
     private Long acknowledgedBy;
 
     private String acknowledgedByName;
+
+    private Integer occurrenceNo;
+    private String stateKey;
+    private String ruleVersion;
+    private String ruleSnapshot;
+    private String evidenceSnapshot;
+    private String dataSource;
+    private String sourceInstanceId;
+    private Long sourceSequence;
+    private LocalDateTime sourceObservedAt;
+    private LocalDateTime sourceReceivedAt;
+    private LocalDateTime detectedAt;
+    private LocalDateTime persistedAt;
+    private LocalDateTime pushedAt;
+    private String topologyVersion;
+    private Boolean topologySimulated;
+    private LocalDateTime recoveredAt;
+    private Long previousAlertId;
 
     private LocalDateTime createdAt;
 }

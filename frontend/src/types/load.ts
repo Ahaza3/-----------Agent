@@ -48,6 +48,16 @@ export interface RealtimeLoadPoint {
   humidity: number | null
   /** 数据来源 */
   source: string
+  nodeId?: number
+  observedAt?: string | null
+  receivedAt?: string | null
+  sourceInstanceId?: string | null
+  qualityCode?: 'GOOD' | 'ESTIMATED' | 'LATE' | 'BAD' | 'LEGACY_UNKNOWN'
+  qualityReason?: string | null
+  dataSource?: string | null
+  estimated?: boolean
+  freshnessStatus?: 'FRESH' | 'STALE' | 'LEGACY_UNKNOWN'
+  persistenceStatus?: 'PERSISTED' | 'PERSISTENCE_DEGRADED' | null
 }
 
 /**

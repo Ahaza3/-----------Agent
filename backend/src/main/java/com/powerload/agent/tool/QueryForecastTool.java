@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.powerload.agent.Tool;
 import com.powerload.agent.ToolResult;
+import com.powerload.common.GridTopologyConstants;
 import com.powerload.entity.PredictionResult;
 import com.powerload.mapper.PredictionResultMapper;
 import com.powerload.service.PredictService;
@@ -41,6 +42,11 @@ public class QueryForecastTool implements Tool {
     }
 
     @Override
+    public java.util.Set<String> allowedRoles() {
+        return java.util.Set.of("DISPATCHER", "OPERATOR", "SYSTEM_ADMIN");
+    }
+
+    @Override
     public String description() {
         return "查询未来 24 小时的负荷预测数据，包括每个小时的预测值、峰值时间、平均值等。" +
                "适用于用户询问'未来负荷趋势'、'预测最高负荷'、'明天负荷会到多少'等问题。" +
@@ -53,7 +59,9 @@ public class QueryForecastTool implements Tool {
         schema.put("type", "object");
         schema.put("properties", Map.of(
                 "refresh", Map.of("type", "boolean",
-                        "description", "是否强制重新生成预测，默认 false（从数据库读取最新批次）")
+                        "description", "是否强制重新生成预测，默认 false（从数据库读取最新批次）"),
+                "nodeId", Map.of("type", "integer",
+                        "description", "可选，指定拓扑节点 ID；不传时查询区域根节点")
         ));
         return schema;
     }
@@ -61,10 +69,14 @@ public class QueryForecastTool implements Tool {
     @Override
     public ToolResult execute(String argumentsJson) {
         boolean refresh = false;
+        long nodeId = GridTopologyConstants.ROOT_NODE_ID;
         if (argumentsJson != null && !argumentsJson.isBlank()) {
             try {
                 JsonNode args = MAPPER.readTree(argumentsJson);
                 refresh = args.has("refresh") && args.get("refresh").asBoolean(false);
+                if (args.has("nodeId") && args.get("nodeId").canConvertToLong()) {
+                    nodeId = args.get("nodeId").asLong();
+                }
             } catch (JsonProcessingException e) {
                 // 忽略无效参数，使用默认值
             }
@@ -73,16 +85,16 @@ public class QueryForecastTool implements Tool {
         try {
             if (refresh) {
                 log.info("强制刷新预测...");
-                predictService.forecast();
+                triggerForecast(nodeId);
             }
 
             // 查询最新一批预测（createdAt 最大的一组记录）
-            var latestRecord = getLatestCreatedAt();
+            var latestRecord = getLatestCreatedAt(nodeId);
             if (latestRecord == null) {
                 // 预测表为空，尝试生成
                 log.info("预测表为空，自动触发一次预测生成");
-                predictService.forecast();
-                latestRecord = getLatestCreatedAt();
+                triggerForecast(nodeId);
+                latestRecord = getLatestCreatedAt(nodeId);
                 if (latestRecord == null) {
                     return ToolResult.fail("预测数据不可用：预测生成后仍未找到数据，请检查 Flask 预测服务是否正常。");
                 }
@@ -90,6 +102,7 @@ public class QueryForecastTool implements Tool {
 
             LocalDateTime batchTime = latestRecord.getCreatedAt();
             var wrapper = new LambdaQueryWrapper<PredictionResult>()
+                    .eq(PredictionResult::getNodeId, nodeId)
                     .eq(PredictionResult::getCreatedAt, batchTime)
                     .orderByAsc(PredictionResult::getPredictTime);
             List<PredictionResult> batch = predictionResultMapper.selectList(wrapper);
@@ -119,6 +132,7 @@ public class QueryForecastTool implements Tool {
 
             Map<String, Object> result = new LinkedHashMap<>();
             result.put("source", "MOCK_FORECAST");
+            result.put("nodeId", nodeId);
             result.put("model", "LSTM");
             result.put("modelVersionId", batch.get(0).getModelVersionId());
             result.put("forecastStartTime", batch.get(0).getPredictTime().toString());
@@ -157,11 +171,20 @@ public class QueryForecastTool implements Tool {
         }
     }
 
-    private PredictionResult getLatestCreatedAt() {
+    private PredictionResult getLatestCreatedAt(long nodeId) {
         var wrapper = new LambdaQueryWrapper<PredictionResult>()
+                .eq(PredictionResult::getNodeId, nodeId)
                 .orderByDesc(PredictionResult::getCreatedAt)
                 .last("LIMIT 1");
         return predictionResultMapper.selectOne(wrapper);
+    }
+
+    private void triggerForecast(long nodeId) {
+        if (nodeId == GridTopologyConstants.ROOT_NODE_ID) {
+            predictService.forecast();
+        } else {
+            predictService.forecast(nodeId);
+        }
     }
 
     /** 构建 ECharts 折线图配置 */

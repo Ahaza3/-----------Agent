@@ -13,7 +13,7 @@ import type { EChartsOption } from 'echarts'
 import ReactECharts from 'echarts-for-react'
 import api from '../../services/api'
 import { Popconfirm } from 'antd'
-import { fetchAlertRules } from '../../services/alertApi'
+import { fetchAlertDeliveryMetrics, fetchAlertRules, type AlertDeliveryMetrics } from '../../services/alertApi'
 import useAuthStore from '../../stores/useAuthStore'
 import { getAdminTabs } from '../../config/roles'
 import type { Role } from '../../config/roles'
@@ -398,17 +398,21 @@ const ModelPanel = () => {
   const [activationNotice, setActivationNotice] = useState<string | null>(null)
   const [quality, setQuality] = useState<any>(null)
   const [review, setReview] = useState<any>(null)
+  const [reviewNodeId, setReviewNodeId] = useState(1)
+  const [reviewLeadHour, setReviewLeadHour] = useState<1 | 4 | 24>(24)
+  const [reviewNodes, setReviewNodes] = useState<{ value: number; label: string }[]>([{ value: 1, label: '根区域（模拟）' }])
 
   const refresh = useCallback(async (showLoading = true) => {
     if (showLoading) setLoading(true)
-    const [forecastResp, versionsResp, healthResp, retrainResp, historyResp, qualityResp, reviewResp] = await Promise.allSettled([
+    const [forecastResp, versionsResp, healthResp, retrainResp, historyResp, qualityResp, reviewResp, topologyResp] = await Promise.allSettled([
       api.get('/predict/forecast'),
       api.get('/model/versions'),
       api.get('/system/health'),
       api.get('/model/retrain/status'),
       api.get('/model/retrain/history'),
       api.get('/predict/quality'),
-      api.get('/predict/review'),
+      api.get('/predict/review', { params: { nodeId: reviewNodeId, leadHour: reviewLeadHour } }),
+      api.get('/topology'),
     ])
     if (forecastResp.status === 'fulfilled') setForecast(forecastResp.value)
     if (versionsResp.status === 'fulfilled') setVersions((versionsResp.value as unknown as any[]) || [])
@@ -417,8 +421,9 @@ const ModelPanel = () => {
     if (historyResp.status === 'fulfilled') setTrainingHistory((historyResp.value as unknown as any[]) || [])
     if (qualityResp.status === 'fulfilled') setQuality(qualityResp.value)
     if (reviewResp.status === 'fulfilled') setReview(reviewResp.value)
+    if (topologyResp.status === 'fulfilled') setReviewNodes(((topologyResp.value as any)?.nodes || []).map((node: any) => ({ value: node.id, label: `${node.nodeName}（模拟）` })))
     if (showLoading) setLoading(false)
-  }, [])
+  }, [reviewLeadHour, reviewNodeId])
   useEffect(() => { refresh() }, [refresh])
   useEffect(() => {
     if (trainingStatus?.status !== 'RUNNING') return undefined
@@ -435,32 +440,35 @@ const ModelPanel = () => {
   }, [refresh, trainingStatus?.status])
 
   const activeVersion = versions.find((item) => item.isActive === 1)
-  const runtimeModel = health?.flaskModel === 'torchscript'
+  const runtimeModel = health?.flaskRuntimeVersion || (health?.flaskModel === 'torchscript'
     ? 'LSTM (TorchScript)'
     : health?.flaskModel === 'prophet'
       ? 'Prophet'
       : health?.flaskModel && health.flaskModel !== 'UNKNOWN'
         ? health.flaskModel
-        : forecast?.model || ''
+        : forecast?.model || '')
   const runtimeModelType = health?.flaskModel === 'torchscript'
     ? 'LSTM'
     : health?.flaskModel === 'prophet'
       ? 'Prophet'
       : ''
+  const runtimeChecksumMismatch = Boolean(activeVersion?.artifactChecksum && health?.flaskRuntimeChecksum
+    && activeVersion.artifactChecksum !== health.flaskRuntimeChecksum)
   const runtimeTypeMismatch = Boolean(activeVersion && runtimeModelType && String(activeVersion.modelName).toUpperCase() !== runtimeModelType.toUpperCase())
   const runtimeEffectStatus = !activeVersion
     ? { color: 'default', label: '未发布' }
     : health?.flask !== 'UP'
       ? { color: 'red', label: '推理服务异常' }
-      : (activationNotice || runtimeTypeMismatch)
-        ? { color: 'gold', label: '待重启' }
+      : (activationNotice || runtimeTypeMismatch || runtimeChecksumMismatch)
+        ? { color: runtimeChecksumMismatch ? 'red' : 'gold', label: runtimeChecksumMismatch ? '校验失败' : '待切换' }
         : { color: 'green', label: '已生效' }
   const reviewChartOption = useMemo<EChartsOption>(() => {
     const points = Array.isArray(review?.series) ? review.series : []
     const times = points.map((point: any) => dayjs(point.time).format('MM-DD HH:mm'))
     return {
       animation: false,
-      grid: { top: 20, left: 52, right: 20, bottom: 42 },
+      title: { text: `根区域负荷预测复盘（${reviewLeadHour}h 提前量）`, textStyle: { color: WHITE, fontSize: 13 } },
+      grid: { top: 44, left: 52, right: 20, bottom: 42 },
       tooltip: { trigger: 'axis' },
       legend: { data: ['实际', '预测', '参考下界', '参考上界'], textStyle: { color: '#7D8A97', fontSize: 11 }, bottom: 0 },
       xAxis: { type: 'category', data: times, axisLabel: { color: '#7D8A97', hideOverlap: true } },
@@ -472,24 +480,19 @@ const ModelPanel = () => {
         { name: '参考上界', type: 'line', data: points.map((point: any) => point.upperBound), smooth: true, symbol: 'none', lineStyle: { color: '#8B98A6', width: 1, type: 'dotted' } },
       ],
     }
-  }, [review])
+  }, [review, reviewLeadHour])
 
   if (loading) return <Skeleton active paragraph={{ rows: 4 }} />
 
   const activateVersion = async (id: number) => {
     setActivating(id)
     try {
-      const activated = await api.put(`/model/versions/${id}/activate`) as any
+      const activated = await api.put(`/model/versions/${id}/activate`, null, { headers: { 'X-Request-Id': crypto.randomUUID() } }) as any
       const activatedLabel = activated?.version
         ? `${activated.modelName} ${activated.version}`
         : '目标模型版本'
-      setActivationNotice(`数据库已切换为 ${activatedLabel}，Flask 尚未重载`)
-      message.success('数据库模型版本已切换')
-      Modal.warning({
-        title: '模型版本已切换，需要重启 Flask',
-        content: '当前切换已写入模型版本表，但 Flask 不会自动热加载模型文件。重启 Flask 前，实际推理仍使用进程启动时加载的模型。',
-        okText: '知道了',
-      })
+      setActivationNotice(null)
+      message.success(`${activatedLabel} 已验证、加载并生效`)
       await refresh()
     } catch (e: any) {
       message.error(e?.response?.data?.message || e.message || '模型版本切换失败')
@@ -531,7 +534,6 @@ const ModelPanel = () => {
           <Button icon={<HeartOutlined />} onClick={() => refresh()}>刷新</Button>
           <Button loading={syncing} onClick={syncVersions}>同步本地模型</Button>
           <Button loading={retraining === 'LSTM'} disabled={trainingStatus?.status === 'RUNNING'} onClick={() => startRetrain('LSTM')}>重训练 LSTM</Button>
-          <Button loading={retraining === 'PROPHET'} disabled={trainingStatus?.status === 'RUNNING'} onClick={() => startRetrain('PROPHET')}>重训练 Prophet</Button>
           <Button type="primary" icon={<RobotOutlined />} loading={triggering} onClick={async () => {
             setTriggering(true)
             try { await api.get('/predict/forecast'); message.success('预测已触发'); refresh() }
@@ -540,12 +542,12 @@ const ModelPanel = () => {
           }}>触发预测</Button>
         </Space>
       </div>
-      {(activationNotice || runtimeTypeMismatch) && (
+      {(activationNotice || runtimeTypeMismatch || runtimeChecksumMismatch) && (
         <Alert
           type="warning"
           showIcon
-          message={<span style={{ color: '#f6d365', fontWeight: 600 }}>{activationNotice || '数据库发布版本与 Flask 实际模型类型不一致'}</span>}
-          description={<span style={{ color: '#d9c99a' }}>表格中的“当前使用”表示数据库发布版本；上方“Flask 实际推理模型”表示当前进程内存中的模型。发布或回滚不会自动重载 Flask，完成切换后请重启 Flask 服务。</span>}
+          message={<span style={{ color: '#f6d365', fontWeight: 600 }}>{activationNotice || (runtimeChecksumMismatch ? '数据库与 Flask 校验和不一致' : '数据库发布版本与 Flask 实际模型不一致')}</span>}
+          description={<span style={{ color: '#d9c99a' }}>当前发布仅在 Flask 版本和产物校验和完全一致时显示为已生效。失败时旧运行模型保持服务。</span>}
           style={{ marginBottom: 12, background: '#2b2617', borderColor: '#75602b' }}
         />
       )}
@@ -553,6 +555,7 @@ const ModelPanel = () => {
         items={[
           { label: '数据库发布版本', children: activeVersion ? `${activeVersion.modelName} ${activeVersion.version}` : '未发布' },
           { label: 'Flask 实际推理模型', children: runtimeModel || '未获取' },
+          { label: 'Flask 校验和', children: health?.flaskRuntimeChecksum || 'LEGACY_UNVERIFIED' },
           { label: '模型生效状态', children: <Tag color={runtimeEffectStatus.color}>{runtimeEffectStatus.label}</Tag> },
           { label: '推理服务', children: <Tag color={health?.flask === 'UP' ? 'green' : 'red'}>{health?.flask === 'UP' ? '正常' : '异常'}</Tag> },
           { label: '训练 MAPE', children: activeVersion?.mape != null ? `${Number(activeVersion.mape).toFixed(2)}%` : 'N/A' },
@@ -573,16 +576,22 @@ const ModelPanel = () => {
           { label: '缺失点', children: quality?.missingPoints ?? 'N/A' },
           { label: '天气缺失', children: quality?.weatherMissingPoints ?? 'N/A' },
           { label: '天气特征', children: forecast?.futureWeatherApplied ? '历史天气 + 未来预报' : '历史天气辅助' },
-          { label: '线上 MAPE', children: review?.mape != null ? `${review.mape.toFixed(2)}%` : 'N/A' },
-          { label: '线上 RMSE', children: review?.rmse != null ? `${review.rmse.toFixed(2)} MW` : 'N/A' },
-          { label: '峰值误差', children: review?.peakErrorMw != null ? `${review.peakErrorMw.toFixed(2)} MW` : 'N/A' },
+          { label: '固定提前量 MAPE', children: review?.mape != null ? `${review.mape.toFixed(2)}%` : '暂无足够样本' },
+          { label: 'WMAPE', children: review?.wmape != null ? `${review.wmape.toFixed(2)}%` : '暂无足够样本' },
+          { label: '峰值时刻误差', children: review?.peakTimeErrorHours != null ? `${review.peakTimeErrorHours} 小时` : '暂无足够样本' },
+          { label: '高负荷低估率', children: review?.highLoadUnderForecastRate != null ? `${review.highLoadUnderForecastRate.toFixed(2)}%` : '暂无足够样本' },
+          { label: '有效样本数', children: review?.sampleCount ?? 0 },
         ]}
         labelStyle={{ color: '#888', background: '#0c0c0c' }}
         contentStyle={{ color: '#ccc', background: '#0e0e0e' }}
       />
+      <Space style={{ marginTop: 16 }} wrap>
+        <Select value={reviewNodeId} onChange={setReviewNodeId} style={{ width: 150 }} options={reviewNodes} />
+        <Select value={reviewLeadHour} onChange={setReviewLeadHour} style={{ width: 150 }} options={[1, 4, 24].map(value => ({ value, label: `${value}h 提前量` }))} />
+      </Space>
       <div style={{ color: '#888', fontSize: 11, marginTop: 8 }}>
         线上复盘覆盖 {review?.evaluatedPoints ?? 0} 个已回填实际值的预测点；
-        预测区间来源：{forecast?.intervalSource === 'VALIDATION_RMSE_REFERENCE' ? '验证集 RMSE 参考区间' : '暂无区间数据'}。
+        历史 LEGACY 预测未进入固定提前量统计；当前指标基于模拟负荷数据，不代表真实电网预测精度。
       </div>
       {review?.series?.length > 0 && (
         <ReactECharts option={reviewChartOption} notMerge style={{ height: 250, marginTop: 8 }} />
@@ -597,7 +606,7 @@ const ModelPanel = () => {
         columns={[
           { title: '模型', dataIndex: 'modelName', key: 'modelName' },
           { title: '版本', dataIndex: 'version', key: 'version' },
-          { title: '状态', dataIndex: 'isActive', key: 'isActive', render: (v: number) => <Tag color={v === 1 ? 'green' : 'default'}>{v === 1 ? '当前使用' : '历史版本'}</Tag> },
+          { title: '状态', key: 'status', render: (_: any, row: any) => <Tag color={row.runtimeStatus === 'ACTIVE' ? 'green' : row.runtimeStatus === 'LEGACY_UNVERIFIED' ? 'default' : 'gold'}>{row.runtimeStatus || 'LEGACY_UNVERIFIED'}</Tag> },
           { title: 'MAPE', dataIndex: 'mape', key: 'mape', render: (v: number | null) => v == null ? 'N/A' : `${Number(v).toFixed(2)}%` },
           { title: 'RMSE', dataIndex: 'rmse', key: 'rmse', render: (v: number | null) => v == null ? 'N/A' : `${Number(v).toFixed(2)} MW` },
           { title: '训练时间', dataIndex: 'trainedAt', key: 'trainedAt', render: (v: string) => v ? dayjs(v).format('YYYY-MM-DD HH:mm') : 'N/A' },
@@ -607,7 +616,7 @@ const ModelPanel = () => {
             render: (_: any, row: any) => row.isActive === 1 ? <Tag color="green">已激活</Tag> : (
               <Popconfirm
                 title="确认切换模型版本？"
-                description="该操作只切换数据库发布版本，不会自动重载 Flask；确认后需要重启 Flask 服务。"
+                description="系统会校验产物、原子加载 Flask 并进行健康检查；失败时保留旧运行模型。"
                 onConfirm={() => activateVersion(row.id)}
                 okText="确认"
                 cancelText="取消"
@@ -722,22 +731,25 @@ const OverviewPanel = () => {
   const [users, setUsers] = useState<any[]>([])
   const [forecast, setForecast] = useState<any>(null)
   const [logs, setLogs] = useState<any[]>([])
+  const [deliveryMetrics, setDeliveryMetrics] = useState<AlertDeliveryMetrics | null>(null)
   const [error, setError] = useState('')
 
   const refresh = useCallback(async () => {
     setLoading(true)
     setError('')
     try {
-      const [h, u, f, l] = await Promise.allSettled([
+      const [h, u, f, l, d] = await Promise.allSettled([
         api.get('/system/health'),
         api.get('/system/users'),
         api.get('/predict/forecast'),
         api.get('/system/logs', { params: { page: 1, size: 5, result: 'FAILURE' } }),
+        fetchAlertDeliveryMetrics(),
       ])
       setHealth(h.status === 'fulfilled' ? h.value : null)
       setUsers(u.status === 'fulfilled' ? (u.value as any) : [])
       setForecast(f.status === 'fulfilled' ? f.value : null)
       setLogs(l.status === 'fulfilled' ? (l.value as any)?.records || [] : [])
+      setDeliveryMetrics(d.status === 'fulfilled' ? d.value : null)
     } catch {
       setError('加载失败')
     } finally { setLoading(false) }
@@ -783,6 +795,21 @@ const OverviewPanel = () => {
           </>
         )}
         {!health && <Tag color="default">服务状态不可用</Tag>}
+      </div>
+
+      <h4 style={{ color: '#888', fontSize: 11, marginBottom: 8 }}>告警呈现延迟</h4>
+      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 16 }}>
+        {deliveryMetrics?.deliverySamples ? (
+          <>
+            <span style={{ color: '#888' }}>样本: <b style={{ color: WHITE }}>{deliveryMetrics.deliverySamples}</b></span>
+            <span style={{ color: '#888' }}>P50: <b style={{ color: '#69B1FF' }}>{deliveryMetrics.p50LatencyMs} ms</b></span>
+            <span style={{ color: '#888' }}>P95: <b style={{ color: '#FAAD14' }}>{deliveryMetrics.p95LatencyMs} ms</b></span>
+            <span style={{ color: '#888' }}>最大: <b style={{ color: '#D85C5C' }}>{deliveryMetrics.maxLatencyMs} ms</b></span>
+            <span style={{ color: '#666' }}>排除旧数据 {deliveryMetrics.excludedLegacyCount}，异常 {deliveryMetrics.excludedInvalidCount}</span>
+          </>
+        ) : (
+          <span style={{ color: '#666', fontSize: 12 }}>暂无呈现确认样本</span>
+        )}
       </div>
 
       {/* 用户统计 */}

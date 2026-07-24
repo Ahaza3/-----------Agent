@@ -20,6 +20,8 @@ venv/
 .env.local
 .env.*.local
 application-*.yml
+!backend/src/main/resources/application-docker.yml
+.env.example
 
 # ===== IDE =====
 .vscode/
@@ -31,6 +33,7 @@ application-*.yml
 .DS_Store
 Thumbs.db
 .claude/
+.agents/
 
 # ===== Docker =====
 .docker/

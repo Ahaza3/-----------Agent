@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.powerload.agent.Tool;
 import com.powerload.agent.ToolResult;
+import com.powerload.common.GridTopologyConstants;
 import com.powerload.dto.response.RealtimeLoadPoint;
 import com.powerload.entity.AlertEvent;
 import com.powerload.entity.AlertRule;
@@ -38,6 +39,11 @@ public class QueryDispatchRiskBriefTool implements Tool {
     @Override
     public String name() {
         return "query_dispatch_risk_brief";
+    }
+
+    @Override
+    public java.util.Set<String> allowedRoles() {
+        return java.util.Set.of("DISPATCHER", "SYSTEM_ADMIN");
     }
 
     @Override
@@ -101,10 +107,12 @@ public class QueryDispatchRiskBriefTool implements Tool {
 
     private List<PredictionResult> latestForecastBatch() {
         PredictionResult latest = predictionResultMapper.selectOne(new LambdaQueryWrapper<PredictionResult>()
+                .eq(PredictionResult::getNodeId, GridTopologyConstants.ROOT_NODE_ID)
                 .orderByDesc(PredictionResult::getCreatedAt)
                 .last("LIMIT 1"));
         if (latest == null || latest.getCreatedAt() == null) return List.of();
         return predictionResultMapper.selectList(new LambdaQueryWrapper<PredictionResult>()
+                .eq(PredictionResult::getNodeId, GridTopologyConstants.ROOT_NODE_ID)
                 .eq(PredictionResult::getCreatedAt, latest.getCreatedAt())
                 .orderByAsc(PredictionResult::getPredictTime));
     }

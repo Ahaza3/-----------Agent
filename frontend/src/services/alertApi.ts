@@ -6,6 +6,9 @@ import type { AlertEvent, AlertPageResult, AlertRule } from '../types/alert'
 
 interface QueryParams {
   level?: string
+  type?: string
+  status?: string
+  keyword?: string
   start?: string
   end?: string
   page?: number
@@ -27,6 +30,25 @@ export function acknowledgeAlert(id: number): Promise<void> {
 
 export function fetchAlertMetrics(params: { start?: string; end?: string } = {}): Promise<Record<string, number>> {
   return api.get('/alert/events/metrics', { params })
+}
+
+export function acknowledgeAlertDelivery(id: number, body: { clientRenderedAt?: string; clientSessionId?: string } = {}): Promise<void> {
+  return api.post(`/alert/events/${id}/delivery-ack`, body)
+}
+
+export interface AlertDeliveryMetrics {
+  deliverySamples: number
+  p50LatencyMs: number | null
+  p95LatencyMs: number | null
+  maxLatencyMs: number | null
+  excludedLegacyCount: number
+  excludedInvalidCount: number
+  startTime: string
+  endTime: string
+}
+
+export function fetchAlertDeliveryMetrics(params: { start?: string; end?: string; nodeId?: number } = {}): Promise<AlertDeliveryMetrics> {
+  return api.get('/alert/events/metrics', { params: { ...params, deliveryOnly: true } })
 }
 
 export function fetchLatestAlerts(): Promise<AlertEvent[]> {

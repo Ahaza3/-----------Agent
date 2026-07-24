@@ -3,11 +3,14 @@
  */
 
 export type AlertLevel = 'RED' | 'ORANGE' | 'YELLOW'
-export type AlertType = 'THRESHOLD' | 'TREND' | 'ANOMALY'
+export type AlertType = 'THRESHOLD' | 'TREND' | 'ANOMALY' | 'TOPOLOGY_RISK'
 
 /** 告警事件 */
 export interface AlertEvent {
   id: number
+  nodeId?: number | null
+  rootEventId?: number | null
+  impactLoadMw?: number | null
   triggerTime: string
   level: AlertLevel
   type: AlertType
@@ -21,6 +24,15 @@ export interface AlertEvent {
   status?: 'ACTIVE' | 'ACKNOWLEDGED' | 'RECOVERED'
   acknowledgedAt?: string | null
   acknowledgedByName?: string | null
+  occurrenceNo?: number | null
+  stateKey?: string | null
+  ruleVersion?: string | null
+  dataSource?: string | null
+  sourceObservedAt?: string | null
+  sourceReceivedAt?: string | null
+  recoveredAt?: string | null
+  topologyVersion?: string | null
+  topologySimulated?: boolean | null
   createdAt: string
 }
 
@@ -54,6 +66,16 @@ export interface WsLoadPayload {
     temperature: number | null
     humidity: number | null
     source: string
+    nodeId?: number
+    observedAt?: string | null
+    receivedAt?: string | null
+    sourceInstanceId?: string | null
+    qualityCode?: 'GOOD' | 'ESTIMATED' | 'LATE' | 'BAD'
+    qualityReason?: string | null
+    dataSource?: string | null
+    estimated?: boolean
+    freshnessStatus?: 'FRESH' | 'STALE'
+    persistenceStatus?: 'PERSISTED' | 'PERSISTENCE_DEGRADED'
   }
 }
 
@@ -62,12 +84,23 @@ export interface WsAlertPayload {
   type: 'alert'
   data: {
     id: number
+    nodeId: number | null
+    rootEventId: number | null
+    impactLoadMw: number | null
     triggerTime: string
     level: AlertLevel
+    type: AlertType
     currentValue: number
     thresholdValue: number
     aiAnalysis: string
     suggestion: string
+    occurrenceNo?: number | null
+    ruleVersion?: string | null
+    dataSource?: string | null
+    sourceObservedAt?: string | null
+    qualityCode?: string | null
+    topologyVersion?: string | null
+    topologySimulated?: boolean | null
   }
 }
 
@@ -75,6 +108,8 @@ export interface WsAlertPayload {
 export interface WsPredictionPayload {
   type: 'prediction_update'
   data: {
+    nodeId?: number | null
+    source?: string
     predictions: number[]
     model: string
     forecastStartTime: string | null

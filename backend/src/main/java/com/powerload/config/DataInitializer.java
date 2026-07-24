@@ -1,7 +1,9 @@
 package com.powerload.config;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.powerload.entity.GridNode;
 import com.powerload.entity.SysUser;
+import com.powerload.mapper.GridNodeMapper;
 import com.powerload.mapper.SysUserMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -13,38 +15,40 @@ import org.springframework.stereotype.Component;
 import java.time.LocalDateTime;
 
 /**
- * 开发环境数据初始化 — 创建默认管理员账号。
+ * 开发环境默认数据初始化。
  *
- * <p>仅 dev profile 生效；生产环境由运维手动创建用户。</p>
+ * <p>初始化逻辑按用户名幂等执行，确保已有数据库也能补齐新增的变电站运维人员。</p>
  */
 @Slf4j
 @Component
-@Profile("dev")
+@Profile({"dev", "docker"})
 @RequiredArgsConstructor
 public class DataInitializer implements CommandLineRunner {
 
     private final SysUserMapper sysUserMapper;
+    private final GridNodeMapper gridNodeMapper;
     private final PasswordEncoder passwordEncoder;
 
     @Override
     public void run(String... args) {
-        long count = sysUserMapper.selectCount(null);
-        if (count > 0) {
-            log.info("已有 {} 个用户，跳过初始化", count);
-            return;
-        }
+        ensureUser("admin", "admin123", "系统管理员", "SYSTEM_ADMIN");
+        ensureUser("dispatcher", "disp123", "调度员张三", "DISPATCHER");
+        ensureUser("operator", "oper123", "运维李四", "OPERATOR");
+        SysUser east = ensureUser("operator-east", "oper-east123", "东部运维王五", "OPERATOR");
+        SysUser west = ensureUser("operator-west", "oper-west123", "西部运维赵六", "OPERATOR");
 
-        // 默认管理员
-        createUser("admin", "admin123", "系统管理员", "SYSTEM_ADMIN");
-        // 默认调度员
-        createUser("dispatcher", "disp123", "调度员张三", "DISPATCHER");
-        // 默认运维
-        createUser("operator", "oper123", "运维李四", "OPERATOR");
-
-        log.info("默认用户初始化完成: admin/dispatcher/operator (密码均为用户名+123)");
+        bindSubstation("SUBSTATION-EAST", east.getId());
+        bindSubstation("SUBSTATION-WEST", west.getId());
+        log.info("默认用户与变电站责任域初始化完成");
     }
 
-    private void createUser(String username, String password, String displayName, String role) {
+    private SysUser ensureUser(String username, String password, String displayName, String role) {
+        SysUser existing = sysUserMapper.selectOne(new LambdaQueryWrapper<SysUser>()
+                .eq(SysUser::getUsername, username));
+        if (existing != null) {
+            return existing;
+        }
+
         SysUser user = new SysUser();
         user.setUsername(username);
         user.setPasswordHash(passwordEncoder.encode(password));
@@ -54,5 +58,22 @@ public class DataInitializer implements CommandLineRunner {
         user.setIsActive(1);
         user.setCreatedAt(LocalDateTime.now());
         sysUserMapper.insert(user);
+        return user;
+    }
+
+    private void bindSubstation(String nodeCode, Long userId) {
+        if (userId == null) {
+            return;
+        }
+        GridNode node = gridNodeMapper.selectOne(new LambdaQueryWrapper<GridNode>()
+                .eq(GridNode::getNodeCode, nodeCode));
+        if (node == null || userId.equals(node.getResponsibleUserId())) {
+            return;
+        }
+
+        GridNode update = new GridNode();
+        update.setId(node.getId());
+        update.setResponsibleUserId(userId);
+        gridNodeMapper.updateById(update);
     }
 }

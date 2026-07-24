@@ -91,8 +91,8 @@ export function fetchTicketByAlert(alertId: number): Promise<Ticket> {
 }
 
 /* ─── 创建工单 ─── */
-export function createTicket(alertId: number, summary: string): Promise<Ticket> {
-  return api.post(`/alerts/${alertId}/ticket`, { summary })
+export function createTicket(alertId: number, summary: string, assigneeUserId?: number): Promise<Ticket> {
+  return api.post(`/alerts/${alertId}/ticket`, { summary, assigneeUserId })
 }
 
 export function createPrewarningTicket(payload: {
@@ -144,9 +144,19 @@ export function generateTicketReport(id: number, operatorNote?: string): Promise
 /* ─── 查询智能研判 ─── */
 export interface JudgementResult {
   alertId: number
+  nodeId: number | null
+  nodeCode: string | null
+  nodeName: string | null
+  substationCode: string | null
+  substationName: string | null
   level: string
   currentLoad: number
   thresholdValue: number
+  impactLoadMw: number | null
+  headroomMw: number | null
+  riskBasis: string | null
+  riskReason: string | null
+  alertRootNodeCode: string | null
   trendDirection: string
   forecastPeakLoad: number | null
   forecastPeakTime: string | null
@@ -159,6 +169,14 @@ export interface JudgementResult {
   operatorAdvice: string
   decisionReason: string
   source: string
+  ticketTitle: string | null
+  ticketSummary: string | null
+  rootCauseHints: string[] | null
+  impactScope: string[] | null
+  recommendedAssigneeUserId: number | null
+  recommendedAssigneeName: string | null
+  routingTarget: string | null
+  routingReason: string | null
   createdAt: string
 }
 

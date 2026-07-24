@@ -12,7 +12,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /** 开发环境负荷异常演示控制，不在生产环境注册。 */
-@Profile("dev")
+@Profile({"dev", "docker"})
 @ConditionalOnProperty(prefix = "demo", name = "enabled", havingValue = "true")
 @RestController
 @RequestMapping("/api/v1/demo/load")

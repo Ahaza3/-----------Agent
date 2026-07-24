@@ -27,6 +27,10 @@ public class QueryAlertDetailTool implements Tool {
 
     @Override public String name() { return "query_alert_detail"; }
 
+    @Override public java.util.Set<String> allowedRoles() {
+        return java.util.Set.of("DISPATCHER", "OPERATOR", "SYSTEM_ADMIN");
+    }
+
     @Override public String description() {
         return "查询某条告警事件的完整详情：告警级别、类型、当前负荷、阈值、触发时间、超限比例等。";
     }

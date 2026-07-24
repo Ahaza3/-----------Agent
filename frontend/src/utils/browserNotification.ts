@@ -14,6 +14,7 @@ export async function enableBrowserNotifications(): Promise<BrowserNotificationS
 
 export function showAlertNotification(alert: {
   id?: number
+  type?: string
   level?: string
   currentValue?: number | null
   thresholdValue?: number | null
@@ -23,7 +24,8 @@ export function showAlertNotification(alert: {
   if (alert.id != null) notifiedAlertIds.add(alert.id)
 
   const current = alert.currentValue != null ? `${alert.currentValue.toFixed(1)} MW` : '负荷值未知'
-  const threshold = alert.thresholdValue != null ? `，阈值 ${alert.thresholdValue.toFixed(1)} MW` : ''
+  const limitLabel = alert.type === 'TOPOLOGY_RISK' ? '节点容量' : '阈值'
+  const threshold = alert.thresholdValue != null ? `，${limitLabel} ${alert.thresholdValue.toFixed(1)} MW` : ''
   try {
     new Notification(`电力${alert.level || 'UNKNOWN'}告警`, {
       body: `当前负荷 ${current}${threshold}，请及时查看告警中心。`,

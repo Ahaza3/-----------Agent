@@ -21,6 +21,10 @@ public class QueryAlertTicketTool implements Tool {
 
     @Override public String name() { return "query_alert_ticket"; }
 
+    @Override public java.util.Set<String> allowedRoles() {
+        return java.util.Set.of("DISPATCHER", "OPERATOR", "SYSTEM_ADMIN");
+    }
+
     @Override public String description() {
         return "查询告警处置工单信息：当前状态、优先级、处理人、处置时间线、处理结果等。"
              + "可按工单编号(ticketNo)、工单ID(ticketId)或告警ID(alertId)查询。"

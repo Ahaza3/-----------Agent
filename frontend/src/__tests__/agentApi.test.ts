@@ -229,6 +229,27 @@ describe('agentApi — SSE 事件解析', () => {
     expect(events[0].message).toContain('Network Error')
   })
 
+  it('已经收到正文后连接异常关闭时不应追加 error 事件', async () => {
+    const events: AgentEvent[] = []
+    const encoder = new TextEncoder()
+    const stream = new ReadableStream({
+      start(controller) {
+        controller.enqueue(encoder.encode('event: text\ndata: {"content":"回答内容"}\n\n'))
+      },
+      pull() {
+        throw new Error('Network Error')
+      },
+    })
+
+    fetchSpy.mockResolvedValue(new Response(stream, { status: 200 }))
+
+    await new Promise<void>((resolve) => {
+      agentChat('test', undefined, (e) => events.push(e), resolve)
+    })
+
+    expect(events).toEqual([{ type: 'text', content: '回答内容' }])
+  })
+
   /* ─── conversationId 传递 ─── */
 
   it('应该在请求中传递 conversationId', async () => {

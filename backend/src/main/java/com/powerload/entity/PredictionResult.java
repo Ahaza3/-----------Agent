@@ -19,6 +19,15 @@ public class PredictionResult {
     @TableId(type = IdType.AUTO)
     private Long id;
 
+    /** 关联预测批次；历史记录保持 NULL。 */
+    private Long forecastRunId;
+
+    /** 相对批次签发时间的提前量（小时）。 */
+    private Integer leadHours;
+
+    /** 预测目标拓扑节点 ID；历史单区域预测归属区域根节点 */
+    private Long nodeId;
+
     /** 预测的时间点 */
     private LocalDateTime predictTime;
 

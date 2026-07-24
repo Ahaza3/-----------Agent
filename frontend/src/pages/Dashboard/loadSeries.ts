@@ -54,7 +54,8 @@ export function buildLoadSeriesSegments(
   const recentRealtime = includeRealtime
     ? realtimePoints
         .slice(-maxRealtimePoints)
-        .filter((point) => Number.isFinite(point.timestamp) && Number.isFinite(point.loadMw))
+        .filter((point) => point.qualityCode !== 'BAD'
+          && Number.isFinite(point.timestamp) && Number.isFinite(point.loadMw))
         .sort((a, b) => a.timestamp - b.timestamp)
     : []
 

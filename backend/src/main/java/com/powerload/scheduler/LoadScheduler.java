@@ -42,7 +42,9 @@ public class LoadScheduler {
             syncTargetLoad();
 
             RealtimeLoadPoint point = realtimeLoadService.generateAndAppend();
-            pushService.pushRealtimeLoad(point);
+            if (point != null && !"BAD".equals(point.getQualityCode())) {
+                pushService.pushRealtimeLoad(point);
+            }
         } catch (Exception e) {
             log.error("Load push error", e);
         }

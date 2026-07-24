@@ -1,13 +1,18 @@
 package com.powerload.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.powerload.common.GridTopologyConstants;
 import com.powerload.entity.AlertEvent;
 import com.powerload.entity.PredictionResult;
+import com.powerload.entity.ModelVersion;
 import com.powerload.mapper.AlertEventMapper;
 import com.powerload.mapper.PredictionResultMapper;
+import com.powerload.mapper.ModelVersionMapper;
 import com.powerload.ml.FlaskInferenceService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.stereotype.Service;
 
 import javax.sql.DataSource;
@@ -22,9 +27,11 @@ import java.util.Map;
 public class SystemHealthService {
 
     private final DataSource dataSource;
+    private final ObjectProvider<RedisConnectionFactory> redisConnectionFactoryProvider;
     private final FlaskInferenceService flaskService;
     private final PredictionResultMapper predictionResultMapper;
     private final AlertEventMapper alertEventMapper;
+    private final ModelVersionMapper modelVersionMapper;
 
     @Value("${llm.api.key:}")
     private String llmApiKey;
@@ -47,13 +54,29 @@ public class SystemHealthService {
         // MySQL
         health.put("mysql", checkMysql());
 
-        // Redis (当前profile禁用时显示DISABLED)
-        health.put("redis", redisHost.isBlank() ? "DISABLED" : "UNKNOWN");
+        // Redis
+        health.put("redis", checkRedis());
 
         // Flask 及当前实际加载的推理模型
         Map<String, Object> flaskHealth = flaskService.getHealth();
         health.put("flask", Boolean.TRUE.equals(flaskHealth.get("healthy")) ? "UP" : "DOWN");
         health.put("flaskModel", flaskHealth.getOrDefault("model_type", "UNKNOWN"));
+        ModelVersion published = modelVersionMapper.selectOne(new LambdaQueryWrapper<ModelVersion>()
+                .eq(ModelVersion::getIsActive, 1).last("LIMIT 1"));
+        health.put("databasePublishedVersion", published == null ? null : published.getVersion());
+        health.put("databasePublishedChecksum", published == null ? null : published.getArtifactChecksum());
+        health.put("flaskRuntimeVersion", flaskHealth.get("modelVersion"));
+        health.put("flaskRuntimeChecksum", flaskHealth.get("artifactChecksum"));
+        health.put("lastCheckedAt", LocalDateTime.now().toString());
+        health.put("lastActivationError", published == null ? null : published.getLastLoadError());
+        String consistency = "FLASK_UNAVAILABLE";
+        if (Boolean.TRUE.equals(flaskHealth.get("healthy"))) {
+            if (published == null || published.getArtifactChecksum() == null) consistency = "LEGACY_UNVERIFIED";
+            else if (published.getVersion().equals(String.valueOf(flaskHealth.get("modelVersion")))
+                    && published.getArtifactChecksum().equalsIgnoreCase(String.valueOf(flaskHealth.get("artifactChecksum")))) consistency = "CONSISTENT";
+            else consistency = "INCONSISTENT";
+        }
+        health.put("consistency", consistency);
 
         // LLM
         health.put("llm", Map.of(
@@ -63,6 +86,7 @@ public class SystemHealthService {
         // Recent predictions
         var lastPred = predictionResultMapper.selectOne(
                 new LambdaQueryWrapper<PredictionResult>()
+                        .eq(PredictionResult::getNodeId, GridTopologyConstants.ROOT_NODE_ID)
                         .orderByDesc(PredictionResult::getCreatedAt).last("LIMIT 1"));
         health.put("lastPrediction", lastPred != null ? lastPred.getCreatedAt().toString() : "NONE");
 
@@ -79,6 +103,22 @@ public class SystemHealthService {
     private String checkMysql() {
         try (Connection conn = dataSource.getConnection()) {
             return conn.isValid(2) ? "UP" : "DOWN";
+        } catch (Exception e) {
+            return "DOWN (" + e.getMessage() + ")";
+        }
+    }
+
+    private String checkRedis() {
+        if (redisHost.isBlank()) {
+            return "DISABLED";
+        }
+        RedisConnectionFactory redisConnectionFactory = redisConnectionFactoryProvider.getIfAvailable();
+        if (redisConnectionFactory == null) {
+            return "DISABLED";
+        }
+        try (var connection = redisConnectionFactory.getConnection()) {
+            String response = connection.ping();
+            return "PONG".equalsIgnoreCase(response) ? "UP" : "DOWN";
         } catch (Exception e) {
             return "DOWN (" + e.getMessage() + ")";
         }

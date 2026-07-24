@@ -73,7 +73,7 @@ public class TicketController {
     public R<AlertTicket> create(@PathVariable Long alertId,
                                   @Valid @RequestBody CreateTicketRequest req,
                                   @AuthenticationPrincipal SysUserPrincipal user) {
-        return R.ok(ticketService.create(alertId, req.getSummary(), user));
+        return R.ok(ticketService.create(alertId, req.getSummary(), req.getAssigneeUserId(), user));
     }
 
     @PostMapping("/tickets/prewarning")

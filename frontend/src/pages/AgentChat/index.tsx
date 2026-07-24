@@ -256,12 +256,17 @@ const AgentChat = () => {
           setThinking('')
           setMessages((previous) => previous.map((item) =>
             item.id === assistantId
-              ? {
-                  ...item,
-                  role: 'error',
-                  content: event.message || '请求失败，请稍后重试。',
-                  pending: false,
-                }
+              ? item.content
+                ? {
+                    ...item,
+                    pending: false,
+                  }
+                : {
+                    ...item,
+                    role: 'error',
+                    content: event.message || '请求失败，请稍后重试。',
+                    pending: false,
+                  }
               : item,
           ))
           return

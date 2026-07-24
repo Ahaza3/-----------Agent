@@ -1,0 +1,46 @@
+spring:
+  datasource:
+    url: jdbc:mysql://${MYSQL_HOST:mysql}:${MYSQL_PORT:3306}/${MYSQL_DATABASE:power_load}?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false
+    username: ${MYSQL_USER:root}
+    password: ${MYSQL_PASSWORD:123456}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  data:
+    redis:
+      host: ${REDIS_HOST:redis}
+      port: ${REDIS_PORT:6379}
+
+ml:
+  service:
+    url: ${ML_SERVICE_URL:http://ml-inference:5000}
+    internal-token: ${ML_INTERNAL_TOKEN:}
+  model-dir: ${ML_MODEL_DIR:/app/ml/models}
+  work-dir: ${ML_WORK_DIR:/app/ml}
+
+weather:
+  enabled: ${WEATHER_ENABLED:true}
+  provider: ${WEATHER_PROVIDER:OPEN_METEO}
+  location-code: ${WEATHER_LOCATION_CODE:DEFAULT}
+  latitude: ${WEATHER_LATITUDE:39.9042}
+  longitude: ${WEATHER_LONGITUDE:116.4074}
+  timezone: ${WEATHER_TIMEZONE:Asia/Shanghai}
+  forecast-hours: ${WEATHER_FORECAST_HOURS:48}
+  sync-cron: ${WEATHER_SYNC_CRON:0 10 * * * *}
+
+llm:
+  api:
+    key: ${LLM_API_KEY:}
+    url: ${LLM_API_URL:https://api.deepseek.com/v1}
+    model: ${LLM_MODEL:deepseek-chat}
+    timeout-seconds: ${LLM_TIMEOUT_SECONDS:30}
+
+jwt:
+  secret: ${JWT_SECRET:power-load-docker-jwt-secret-key-32chars}
+  access-expiration-ms: ${JWT_ACCESS_EXPIRATION_MS:1800000}
+  refresh-expiration-ms: ${JWT_REFRESH_EXPIRATION_MS:604800000}
+
+demo:
+  enabled: ${DEMO_ENABLED:true}
+
+logging:
+  level:
+    com.powerload: ${APP_LOG_LEVEL:info}

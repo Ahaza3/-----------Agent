@@ -1,6 +1,7 @@
 package com.powerload.agent;
 
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Agent 工具接口 — 所有工具 Bean 实现此接口，由 ToolRegistry 自动收集。
@@ -15,6 +16,9 @@ public interface Tool {
 
     /** 工具描述，给 LLM 理解用途 */
     String description();
+
+    /** Roles that may invoke this tool. Every tool must declare a non-empty set. */
+    Set<String> allowedRoles();
 
     /** 参数 JSON Schema（OpenAI tool function parameters 格式） */
     Map<String, Object> parameters();

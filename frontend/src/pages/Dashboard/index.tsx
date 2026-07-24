@@ -14,6 +14,7 @@ import LoadChart from '../../components/LoadChart'
 import { fetchLoadRange, fetchRealtimeRecent } from '../../services/dataApi'
 import { fetchForecast } from '../../services/predictApi'
 import { fetchAlertRules, fetchAlertEvents } from '../../services/alertApi'
+import { fetchGridRisk } from '../../services/topologyApi'
 import * as ticketApi from '../../services/ticketApi'
 import { createPrewarningTicket } from '../../services/ticketApi'
 import useDashboardStore from '../../stores/useDashboardStore'
@@ -21,6 +22,7 @@ import useAuthStore from '../../stores/useAuthStore'
 import type { Role } from '../../config/roles'
 import { ALERT_LEVEL_CONFIG } from '../../types/alert'
 import type { AlertEvent } from '../../types/alert'
+import type { GridRiskSnapshot } from '../../types/topology'
 import AlertTicketDetail from '../AlertCenter/shared/AlertTicketDetail'
 import type { Ticket } from '../../services/ticketApi'
 import { buildLoadSeriesSegments } from './loadSeries'
@@ -91,6 +93,7 @@ const Dashboard = () => {
   const [showThresholds, setShowThresholds] = useState(true)
   const [showRecovery, setShowRecovery] = useState(true)
   const [alertMarks, setAlertMarks] = useState<AlertEvent[]>([])
+  const [topologyRisk, setTopologyRisk] = useState<GridRiskSnapshot[]>([])
   const [selectedAlert, setSelectedAlert] = useState<AlertEvent | null>(null)
   const [alertTicket, setAlertTicket] = useState<Ticket | null>(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
@@ -98,6 +101,7 @@ const Dashboard = () => {
   const [prewarningSummary, setPrewarningSummary] = useState('')
   const [creatingPrewarning, setCreatingPrewarning] = useState(false)
   const [notificationState, setNotificationState] = useState<BrowserNotificationState>(getBrowserNotificationState)
+  const [freshnessClock, setFreshnessClock] = useState(Date.now())
   const chartRef = useRef<ReactECharts>(null)
   const connectedRef = useRef(true)
 
@@ -112,6 +116,17 @@ const Dashboard = () => {
   const rangeEnd = customRange ? customRange[1] : quickToRange(quickRange)[1]
   const isLive = isRangeCoveringNow(rangeEnd)
   const hourlyLoadData = useMemo(() => loadData.filter((p) => isHourlyHistoryPoint(p.time)), [loadData])
+  const latestRealtime = realtimeLoads[realtimeLoads.length - 1]
+  const latestReceivedAt = latestRealtime?.receivedAt
+    ? new Date(latestRealtime.receivedAt).getTime()
+    : latestRealtime?.timestamp
+  const realtimeFreshness = latestRealtime?.freshnessStatus === 'STALE'
+    || (latestReceivedAt != null && freshnessClock - latestReceivedAt > 15_000) ? 'STALE' : 'FRESH'
+  const realtimeQuality = latestRealtime?.qualityCode ?? 'LEGACY_UNKNOWN'
+  useEffect(() => {
+    const timer = window.setInterval(() => setFreshnessClock(Date.now()), 1_000)
+    return () => window.clearInterval(timer)
+  }, [])
   const handleEnableNotifications = useCallback(async () => {
     const state = await enableBrowserNotifications()
     setNotificationState(state)
@@ -169,6 +184,16 @@ const Dashboard = () => {
         })
       } catch {}
     }).catch(() => {})
+  }, [])
+
+  // 拓扑风险摘要与首页负荷、告警保持同屏刷新。
+  useEffect(() => {
+    const refreshTopologyRisk = () => {
+      fetchGridRisk().then(setTopologyRisk).catch(() => {})
+    }
+    refreshTopologyRisk()
+    const timer = window.setInterval(refreshTopologyRisk, 15_000)
+    return () => window.clearInterval(timer)
   }, [])
 
   // -- 基础数据 --
@@ -514,6 +539,7 @@ const Dashboard = () => {
           <span>当前负荷</span>
           <strong className="font-mono">{fmtMw(liveLoad?.loadMw)} <small>MW</small></strong>
           <em>{liveLoad?.time ? dayjs(liveLoad.time).format('HH:mm:ss') : '等待实时数据'}</em>
+          <em>模拟数据源 · {realtimeQuality} · {realtimeFreshness === 'STALE' ? '数据陈旧' : '数据新鲜'}</em>
         </div>
 
         <div className="dashboard-metric-card">
@@ -535,7 +561,7 @@ const Dashboard = () => {
         <div className="dashboard-metric-card">
           <span>数据延迟</span>
           <strong className="font-mono">{lastRealtimeAt > 0 ? relativeTime(lastRealtimeAt) : '--'}</strong>
-          <em>{wsConnected ? '实时链路正常' : '实时链路中断'}</em>
+          <em>{realtimeFreshness === 'STALE' ? '最后有效观测数据已陈旧' : (wsConnected ? '模拟实时链路正常' : '模拟实时链路中断')}</em>
         </div>
       </section>
 
@@ -544,6 +570,37 @@ const Dashboard = () => {
           <Button size="small" icon={<AlertOutlined />} onClick={() => window.location.href = '/alerts?level=RED'}>严重告警</Button>
           <Button size="small" icon={<RobotOutlined />} onClick={() => window.location.href = '/agent'}>询问风险</Button>
           <Button size="small" icon={<FileTextOutlined />} onClick={() => window.location.href = '/alerts?status=RESOLVED'}>待关闭工单</Button>
+        </section>
+      )}
+
+      {topologyRisk.length > 0 && (
+        <section className="dashboard-topology-strip">
+          <div className="dashboard-topology-strip__header">
+            <div>
+              <div className="dashboard-topology-strip__kicker">TOPOLOGY RISK</div>
+              <h2>拓扑风险摘要</h2>
+              <p>将节点风险、根告警和责任变电站带回运行监控首页。</p>
+            </div>
+            <Button size="small" onClick={() => { window.location.href = '/topology' }}>
+              查看拓扑
+            </Button>
+          </div>
+          <div className="dashboard-topology-strip__metrics">
+            <span>关注节点 <b>{topologyRisk.filter((item) => item.riskLevel !== 'NORMAL').length}</b></span>
+            <span>根告警 <b>{topologyRisk.filter((item) => item.alertRootNodeCode === item.nodeCode).length}</b></span>
+            <span>红色风险 <b>{topologyRisk.filter((item) => item.riskLevel === 'RED').length}</b></span>
+          </div>
+          <div className="dashboard-topology-strip__nodes">
+            {topologyRisk
+              .filter((item) => item.alertRootNodeCode === item.nodeCode)
+              .slice(0, 3)
+              .map((item) => (
+                <div key={item.nodeId} className={`dashboard-topology-node dashboard-topology-node--${item.riskLevel.toLowerCase()}`}>
+                  <strong>{item.nodeName}</strong>
+                  <span>{item.riskLevel} · {fmtMw(item.currentLoadMw)} MW</span>
+                </div>
+              ))}
+          </div>
         </section>
       )}
 
@@ -613,7 +670,7 @@ const Dashboard = () => {
           onClose={() => setDrawerOpen(false)}
           role={role as Role | undefined}
           userId={userId}
-          alert={{ id: selectedAlert.id, level: selectedAlert.level, currentValue: selectedAlert.currentValue, thresholdValue: selectedAlert.thresholdValue, triggerTime: selectedAlert.triggerTime, aiAnalysis: selectedAlert.aiAnalysis, suggestion: selectedAlert.suggestion }}
+          alert={{ id: selectedAlert.id, type: selectedAlert.type, level: selectedAlert.level, currentValue: selectedAlert.currentValue, thresholdValue: selectedAlert.thresholdValue, triggerTime: selectedAlert.triggerTime, aiAnalysis: selectedAlert.aiAnalysis, suggestion: selectedAlert.suggestion }}
           ticket={alertTicket}
           onTicketUpdated={setAlertTicket}
           onAssign={() => {}}
@@ -744,6 +801,76 @@ const Dashboard = () => {
           gap: 8px;
           flex-wrap: wrap;
         }
+        .dashboard-topology-strip {
+          border: 1px solid #1C2935;
+          background: linear-gradient(180deg, rgba(17, 26, 35, 0.96), rgba(14, 22, 31, 0.96));
+          border-radius: 8px;
+          padding: 14px 16px;
+        }
+        .dashboard-topology-strip__header {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          gap: 12px;
+        }
+        .dashboard-topology-strip__kicker {
+          color: #7FA7C7;
+          font-size: 10px;
+          letter-spacing: 0.08em;
+        }
+        .dashboard-topology-strip h2 {
+          margin: 4px 0 0;
+          color: #E7EDF3;
+          font-size: 15px;
+        }
+        .dashboard-topology-strip p {
+          margin: 5px 0 0;
+          color: #6F7D8A;
+          font-size: 12px;
+        }
+        .dashboard-topology-strip__metrics {
+          display: flex;
+          gap: 18px;
+          margin-top: 14px;
+          color: #7D8A97;
+          font-size: 12px;
+        }
+        .dashboard-topology-strip__metrics b {
+          margin-left: 5px;
+          color: #E7EDF3;
+          font-size: 16px;
+        }
+        .dashboard-topology-strip__nodes {
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 8px;
+          margin-top: 12px;
+        }
+        .dashboard-topology-node {
+          min-width: 0;
+          padding: 9px 10px;
+          border-left: 3px solid #5FA777;
+          background: #101A23;
+        }
+        .dashboard-topology-node strong,
+        .dashboard-topology-node span {
+          display: block;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+        .dashboard-topology-node strong {
+          color: #DDEAF5;
+          font-size: 12px;
+        }
+        .dashboard-topology-node span {
+          margin-top: 4px;
+          color: #7D8A97;
+          font-size: 11px;
+        }
+        .dashboard-topology-node--red { border-left-color: #D85C5C; }
+        .dashboard-topology-node--orange { border-left-color: #D7A447; }
+        .dashboard-topology-node--yellow { border-left-color: #C6A34A; }
         .dashboard-forecast-summary {
           display: flex;
           align-items: center;

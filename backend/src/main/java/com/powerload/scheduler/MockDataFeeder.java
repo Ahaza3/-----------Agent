@@ -1,6 +1,7 @@
 package com.powerload.scheduler;
 
 import com.powerload.entity.LoadData;
+import com.powerload.common.GridTopologyConstants;
 import com.powerload.mapper.LoadDataMapper;
 import com.powerload.service.LoadDataService;
 import lombok.RequiredArgsConstructor;
@@ -89,6 +90,7 @@ public class MockDataFeeder {
                 double humidity = Math.max(0, Math.min(100, humProfile + humNoise));
 
                 LoadData row = new LoadData();
+                row.setNodeId(GridTopologyConstants.ROOT_NODE_ID);
                 row.setTime(target);
                 row.setLoadMw((float) loadMw);
                 row.setTemperature((float) temperature);
